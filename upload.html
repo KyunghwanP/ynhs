@@ -40,7 +40,7 @@ if ('serviceWorker' in navigator) {
 </head>
 <body>
 <div class="card">
-  <h1>영남고 시간표 업로드 도구3</h1>
+  <h1>영남고 시간표 업로드 도구</h1>
   <p class="subtitle">엑셀 템플릿(시간표_입력템플릿_완성본.xlsx)을 채워서 올리면<br>앱 데이터가 바로 갱신됩니다.</p>
 
   <div class="step">
@@ -109,7 +109,8 @@ let currentUser = null;
 function setStatus(msg, type) {
   statusEl.textContent = msg;
   statusEl.className = type || 'info';
-  statusEl.style.display = msg ? '' : 'none';
+  statusEl.style.display = msg ? 'block' : 'none';
+  if(msg) statusEl.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 loginBtn.addEventListener('click', async () => {
@@ -176,10 +177,8 @@ async function parseExcel(file) {
   const wb   = XLSX.read(buf, {type:'array'});
   const DAYS = ['월','화','수','목','금'];
   const PERIODS = [1,2,3,4,5,6,7];
-  const sheetNames = wb.SheetNames;
 
-  const name1 = sheetNames.find(n => n.includes('전체시간표'));
-  const ws1 = name1 ? wb.Sheets[name1] : null;
+  const ws1 = wb.Sheets['전체시간표'];
   if (!ws1) throw new Error('「전체시간표」 시트가 없습니다.');
   const rows1 = XLSX.utils.sheet_to_json(ws1, {header:1, range:1});
   const teachers = [];
@@ -209,8 +208,7 @@ async function parseExcel(file) {
   }
   if (teachers.length < 10) throw new Error('교사 수가 너무 적습니다 (' + teachers.length + '명). 전체시간표 탭을 확인해주세요.');
 
-  const name2 = sheetNames.find(n => n.includes('내선번호'));
-  const ws2 = name2 ? wb.Sheets[name2] : null;
+  const ws2 = wb.Sheets['내선번호'];
   if (!ws2) throw new Error('「내선번호」 시트가 없습니다.');
   const rows2 = XLSX.utils.sheet_to_json(ws2, {header:1, range:1});
   const extMap = {};
@@ -220,8 +218,7 @@ async function parseExcel(file) {
     if (name && ext) extMap[name] = ext;
   }
 
-  const name3 = sheetNames.find(n => n.includes('시정표'));
-  const ws3 = name3 ? wb.Sheets[name3] : null;
+  const ws3 = wb.Sheets['시정표'];
   if (!ws3) throw new Error('「시정표」 시트가 없습니다.');
   const rows3 = XLSX.utils.sheet_to_json(ws3, {header:1, range:1});
   const bellSchedule = [];
@@ -236,8 +233,7 @@ async function parseExcel(file) {
   }
   if (bellSchedule.length < 7) throw new Error('시정표가 부족합니다 (' + bellSchedule.length + '개). 시정표 탭을 확인해주세요.');
 
-  const name4 = sheetNames.find(n => n.includes('묶음선택과목'));
-  const ws4 = name4 ? wb.Sheets[name4] : null;
+  const ws4 = wb.Sheets['묶음선택과목'];
   if (!ws4) throw new Error('「묶음선택과목」 시트가 없습니다.');
   const rows4 = XLSX.utils.sheet_to_json(ws4, {header:1, range:1});
   const blockMap = {};
@@ -253,7 +249,7 @@ async function parseExcel(file) {
   }
   const electiveBlocks = Object.values(blockMap).map(b => ({
     teachers: [...b.teachers],
-    slots:    [...b.slots].map(s => { const [d, p] = s.split('|'); return {day: d, period: parseInt(p, 10)}; })
+    slots:    [...b.slots].map(s => { const [d, p] = s.split('|'); return [d, parseInt(p, 10)]; })
   }));
 
   return {teachers, extMap, bellSchedule, electiveBlocks};
