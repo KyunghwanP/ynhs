@@ -192,7 +192,7 @@
   }
   .print-btn:hover{background:var(--rule);color:var(--ink);}
 
-  /* ---------- week grid ---------- */
+  /* ---------- week grid: rounded tile system (fully fluid via container queries + viewport height) ---------- */
   :root{
     --gt-head-h: clamp(34px, min(9cqw,5.4vh), 44px);
     --gt-row-h: clamp(40px, min(11cqw,7vh), 58px);
@@ -282,7 +282,7 @@
   .gt-cell{
     background:#fff;border-radius:8px;
     min-height:var(--gt-row-h);
-    display:grid;grid-template-rows:1fr auto;align-items:center;justify-content:center;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
     padding:4px 2px;text-align:center;
     border:1.5px solid transparent;
   }
@@ -298,7 +298,7 @@
 
   .cell-subject{font-size:var(--gt-font-subject);font-weight:700;line-height:1.25;word-break:keep-all;color:var(--ink);}
   .cell-class{font-family:'IBM Plex Mono';font-size:var(--gt-font-class);color:var(--ink-soft);margin-top:2px;}
-  .cell-empty{color:#cfc9b8;font-size:var(--gt-font-empty);align-self:center;grid-row:span 2;}
+  .cell-empty{color:#cfc9b8;font-size:var(--gt-font-empty);}
   .now-badge{
     font-size:var(--gt-font-badge);color:#92611a;font-weight:700;
     margin-top:3px;letter-spacing:0.04em;
@@ -408,7 +408,7 @@
   .swap-back:hover{background:var(--rule);}
   .swap-preview-grids{display:flex;flex-direction:column;gap:18px;}
   .preview-col{width:100%;}
-  .preview-col.swap-col-list{flex:0 1 300px;}
+  .preview-col-single{max-width:600px;margin:0 auto;}
   .preview-col-title{font-family:'Noto Serif KR';font-weight:700;font-size:17px;margin-bottom:8px;color:var(--ink);}
   .preview-ext{font-family:'IBM Plex Mono';font-size:13px;font-weight:700;color:var(--wed);margin-left:4px;}
   .gt-cell.preview-out{background:#FBEDE9;border-color:#C9544A;}
@@ -436,7 +436,7 @@
     font-size:12px;margin-top:22px;line-height:1.7;
   }
 
-  /* ---------- layout ---------- */
+  /* ---------- layout: sidebar (tablet/desktop) + main ---------- */
   .layout{margin-top:16px;}
   .sidebar{display:none;}
   .main{min-width:0;}
@@ -503,10 +503,13 @@
     .preview-col.swap-col-list{flex:0 1 300px;}
   }
 
+  /* ---------- phone: tighter page padding ---------- */
   @media (max-width:699px){
     .masthead, .card{padding-left:16px;padding-right:16px;}
     .info-name{font-size:min(var(--info-name-font), 18px);}
   }
+
+  /* ---------- 세로 공간이 부족해지면: 제목/학교명/구분선을 숨기고 검색창 위주로 남김 ---------- */
 
   .exit-toast{
     position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
@@ -562,13 +565,16 @@
     .modal-overlay{display:none !important;}
     .chip.ext-chip, .chip.accent{display:none !important;}
 
+    /* 배경색이 인쇄되지 않는 경우에도 표가 구분되어 보이도록 테두리는 항상 추가 */
     .grid-table .gt-cell, .grid-table .gt-pnum, .grid-table .gt-lunch-cell,
     .grid-table .gt-lunch-label, .grid-table .gt-corner, .grid-table .gt-head{
       border:1px solid #777 !important;
     }
+    /* 요일 헤더는 색이 그대로 인쇄되도록 강제 */
     .gt-head{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     .gt-pnum, .gt-lunch-label, .gt-corner{background:#fff !important;color:#222 !important;}
 
+    /* 오늘/지금 표시와 음영은 인쇄물에서는 의미가 없으므로 모두 제거 */
     .today-tag, .now-badge{display:none !important;}
     .gt-cell.today, .gt-lunch-cell.today{background:#fff !important;}
     .gt-cell.now{background:#fff !important;border-color:#777 !important;box-shadow:none !important;}
@@ -588,6 +594,7 @@
 <button class="logout-btn" id="logoutBtn">로그아웃</button>
 
 <div class="wrap">
+
   <div class="masthead">
     <div class="winsize-group" id="winsizeGroup" style="display:none;">
       <button class="winsize-btn" data-size="small" title="작게">작게</button>
@@ -671,6 +678,7 @@ const DAYS = ['월','화','수','목','금'];
 const PERIODS = [1,2,3,4,5,6,7];
 let todayDay = null;
 
+// 영남고 실제 종 치는 시간: 1교시 08:30 시작, 50분 수업/10분 휴식, 점심 12:20~13:30, 7교시 16:20 종료
 const BELL_SCHEDULE = [
   {period:1, start:'08:30', end:'09:20'},
   {period:2, start:'09:30', end:'10:20'},
@@ -687,6 +695,7 @@ function toMinutes(hhmm){
   return h*60+m;
 }
 
+// '지금' 표시는 각 교시 시작 5분 전부터 끝난 5분 후까지, 교시 진행 중 계속 켜져 있습니다.
 function getCurrentPeriod(){
   const now = new Date();
   const curMin = now.getHours()*60 + now.getMinutes();
@@ -706,6 +715,7 @@ function recomputeTimeState(){
 }
 recomputeTimeState();
 
+// 매번 다시 그리지 않고, 다음 '교시 시작/종료 경계' 시점에만 정확히 한 번 갱신 (가볍게)
 const BOUNDARY_MINUTES = [];
 function rebuildBoundaryMinutes(){
   BOUNDARY_MINUTES.length = 0;
@@ -752,7 +762,8 @@ function scheduleNextTimeUpdate(){
 }
 scheduleNextTimeUpdate();
 
-const classSchedule = {};
+// ---- build class -> schedule reverse index, and class -> homeroom teacher ----
+const classSchedule = {};   // { '3-10': { '월':[{period,subject,teacher}], ... } }
 const classHomeroom = {};
 const classList = [];
 const classByGrade = {};
@@ -766,7 +777,7 @@ function rebuildFromTeachers(){
     if(t.homeroom){ classHomeroom[t.homeroom] = t.name; }
     DAYS.forEach(day=>{
       (t.schedule[day]||[]).forEach(p=>{
-        if(!p.class || p.period === 0) return; // 더미교시 제외
+        if(!p.class) return;
         if(!classSchedule[p.class]) classSchedule[p.class] = {};
         if(!classSchedule[p.class][day]) classSchedule[p.class][day] = [];
         classSchedule[p.class][day].push({period:p.period, subject:p.subject, teacher:t.name});
@@ -801,27 +812,26 @@ function rebuildFromTeachers(){
   ORDERED_TEACHER_NAMES.push(...SUBJECT_GROUPS.flatMap(g=>g.teachers), ...UNGROUPED_NAMES);
 }
 
+// ---- 묶음 선택과목: 같은 시간대에 동시 개설되어 따로 교체할 수 없는 선택과목 그룹 ----
+// (2026-1학기 선택과목 편성 현황표 기준)
 const ELECTIVE_BLOCKS = [];
 const ELECTIVE_LOCK_SET = new Set();
 function rebuildElectiveLockSet(){
   ELECTIVE_LOCK_SET.clear();
   ELECTIVE_BLOCKS.forEach(block=>{
     block.teachers.forEach(name=>{
-      block.slots.forEach(slot=>{
-        // Firestore의 객체 배열 규격(day, period)에 맞게 안전하게 치환하여 검증
-        const slotDay = typeof slot === 'object' ? slot.day : slot[0];
-        const slotPeriod = typeof slot === 'object' ? slot.period : slot[1];
-        ELECTIVE_LOCK_SET.add(`${name}|${slotDay}|${slotPeriod}`);
+      block.slots.forEach(([day,period])=>{
+        ELECTIVE_LOCK_SET.add(`${name}|${day}|${period}`);
       });
     });
   });
 }
 rebuildElectiveLockSet();
-
 function isLocked(name, day, period){
   return ELECTIVE_LOCK_SET.has(`${name}|${day}|${period}`);
 }
 
+// 자율학습/동아리는 항상 교체 불가. 진로는 1학년만 교체 가능하되, 월요일 1교시 진로는 학년 무관하게 항상 불가.
 const ALWAYS_NO_SWAP_SUBJECTS = new Set(['자율','동아']);
 function isNoSwapSubject(subject, cls, day, period){
   if(!subject) return false;
@@ -834,6 +844,7 @@ function isNoSwapSubject(subject, cls, day, period){
   return false;
 }
 
+// ---- 과목별 교사 그룹 (지정한 순서 그대로) ----
 const SUBJECT_GROUPS = [
   { subject:'국어', teachers:['최영수','이인태','윤익희','손병락','박재정','김창식','남영동','문광섭','정희철','정원길','강서영','박한솔'] },
   { subject:'수학', teachers:['정승호','김종욱','노진석','주원순','이재문','이호정','한지훈','전병화','김영란','이상용','권재현','윤동현','김정훈','김경모','정현석'] },
@@ -854,6 +865,7 @@ const SUBJECT_GROUPS = [
   { subject:'한문', teachers:['이소영'] },
   { subject:'진로/보건/상담', teachers:['박용수','현지환','장수정'] },
 ];
+// 위 그룹에 없는 교사(예: 외부 온라인 강사 등)는 전체 목록 맨 뒤에 그대로 붙여 누락을 막음
 const GROUPED_NAME_SET = new Set(SUBJECT_GROUPS.flatMap(g=>g.teachers));
 const UNGROUPED_NAMES = TEACHERS.map(t=>t.name).filter(n=>!GROUPED_NAME_SET.has(n));
 const ORDERED_TEACHER_NAMES = [...SUBJECT_GROUPS.flatMap(g=>g.teachers), ...UNGROUPED_NAMES];
@@ -861,8 +873,11 @@ rebuildFromTeachers();
 const TEACHER_TO_SUBJECT = {};
 SUBJECT_GROUPS.forEach(g=> g.teachers.forEach(name=> { TEACHER_TO_SUBJECT[name] = g.subject; }));
 
+// 보강 후보 정렬용 '동교과' 큰 단위 묶음 (한문은 강사라 어느 교과에도 묶지 않음)
 const DEPARTMENT_OF_SUBJECT = {
-  '국어':'국어과', '수학':'수학과', '영어':'영어과',
+  '국어':'국어과',
+  '수학':'수학과',
+  '영어':'영어과',
   '사회':'사회과', '지리':'사회과', '역사':'사회과', '윤리':'사회과',
   '물리':'과학과', '화학':'과학과', '생물':'과학과', '지구과학':'과학과',
   '미술':'예체능', '음악':'예체능', '체육':'예체능',
@@ -875,7 +890,7 @@ function getDept(name){
 
 const EXT_MAP = {};
 
-let mode = 'teacher';
+let mode = 'teacher'; // teacher | class
 let activeIdx = -1;
 let selectedKey = null;
 let currentTeacherObj = null;
@@ -1008,6 +1023,7 @@ function getMatches(q){
   return q ? classList.filter(c=>c.includes(q)) : classList;
 }
 
+
 function itemHTML(m){
   const key = mode==='teacher' ? m.name : m;
   const activeCls = key===selectedKey ? ' active' : '';
@@ -1092,8 +1108,9 @@ function select(item){
   closeDropdown();
 }
 
+
 function cellInner(p, secondLineKey){
-  if(!p || (!p.subject && !p[secondLineKey]) || p.period === 0){
+  if(!p || (!p.subject && !p[secondLineKey])){
     return `<span class="cell-empty">·</span>`;
   }
   const sub = p.subject ? `<div class="cell-subject">${p.subject}</div>` : '';
@@ -1125,9 +1142,10 @@ function buildWeekGrid(getPeriod, secondLineKey, enableSwap, teacherName, highli
       const found = getPeriod(day,p);
       const isToday = !suppressTodayNow && day===todayDay;
       const isNow = isToday && currentPeriod===p;
-      const hasContent = found && (found.subject || found[secondLineKey]) && found.period !== 0;
+      const hasContent = found && (found.subject || found[secondLineKey]);
       const locked = enableSwap && hasContent && teacherName && isLocked(teacherName, day, p);
-      const swappable = enableSwap && hasContent && !locked;
+      const noSwapSubject = found && isNoSwapSubject(found.subject, found.class, day, p);
+      const swappable = enableSwap && hasContent;
       const hlType = highlightMap[`${day}-${p}`];
       const cls = ['gt-cell', isToday?'today':'', isNow?'now':'', swappable?'swappable':'', locked?'locked':'', hlType?'preview-'+hlType:''].filter(Boolean).join(' ');
       let badge = '';
@@ -1178,6 +1196,7 @@ function renderClass(cls){
   saveLastView();
 }
 
+// ---- 마지막으로 보던 화면 기억하기 (localStorage) ----
 const LAST_VIEW_KEY = 'yeungnam_timetable_last_view';
 function saveLastView(){
   const payload = JSON.stringify({mode, key:selectedKey});
@@ -1218,7 +1237,7 @@ function restoreLastView(){
   if(typeof Neutralino !== 'undefined'){
     Neutralino.storage.getData(LAST_VIEW_KEY)
       .then(raw=> applyRestoredView(JSON.parse(raw)))
-      .catch(()=>{});
+      .catch(()=>{}); // 저장된 값이 없으면 그냥 기본 화면 유지
     return;
   }
   try{
@@ -1229,6 +1248,7 @@ function restoreLastView(){
   return false;
 }
 
+// ---- 클립보드 복사 (실패 시 구형 방식으로 대체) ----
 function copyToClipboard(text, btn){
   const onSuccess = ()=>{
     if(btn){
@@ -1256,19 +1276,14 @@ function copyToClipboard(text, btn){
   }
 }
 
+// 복사 버튼 + (지원되는 기기라면) 공유 버튼을 같이 연결
 function wireRequestButtons(copyBtnId, shareBtnId, getMsg){
   const copyBtn = document.getElementById(copyBtnId);
   if(copyBtn) copyBtn.addEventListener('click', (e)=> copyToClipboard(getMsg(), e.target));
-
-  const shareBtn = document.getElementById(shareBtnId);
-  if(shareBtn && navigator.share){
-    shareBtn.style.display = '';
-    shareBtn.addEventListener('click', ()=>{
-      navigator.share({text: getMsg()}).catch(()=>{});
-    });
-  }
 }
 
+// ---- 수업교체 가능 시간 찾기 ----
+// 같은 반(cls)에 들어가는 다른 선생님 중, 두 사람의 시간이 서로 비어 있는 경우만 후보로 반환
 function findSwapCandidates(teacherObj, day, period, cls){
   const candidates = [];
   const classDays = classSchedule[cls] || {};
@@ -1280,9 +1295,9 @@ function findSwapCandidates(teacherObj, day, period, cls){
       if(isNoSwapSubject(entry.subject, cls, day2, entry.period)) return;
       const candidate = TEACHERS.find(x=>x.name===entry.teacher);
       if(!candidate) return;
-      const candidateBusyAtMySlot = (candidate.schedule[day]||[]).some(x=>x.period===period && x.subject !== "");
+      const candidateBusyAtMySlot = (candidate.schedule[day]||[]).some(x=>x.period===period);
       if(candidateBusyAtMySlot) return;
-      const meBusyAtCandidateSlot = (teacherObj.schedule[day2]||[]).some(x=>x.period===entry.period && x.subject !== "");
+      const meBusyAtCandidateSlot = (teacherObj.schedule[day2]||[]).some(x=>x.period===entry.period);
       if(meBusyAtCandidateSlot) return;
       candidates.push({teacher:entry.teacher, day:day2, period:entry.period, subject:entry.subject});
     });
@@ -1296,7 +1311,7 @@ function findCoverCandidates(teacherObj, day, period){
   const myDept = getDept(teacherObj.name);
   const list = TEACHERS
     .filter(t=>t.name !== teacherObj.name)
-    .filter(t=> !(t.schedule[day]||[]).some(x=>x.period===period && x.subject !== ""))
+    .filter(t=> !(t.schedule[day]||[]).some(x=>x.period===period))
     .map(t=>({
       teacher: t.name,
       subject: TEACHER_TO_SUBJECT[t.name] || null,
@@ -1317,6 +1332,7 @@ function findCoverCandidates(teacherObj, day, period){
 const swapModal = document.getElementById('swapModal');
 const swapModalBody = document.getElementById('swapModalBody');
 
+// 팝업 내용이 바뀔 때 부드럽게 페이드 전환 (크기 변화도 같이 자연스럽게 보이도록)
 function setModalContent(html, afterRender, sizeClass){
   const box = swapModal.querySelector('.modal-box');
   const wasOpen = swapModal.classList.contains('open');
@@ -1324,6 +1340,8 @@ function setModalContent(html, afterRender, sizeClass){
   const willBeWide = sizeClass === 'wide';
   const sizeChanging = wasOpen && (wasWide !== willBeWide);
 
+  // 클래스를 바꾸기 전에 현재 화면 그대로의 픽셀 크기로 고정해서,
+  // max-width 클래스 전환으로 인한 즉발적인 스냅(튕김)을 막음
   let startW = 0, startH = 0;
   if(sizeChanging && box){
     const r = box.getBoundingClientRect();
@@ -1336,6 +1354,7 @@ function setModalContent(html, afterRender, sizeClass){
   swapModal.classList.remove('wide','medium');
   swapModal.classList.add(sizeClass || 'medium');
 
+  // 크기 분류(medium/wide)가 그대로면 애니메이션 없이 내용만 바로 교체
   if(!sizeChanging){
     swapModalBody.style.transition = 'none';
     swapModalBody.innerHTML = html;
@@ -1357,13 +1376,15 @@ function setModalContent(html, afterRender, sizeClass){
     swapModalBody.innerHTML = html;
     if(typeof afterRender === 'function') afterRender();
 
+    // 새 내용 + 새 클래스 기준의 자연 크기를 측정
     box.style.transition = 'none';
     box.style.width = 'auto';
     box.style.height = 'auto';
     const endR = box.getBoundingClientRect();
+    // 고정해뒀던 이전 크기로 다시 되돌림 (내용은 아직 투명한 상태)
     box.style.width = startW + 'px';
     box.style.height = startH + 'px';
-    void box.offsetWidth;
+    void box.offsetWidth; // 강제 리플로우
     requestAnimationFrame(()=>{
       box.style.transition = 'width 0.24s ease, height 0.24s ease';
       box.style.width = endR.width + 'px';
@@ -1374,6 +1395,7 @@ function setModalContent(html, afterRender, sizeClass){
       box.style.height = '';
       box.style.transition = '';
     }, 250);
+    // 크기 변화가 거의 끝난 다음에 내용을 페이드인 (내용 비율 왜곡 없이)
     setTimeout(fadeContentIn, 230);
   };
 
@@ -1403,7 +1425,7 @@ function cloneScheduleWithAdd(schedule, addDay, addPeriod, subject, cls){
 }
 
 let swapContextTeacher = null;
-let popupTab = 'swap';
+let popupTab = 'swap'; // 'swap' | 'cover'
 
 function renderPopup(teacherObj, day, period, entry){
   swapContextTeacher = teacherObj;
@@ -1514,7 +1536,6 @@ function renderCoverPreview(teacherObj, day, period, entry, candName){
       </div>
     </div>
     <button class="copy-req-btn" id="copyCoverReqBtn">요청 문구 복사 📋</button>
-    <button class="copy-req-btn" id="shareCoverReqBtn" style="display:none;">공유하기 📤</button>
     <div class="swap-note">🟢 신규 = 이번에 새로 보강을 맡게 되는 칸입니다. 그 날 다른 수업들과 겹치거나 너무 몰리지 않는지 확인해보세요. 실제 보강 요청은 학교 협의 절차를 따로 거쳐야 해요.</div>
   `;
   setModalContent(html, ()=>{
@@ -1523,6 +1544,7 @@ function renderCoverPreview(teacherObj, day, period, entry, candName){
   }, 'medium');
 }
 
+// 팝업 안의 시간표에서 다른 칸을 클릭하면 그 시간 기준으로 목록을 다시 보여줌
 swapModalBody.addEventListener('click', e=>{
   const cell = e.target.closest('.gt-cell.swappable');
   if(!cell || !swapContextTeacher) return;
@@ -1559,7 +1581,6 @@ function renderSwapPreview(teacherObj, day, period, entry, cand){
       </div>
     </div>
     <button class="copy-req-btn" id="copySwapReqBtn">요청 문구 복사 📋</button>
-    <button class="copy-req-btn" id="shareSwapReqBtn" style="display:none;">공유하기 📤</button>
     <div class="swap-note">🟡 비워짐 = 원래 있던 수업이 빠지는 칸 · 🟢 신규 = 교체로 새로 들어오는 칸. 실제 교체는 학교 협의 절차를 따로 거쳐야 해요.</div>
   `;
   setModalContent(html, ()=>{
@@ -1568,7 +1589,8 @@ function renderSwapPreview(teacherObj, day, period, entry, cand){
   }, 'wide');
 }
 
-let modalDepth = 0;
+// ---- 모바일 뒤로가기(하드웨어/제스처) 버튼이 팝업을 자연스럽게 닫거나 이전 화면으로 가도록 ----
+let modalDepth = 0; // 0=닫힘, 1=목록(교체/보강), 2=미리보기
 let lastListArgs = null;
 let exitArmTimer = null;
 
@@ -1589,10 +1611,10 @@ function showExitToast(){
 function armExitGuard(){
   history.pushState({root:true}, '');
 }
-armExitGuard();
+armExitGuard(); // 페이지를 처음 열 때 한 번 무장
 
 function openSwapModal(teacherObj, day, period, entry){
-  clearTimeout(exitArmTimer);
+  clearTimeout(exitArmTimer); // 팝업을 여는 동안에는 무장 타이머가 끼어들지 않도록
   popupTab = 'swap';
   lastListArgs = {teacherObj, day, period, entry};
   renderPopup(teacherObj, day, period, entry);
@@ -1620,11 +1642,14 @@ window.addEventListener('popstate', (e)=>{
     }
     return;
   }
+  // 팝업이 닫혀있는 상태(modalDepth===0)에서, 방금 무장해둔 안전장치를 막 소비한 경우
+  // (= 더 이상 안으로 갈 곳이 없는 진짜 바닥에 도달) → 토스트만 보여주고,
+  // 바로 다시 무장하지 않음. 2초 안에 또 누르면 그 즉시 진짜로 종료됨.
   if(modalDepth === 0 && !(e.state && e.state.root)){
     showExitToast();
     clearTimeout(exitArmTimer);
     exitArmTimer = setTimeout(()=>{
-      if(modalDepth === 0) armExitGuard();
+      if(modalDepth === 0) armExitGuard(); // 그 사이 또 안 눌렀으면 다시 무장
     }, 2000);
   }
 });
@@ -1649,6 +1674,7 @@ card.addEventListener('click', e=>{
   openSwapModal(currentTeacherObj, day, period, entry);
 });
 
+// 데스크톱 앱(Electron 또는 Neutralino)으로 실행 중일 때만 창 크기 전환 버튼을 보여줌
 if (window.electronAPI) {
   const winsizeGroup = document.getElementById('winsizeGroup');
   winsizeGroup.style.display = 'flex';
@@ -1683,10 +1709,14 @@ function initAppUI(){
   restoreLastView();
 }
 
+// PWA: http/https로 서빙될 때만 서비스워커 등록 (file://, Electron 환경에서는 그냥 건너뜀)
 if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
 
+// ---- 구글 로그인 + Firestore에서 데이터 가져오기 ----
+// 시간표 데이터는 더 이상 이 파일 안에 들어있지 않고, 로그인한 학교 계정(@yeungnam.hs.kr)에게만
+// Firestore가 내려줍니다. 오프라인 캐시는 의도적으로 사용하지 않습니다(보안을 위해).
 const authGate = document.getElementById('authGate');
 const authStatus = document.getElementById('authStatus');
 const googleLoginBtn = document.getElementById('googleLoginBtn');
@@ -1703,6 +1733,7 @@ googleLoginBtn.addEventListener('click', async () => {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ hd: 'yeungnam.hs.kr' });
     await signInWithPopup(fbAuth, provider);
+    // 이후 흐름은 onAuthStateChanged에서 처리됨
   }catch(e){
     setAuthStatus('로그인 실패: ' + e.message, true);
   }
@@ -1761,10 +1792,9 @@ onAuthStateChanged(fbAuth, async (user) => {
     logoutBtn.style.display = '';
   }catch(e){
     setAuthStatus('데이터를 불러오지 못했습니다: ' + e.message + ' (인터넷 연결을 확인하고 새로고침해주세요)', true);
-    // 무한 루프 락(Lock) 해결을 위해 로드 실패 시 완전히 로그아웃 처리하여 세션 초기화
-    await signOut(fbAuth); 
   }
 });
+
 </script>
 </body>
 </html>

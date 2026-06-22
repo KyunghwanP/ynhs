@@ -30,6 +30,14 @@
   #status.info{background:#e8f4f8;color:#1a4a6b;}
   .divider{border:none;border-top:1px solid #eee;margin:16px 0;}
 </style>
+<script>
+// 이 페이지(업로드 도구)에서는 서비스워커가 Firestore POST 요청을 가로채지 않도록 해제
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(reg => reg.unregister());
+  });
+}
+</script>
 </head>
 <body>
 <div class="card">
@@ -265,7 +273,13 @@ uploadBtn.addEventListener('click', async ()=>{
       `앱을 새로고침하면 새 데이터가 바로 반영됩니다.`, 'ok');
     uploadBtn.disabled = false;
   }catch(e){
-    setStatus('❌ 업로드 실패: '+e.message,'err');
+    console.error('upload error:', e);
+    setStatus('❌ 업로드 실패:
+' + e.code + '
+' + e.message + '
+
+' +
+      '로컬에서 직접 열었다면 깃허브에 올려서 열어주세요.', 'err');
     uploadBtn.disabled = false;
   }
 });
