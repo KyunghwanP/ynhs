@@ -33,211 +33,20 @@
     --today-tint:#F3E6C5;
   }
 
-  /* ══════════════════════════════════════════
-     앱 셸 레이아웃
-  ══════════════════════════════════════════ */
-  html, body{height:100%;overflow:hidden;margin:0;padding:0;}
-  body{background:var(--bg-base);font-family:'Noto Sans KR',sans-serif;color:var(--ink);}
-
-  .app-shell{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
-
-  /* 상단 헤더 */
-  .app-header{
-    flex-shrink:0;display:flex;align-items:flex-end;gap:14px;
-    height:160px;padding:0 22px 18px;
-    background:var(--paper);
-    border-bottom:1px solid rgba(255,255,255,0.07);
-    box-shadow:0 4px 20px -6px rgba(0,0,0,0.5);
-    z-index:100;position:relative;
-    background-image:
-      radial-gradient(circle at 20% 50%, rgba(255,255,255,0.04), transparent 50%),
-      radial-gradient(circle at 80% 30%, rgba(255,255,255,0.03), transparent 45%);
-  }
-  .app-header-title{
-    font-family:'Noto Serif KR';font-weight:900;font-size:24px;
-    color:var(--ink);flex:1;
-    text-shadow:0 2px 8px rgba(0,0,0,0.3);
-    letter-spacing:-0.02em;
-  }
-  .hamburger-btn{
-    flex-shrink:0;width:40px;height:40px;
-    background:transparent;border:none;cursor:pointer;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
-    padding:4px;border-radius:8px;
-    align-self:flex-start;margin-top:14px;
-  }
-  .hamburger-btn:hover{background:var(--paper-soft);}
-  .hamburger-btn span{
-    display:block;width:20px;height:2px;
-    background:var(--ink);border-radius:2px;
-    transition:transform .2s ease, opacity .2s ease;
-  }
-  .hamburger-btn.open span:nth-child(1){transform:translateY(7px) rotate(45deg);}
-  .hamburger-btn.open span:nth-child(2){opacity:0;}
-  .hamburger-btn.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg);}
-  .app-logout-btn{
-    border:1px solid var(--rule);background:var(--paper-soft);
-    font-family:'Noto Sans KR';font-size:11.5px;font-weight:700;color:var(--ink-soft);
-    padding:6px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;
-    align-self:flex-start;margin-top:14px;
-  }
-  .app-logout-btn:hover{background:var(--rule);}
-
-  /* 앱 바디 */
-  .app-body{flex:1;display:flex;overflow:hidden;position:relative;}
-
-  /* 메인 네비게이션 사이드바 */
-  /* 메인 네비게이션: 기본적으로 고정(overlay) 방식 → JS가 .desktop 클래스 추가 시 인라인으로 전환 */
-  .main-nav{
-    flex-shrink:0;width:240px;
-    background:var(--paper);
-    overflow-y:auto;
-    border-right:1px solid var(--rule);
-    padding:12px;
-    transition:transform .25s ease;
-    /* 기본: 오버레이(고정) 모드 */
-    position:fixed;left:0;top:160px;bottom:0;z-index:200;
-    transform:translateX(-100%);
-    box-shadow:4px 0 20px -4px rgba(0,0,0,0.5);
-  }
-  .main-nav.open{transform:translateX(0);}
-
-  /* JS가 충분한 여백을 감지하면 .desktop 클래스 추가 → 인라인 배치 */
-  .main-nav.desktop{
-    position:static;transform:none;
-    box-shadow:none;
-  }
-  /* 데스크톱 모드에서는 햄버거 버튼 숨김 */
-  .app-shell.desktop-nav .hamburger-btn{display:none;}
-  .main-nav-item{
-    display:flex;align-items:center;gap:10px;
-    padding:14px 16px;border-radius:10px;cursor:pointer;
-    font-family:'Noto Sans KR';font-size:14.5px;font-weight:700;
-    color:var(--ink-soft);
-    transition:background .12s ease, color .12s ease;
-  }
-  .main-nav-item:hover{background:var(--paper-soft);color:var(--ink);}
-  .main-nav-item.active{background:var(--mon);color:#fff;}
-  .main-nav-icon{font-size:17px;}
-
-  /* 모바일: 오버레이 배경 */
-  .nav-overlay{
-    display:none;position:fixed;inset:0;
-    background:rgba(0,0,0,0.45);z-index:199;
-  }
-  .nav-overlay.open{display:block;}
-  /* 데스크톱 모드에서는 오버레이 불필요 */
-  .app-shell.desktop-nav .nav-overlay{display:none !important;}
-
-  /* 콘텐츠 영역 */
-  .app-content{flex:1;overflow:hidden;display:flex;flex-direction:column;}
-
-  /* 페이지 뷰 */
-  .page-view{display:none;flex:1;overflow:auto;}
-  .page-view.active{display:flex;flex-direction:column;}
-
-  /* 시간표 페이지: 기존 .wrap */
-  #timetablePage .wrap{
-    max-width:920px;width:100%;margin:0 auto;
-    padding:20px 16px 40px;
-    flex:1;
-  }
-
-  /* 주간교육활동 페이지 - iframe 방식 */
-  .weekly-top-bar{
-    flex-shrink:0;padding:10px 14px;
-    background:var(--paper);border-bottom:1px solid var(--rule);
-    min-height:44px;display:flex;align-items:center;
-  }
-  .weekly-iframe-wrap{
-    flex:1;min-height:0;position:relative;
-  }
-  #weeklyIframe{
-    width:100%;height:100%;border:none;display:block;
-  }
-  .weekly-iframe-fallback{
-    position:absolute;inset:0;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:16px;
-    background:var(--paper);
-    font-size:14px;color:var(--ink-soft);
-  }
-  .weekly-open-btn{
-    padding:12px 24px;border-radius:8px;
-    background:var(--mon);color:#fff;font-weight:700;
-    font-family:'Noto Sans KR';font-size:14px;
-    text-decoration:none;
-  }
-  .weekly-open-btn:hover{opacity:.85;}
-  .weekly-page-loading{
-    font-size:13px;color:var(--ink-soft);
-  }
-  .weekly-dept{
-    background:var(--paper);border-radius:8px;margin-bottom:10px;overflow:hidden;
-    box-shadow:0 4px 12px -8px rgba(0,0,0,0.3);
-  }
-  .weekly-dept-header{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:12px 16px;cursor:pointer;
-    font-family:'Noto Serif KR';font-weight:700;font-size:13.5px;color:var(--ink);
-    background:var(--paper-soft);
-    border-bottom:1px solid var(--rule);
-  }
-  .weekly-dept-header:hover{background:var(--rule);}
-  .weekly-dept-body{padding:12px 16px;}
-  .weekly-dept-body.closed{display:none;}
-  .weekly-item{margin-bottom:14px;}
-  .weekly-item:last-child{margin-bottom:0;}
-  .weekly-item-title{
-    font-weight:700;font-size:12.5px;color:var(--ink);
-    margin-bottom:5px;padding-bottom:4px;border-bottom:1px dashed var(--rule);
-  }
-  .weekly-item-body{
-    font-size:12px;line-height:1.85;color:var(--ink-soft);
-    white-space:pre-wrap;word-break:break-word;
-  }
-  .weekly-item-body a{color:var(--wed);}
-  .weekly-html-content{
-    background:var(--paper);border-radius:8px;padding:24px 28px;
-    box-shadow:0 4px 12px -8px rgba(0,0,0,0.3);
-    font-size:15px;line-height:2;color:var(--ink-soft);
-  }
-  .weekly-html-content h1,.weekly-html-content h2,.weekly-html-content h3,
-  .weekly-html-content h4{
-    font-family:'Noto Serif KR';color:var(--ink);margin:24px 0 10px;
-    font-weight:700;padding-bottom:8px;border-bottom:1px solid var(--rule);
-  }
-  .weekly-html-content h1{font-size:20px;}
-  .weekly-html-content h2{font-size:18px;}
-  .weekly-html-content h3{font-size:16px;}
-  .weekly-html-content h4{font-size:15px;border-bottom:none;}
-  .weekly-html-content p{margin:6px 0;}
-  .weekly-html-content a{color:var(--wed);word-break:break-all;}
-  .weekly-html-content a:hover{text-decoration:underline;}
-  .weekly-html-content strong,.weekly-html-content b{color:var(--ink);font-weight:700;}
-  .weekly-html-content ul,.weekly-html-content ol{padding-left:20px;margin:6px 0;}
-  .weekly-html-content li{margin:4px 0;}
-  .weekly-html-content div{margin:3px 0;}
-  .weekly-html-content br{line-height:1.5;}
-
-  .weekly-week-bar{
-    display:flex;align-items:center;gap:8px;
-    margin-bottom:14px;flex-wrap:wrap;
-  }
-  .weekly-week-chip{
-    padding:5px 12px;border-radius:20px;cursor:pointer;
-    font-size:12px;font-weight:700;font-family:'Noto Sans KR';
-    border:1.5px solid var(--rule);color:var(--ink-soft);background:var(--paper);
-  }
-  .weekly-week-chip.active{background:var(--mon);border-color:var(--mon);color:#fff;}
-  .weekly-week-chip:hover:not(.active){background:var(--paper-soft);}
-
-  /* 기존 .wrap 기본 스타일 제거 (상위에서 처리) */
-  .wrap{max-width:unset;margin:unset;}
-
-  /* ══════════════════════════════════════════
-     기존 body 스타일 오버라이드
-  ══════════════════════════════════════════ */
   *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg-base);
+    background-image:
+      radial-gradient(circle at 18% 12%, rgba(255,255,255,0.04), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(255,255,255,0.03), transparent 45%);
+    color:var(--ink);
+    font-family:'Noto Sans KR', sans-serif;
+    min-height:100vh;
+    padding:28px 16px 60px;
+  }
+
+  .wrap{max-width:920px;margin:0 auto;}
 
   /* ---------- masthead ---------- */
   .masthead{
@@ -673,7 +482,6 @@
     .layout{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:stretch;}
     .main{display:flex;flex-direction:column;}
     .card{flex:1;margin-top:0;}
-    .app-nav{display:block;}
     .sidebar{
       display:block;
       background:var(--paper);border-radius:8px;
@@ -715,8 +523,10 @@
   .exit-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
   @media (max-height: 760px){
-    #timetablePage .wrap{padding-top:10px;padding-bottom:10px;}
-    .masthead{padding-top:10px;padding-bottom:8px;}
+    html, body{height:100%;overflow:hidden;}
+    body{padding:10px 16px;}
+    .wrap{height:100%;display:flex;flex-direction:column;}
+    .masthead{flex:0 0 auto;padding-top:14px;padding-bottom:10px;}
     .masthead .school{display:none;}
     .masthead h1{display:none;}
     .masthead .rule{display:none;}
@@ -728,13 +538,16 @@
     .search-box input{padding:7px 10px;font-size:13px;}
     .class-select-box{min-width:0;}
     .class-select-box select{padding:7px 8px;font-size:13px;}
-    .layout{flex:1 1 auto;min-height:0;margin-top:8px;}
+    .layout{flex:1 1 auto;min-height:0;margin-top:10px;}
+    .main{height:100%;display:flex;flex-direction:column;}
+    .card{flex:1 1 auto;padding-top:14px;overflow-y:auto;min-height:0;}
+    .sidebar{max-height:100%;}
     .masthead.winsize-active .controls{padding-right:205px;}
   }
   @media (max-height: 560px){
-    .masthead{padding-top:6px;padding-bottom:4px;}
+    .masthead{padding-top:8px;padding-bottom:6px;}
     .masthead .controls{margin-top:0;}
-    .table-wrap{padding-top:6px;}
+    .table-wrap{padding-top:8px;}
     .swap-hint{display:none;}
   }
 
@@ -778,40 +591,9 @@
     <div id="authStatus"></div>
   </div>
 </div>
+<button class="logout-btn" id="logoutBtn">로그아웃</button>
 
-<div class="app-shell" id="appShell">
-
-  <!-- 상단 헤더 바 -->
-  <header class="app-header">
-    <button class="hamburger-btn" id="hamburgerBtn" aria-label="메뉴">
-      <span></span><span></span><span></span>
-    </button>
-    <div class="app-header-title">영남고 현황판</div>
-    <button class="app-logout-btn" id="logoutBtn" style="display:none;">로그아웃</button>
-  </header>
-
-  <!-- 앱 바디 -->
-  <div class="app-body">
-
-    <!-- 모바일 오버레이 -->
-    <div class="nav-overlay" id="navOverlay"></div>
-
-    <!-- 메인 내비게이션 사이드바 -->
-    <nav class="main-nav" id="mainNav">
-      <div class="main-nav-item active" data-page="timetable">
-        <span class="main-nav-icon">📅</span>시간표
-      </div>
-      <div class="main-nav-item" data-page="weekly">
-        <span class="main-nav-icon">📋</span>주간교육활동
-      </div>
-    </nav>
-
-    <!-- 콘텐츠 영역 -->
-    <div class="app-content">
-
-      <!-- 시간표 페이지 -->
-      <div class="page-view active" id="timetablePage">
-        <div class="wrap">
+<div class="wrap">
 
   <div class="masthead">
     <div class="winsize-group" id="winsizeGroup" style="display:none;">
@@ -843,12 +625,10 @@
 
   <div class="layout">
     <aside class="sidebar" id="sidebarPanel">
-      <div id="teacherSidebarPanel">
-        <div class="sidebar-title" id="sidebarTitle">교사 목록 (82)</div>
-        <div class="sidebar-body" id="sidebarBody">
-          <div class="subject-col" id="subjectCol"></div>
-          <div class="teacher-col"><div id="sidebarList"></div></div>
-        </div>
+      <div class="sidebar-title" id="sidebarTitle">교사 목록 (82)</div>
+      <div class="sidebar-body" id="sidebarBody">
+        <div class="subject-col" id="subjectCol"></div>
+        <div class="teacher-col"><div id="sidebarList"></div></div>
       </div>
     </aside>
 
@@ -864,27 +644,7 @@
     <span><i style="background:#FFF8E3;border:1.5px solid #E8A93A;"></i>교시 시작 ±5분</span>
     <span style="margin-left:4px;">— 표시는 해당 시간에 등록된 수업이 없음을 의미합니다</span>
   </div>
-        </div><!-- .wrap 끝 -->
-      </div><!-- #timetablePage 끝 -->
-
-      <!-- 주간교육활동 페이지 -->
-      <div class="page-view" id="weeklyPage">
-        <div class="weekly-top-bar">
-          <div class="weekly-page-loading" id="weeklyPageLoading">주간교육활동을 불러오는 중...</div>
-          <div class="weekly-week-bar" id="weeklyWeekBar" style="display:none;"></div>
-        </div>
-        <div class="weekly-iframe-wrap">
-          <iframe id="weeklyIframe" title="주간 교육활동" src=""></iframe>
-          <div class="weekly-iframe-fallback" id="weeklyIframeFallback" style="display:none;">
-            <p>iframe이 차단되었습니다.</p>
-            <a id="weeklyDirectLink" href="https://sites.google.com/yeungnam.hs.kr/202633" target="_blank" class="weekly-open-btn">새 탭에서 열기 ↗</a>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- .app-content 끝 -->
-  </div><!-- .app-body 끝 -->
-</div><!-- .app-shell 끝 -->
+</div>
 
 <div class="modal-overlay" id="swapModal">
   <div class="modal-box">
@@ -2052,172 +1812,6 @@ document.addEventListener('visibilitychange', async () => {
     refreshCurrentView();
   }catch(e){}
 });
-
-// ---- 메인 네비게이션: 시간표 ↔ 주간교육활동 ----
-const mainNav       = document.getElementById('mainNav');
-const hamburgerBtn  = document.getElementById('hamburgerBtn');
-const navOverlay    = document.getElementById('navOverlay');
-const timetablePage = document.getElementById('timetablePage');
-const weeklyPage    = document.getElementById('weeklyPage');
-
-// 햄버거 (모바일/좁은화면)
-hamburgerBtn.addEventListener('click', () => {
-  const open = mainNav.classList.toggle('open');
-  hamburgerBtn.classList.toggle('open', open);
-  navOverlay.classList.toggle('open', open);
-});
-navOverlay.addEventListener('click', () => {
-  mainNav.classList.remove('open');
-  hamburgerBtn.classList.remove('open');
-  navOverlay.classList.remove('open');
-});
-
-// ── 메인 사이드바 반응형: 여백 기반 자동 전환 ──
-// 시간표 내부 사이드바(300px)가 이미 등장한 상태에서
-// .wrap 좌우 합 여백이 50px 이상 될 때 메인 사이드바를 인라인으로 펼침
-const MAIN_NAV_WIDTH = 240;    // .main-nav width
-const WRAP_MAX_WIDTH = 920;    // #timetablePage .wrap max-width
-const MARGIN_THRESHOLD = 50;  // 좌우 합 여백 기준 (px)
-
-function updateNavMode() {
-  // 메인 사이드바를 보였을 때 앱 콘텐츠 너비 = 윈도우 - 사이드바
-  const appContentWidthWithNav = window.innerWidth - MAIN_NAV_WIDTH;
-  // 그 상태에서 .wrap 좌우 합 여백
-  const marginsWithNav = Math.max(0, appContentWidthWithNav - WRAP_MAX_WIDTH);
-
-  const appShell = document.getElementById('appShell');
-  if(marginsWithNav >= MARGIN_THRESHOLD){
-    // 여백 충분 → 메인 사이드바 인라인으로 고정 표시
-    mainNav.classList.add('desktop');
-    mainNav.classList.remove('open');
-    hamburgerBtn.classList.remove('open');
-    navOverlay.classList.remove('open');
-    appShell.classList.add('desktop-nav');
-  } else {
-    // 여백 부족 → 오버레이(햄버거) 방식으로 복귀
-    mainNav.classList.remove('desktop');
-    appShell.classList.remove('desktop-nav');
-  }
-}
-
-// 초기 실행 + 리사이즈 감지
-updateNavMode();
-window.addEventListener('resize', updateNavMode);
-
-// 페이지 전환
-document.querySelectorAll('.main-nav-item').forEach(item => {
-  item.addEventListener('click', () => {
-    const page = item.dataset.page;
-    document.querySelectorAll('.main-nav-item').forEach(i => i.classList.remove('active'));
-    item.classList.add('active');
-
-    // 모바일: 선택 후 자동으로 닫기
-    mainNav.classList.remove('open');
-    hamburgerBtn.classList.remove('open');
-    navOverlay.classList.remove('open');
-
-    if(page === 'timetable'){
-      timetablePage.classList.add('active');
-      weeklyPage.classList.remove('active');
-    } else {
-      timetablePage.classList.remove('active');
-      weeklyPage.classList.add('active');
-      if(!weeklyInitialized) initWeeklyPage();
-    }
-  });
-});
-
-// ---- 주간교육활동 (iframe 방식) ----
-const SITES_BASE = 'https://sites.google.com/yeungnam.hs.kr/202633';
-const APPS_SCRIPT_PROXY = 'https://script.google.com/macros/s/AKfycby4NGUHpHzPXXdmdBbgCAMcx5Fjrya2_tmOGygrD0aEUIJlwZoGlCaDJtFfvGC-9DEzGQ/exec';
-
-const weeklyPageEl    = document.getElementById('weeklyPage');
-const weeklyPageLoading = document.getElementById('weeklyPageLoading');
-const weeklyWeekBar   = document.getElementById('weeklyWeekBar');
-const weeklyIframe    = document.getElementById('weeklyIframe');
-const weeklyFallback  = document.getElementById('weeklyIframeFallback');
-const weeklyDirectLink= document.getElementById('weeklyDirectLink');
-
-let weeklyInitialized = false;
-let currentWeekUrl    = SITES_BASE;
-
-async function initWeeklyPage(){
-  weeklyInitialized = true;
-  weeklyPageLoading.textContent = '주간교육활동 목록을 불러오는 중...';
-  weeklyPageLoading.style.display = '';
-  weeklyWeekBar.style.display = 'none';
-
-  // 1) 먼저 iframe에 현재 주차 페이지 로드
-  loadInIframe(SITES_BASE);
-
-  // 2) Apps Script에서 주차 목록 가져오기
-  try{
-    const res  = await fetch(APPS_SCRIPT_PROXY + '?url=' + encodeURIComponent(SITES_BASE),
-                             {signal: AbortSignal.timeout(10000)});
-    const text = await res.text();
-    const urls = text.trim().split('\n')
-      .map(u => u.trim())
-      .filter(u => u.includes('/202633/'));
-
-    if(urls.length > 0){
-      renderWeekChips(urls);
-      weeklyPageLoading.style.display = 'none';
-      weeklyWeekBar.style.display = '';
-    } else {
-      weeklyPageLoading.textContent = '목록을 가져오지 못했어요.';
-    }
-  }catch(e){
-    weeklyPageLoading.textContent = '목록 로딩 실패: ' + e.message;
-  }
-}
-
-function renderWeekChips(urls){
-  weeklyWeekBar.innerHTML = '';
-  urls.slice(0, 20).forEach((url, i) => {
-    const slug = decodeURIComponent(url.split('/202633/').pop()).replace(/-/g,' ');
-    const m = slug.match(/(\d{4})년\s*(\d+)월\s*(\d+)일\s*([월화수목금토일])/);
-    const text = m ? `${m[2]}월 ${m[3]}일(${m[4]})` : slug;
-
-    const chip = document.createElement('button');
-    chip.className = 'weekly-week-chip' + (i === 0 ? ' active' : '');
-    chip.textContent = text;
-    chip.addEventListener('click', () => {
-      weeklyWeekBar.querySelectorAll('.weekly-week-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      loadInIframe(url);
-    });
-    weeklyWeekBar.appendChild(chip);
-  });
-}
-
-function loadInIframe(url){
-  currentWeekUrl = url;
-  weeklyDirectLink.href = url;
-  weeklyIframe.src = url;
-  weeklyFallback.style.display = 'none';
-  weeklyIframe.style.display = 'block';
-
-  // iframe이 로드된 후 비어있으면 (X-Frame-Options 차단) fallback 표시
-  weeklyIframe.onload = function(){
-    try{
-      // 크로스오리진이면 접근 자체가 불가능 → catch에서 처리
-      const doc = weeklyIframe.contentDocument || weeklyIframe.contentWindow.document;
-      if(!doc || !doc.body || doc.body.innerHTML.trim() === ''){
-        showFallback();
-      }
-    }catch(e){
-      // 크로스오리진 오류 → 사실은 정상 로드된 것 (X-Frame-Options가 없는 경우)
-      // 아무것도 안 해도 됨
-    }
-  };
-}
-
-function showFallback(){
-  weeklyIframe.style.display = 'none';
-  weeklyFallback.style.display = 'flex';
-}
-
-
 
 </script>
 </body>
