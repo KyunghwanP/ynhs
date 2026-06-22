@@ -1,4 +1,4 @@
-const CACHE_NAME = 'timetable-app-v2';
+const CACHE_NAME = 'timetable-app-v3';
 const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -17,9 +17,13 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// 네트워크가 되면 항상 최신 버전을 먼저 가져오고, 그 결과를 캐시에도 갱신해둠.
-// 인터넷이 안 될 때만 마지막으로 저장해둔 캐시를 사용 (오프라인 지원은 그대로 유지).
+// GET 요청만 처리 (POST 등 Firestore/Firebase 요청은 절대 건드리지 않음)
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  // 외부 API 요청(Firebase, Google 등)은 캐시 없이 네트워크로만
+  const url = new URL(event.request.url);
+  if (url.origin !== location.origin) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
