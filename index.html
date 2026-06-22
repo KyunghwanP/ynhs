@@ -820,7 +820,9 @@ function rebuildElectiveLockSet(){
   ELECTIVE_LOCK_SET.clear();
   ELECTIVE_BLOCKS.forEach(block=>{
     block.teachers.forEach(name=>{
-      block.slots.forEach(([day,period])=>{
+      block.slots.forEach((slot)=>{
+        const day    = Array.isArray(slot) ? slot[0] : slot.day;
+        const period = Array.isArray(slot) ? slot[1] : slot.period;
         ELECTIVE_LOCK_SET.add(`${name}|${day}|${period}`);
       });
     });
