@@ -2,289 +2,261 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>영남고 시간표 업로드 도구</title>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    for(let registration of registrations) {
-      registration.unregister();
-    }
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(reg => reg.unregister());
   });
 }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Malgun Gothic', sans-serif; background-color: #f0f4f3; color: #222; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-  .card { background: #fff; border-radius: 12px; box-shadow: 0 20px 50px -15px rgba(0,0,0,0.3); max-width: 560px; width: 100%; padding: 36px 32px; }
-  h1 { font-size: 18px; font-weight: 900; color: #2F5D62; margin-bottom: 6px; }
-  .subtitle { font-size: 12.5px; color: #666; margin-bottom: 28px; line-height: 1.6; }
-  .step-box { background-color: #f8faf9; border: 1px solid #e4ebe9; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-  .step-title { font-size: 13px; font-weight: 700; color: #2F5D62; margin-bottom: 12px; display: flex; align-items: center; }
-  .step-title span { background-color: #2F5D62; color: #fff; font-size: 10px; width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
-  .btn { display: block; width: 100%; background-color: #2F5D62; color: #fff; border: none; padding: 12px; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
-  .btn:hover { background-color: #1E3D40; }
-  .btn:disabled { background-color: #ccc; cursor: not-allowed; }
-  .file-label { display: block; border: 2px dashed #b5c7c4; padding: 24px; text-align: center; border-radius: 6px; cursor: pointer; background-color: #fff; transition: background 0.2s; }
-  .file-label:hover { background-color: #f0f5f4; }
-  .file-label input { display: none; }
-  .file-info { margin-top: 8px; font-size: 12px; color: #555; font-weight: 700; }
-  #status { margin-top: 20px; padding: 14px; border-radius: 6px; font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; display: none; }
-  .status-info { background-color: #eaf4f5; border: 1px solid #bce1e4; color: #2c5e61; }
-  .status-err { background-color: #fdf2f2; border: 1px solid #fbc4c4; color: #9b2c2c; }
-  .user-info { font-size: 12px; color: #666; margin-top: -16px; margin-bottom: 24px; text-align: right; }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Malgun Gothic',sans-serif;background:#f0f4f3;color:#222;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .card{background:#fff;border-radius:12px;box-shadow:0 20px 50px -15px rgba(0,0,0,0.3);max-width:560px;width:100%;padding:36px 32px;}
+  h1{font-size:18px;font-weight:900;color:#2F5D62;margin-bottom:6px;}
+  .subtitle{font-size:12.5px;color:#666;margin-bottom:28px;line-height:1.6;}
+  .step{display:flex;align-items:flex-start;gap:14px;margin-bottom:20px;}
+  .step-num{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#2F5D62;color:#fff;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;}
+  .step-body{flex:1;}
+  .step-label{font-size:13px;font-weight:700;margin-bottom:6px;}
+  button{font-family:'Malgun Gothic',sans-serif;font-size:13px;font-weight:700;padding:10px 20px;border-radius:8px;border:1.5px solid #ccc;background:#f5f5f5;cursor:pointer;}
+  button:hover:not(:disabled){background:#e5e5e5;}
+  button:disabled{opacity:.45;cursor:default;}
+  .btn-primary{background:#2F5D62;color:#fff;border-color:#2F5D62;}
+  .btn-primary:hover:not(:disabled){background:#254d52;}
+  .file-label{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:1.5px dashed #aaa;border-radius:8px;cursor:pointer;font-size:13px;color:#555;background:#fafafa;}
+  .file-label:hover{border-color:#2F5D62;color:#2F5D62;}
+  #fileInput{display:none;}
+  #fileName{font-size:11.5px;color:#888;margin-top:6px;}
+  #status{margin-top:24px;padding:14px 16px;border-radius:8px;background:#f0f4f3;font-size:12.5px;line-height:1.8;white-space:pre-wrap;display:none;}
+  #status.ok{background:#e6f7e6;color:#1a6b1a;}
+  #status.err{background:#fdeaea;color:#a02626;}
+  #status.info{background:#e8f4f8;color:#1a4a6b;}
+  hr{border:none;border-top:1px solid #eee;margin:16px 0;}
 </style>
 </head>
 <body>
-
 <div class="card">
-  <h1>영남고 시간표 데이터 업로드</h1>
-  <div class="subtitle">엑셀 파일(.xlsx)을 선택하여 Firestore에 통합 데이터를 업로드합니다.</div>
-  
-  <div class="user-info" id="userInfo">확인 중...</div>
+  <h1>영남고 시간표 업로드 도구3</h1>
+  <p class="subtitle">엑셀 템플릿(시간표_입력템플릿_완성본.xlsx)을 채워서 올리면<br>앱 데이터가 바로 갱신됩니다.</p>
 
-  <div class="step-box" id="loginBox">
-    <div class="step-title"><span>0</span> 관리자 인증</div>
-    <button class="btn" id="loginBtn">Google 계정으로 로그인</button>
-    <button class="btn" id="logoutBtn" style="display:none; background-color:#888;">로그아웃</button>
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <div class="step-label">학교 계정으로 로그인</div>
+      <button id="loginBtn" class="btn-primary">Google로 로그인</button>
+      <button id="logoutBtn" style="display:none;margin-left:8px;">로그아웃</button>
+    </div>
   </div>
 
-  <div class="step-box">
-    <div class="step-title"><span>1</span> 엑셀 템플릿 파일 선택</div>
-    <label class="file-label">
-      <span style="font-size:13px; color:#666;">컴퓨터에서 파일 선택 (.xlsx)</span>
-      <input type="file" id="excelFile" accept=".xlsx">
-      <div class="file-info" id="fileName">선택된 파일 없음</div>
-    </label>
+  <hr>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <div class="step-label">엑셀 파일 선택</div>
+      <label class="file-label" for="fileInput">📂 파일 선택…</label>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" disabled>
+      <div id="fileName">파일을 선택해주세요</div>
+    </div>
   </div>
 
-  <button class="btn" id="uploadBtn" disabled>Firestore에 업로드 실행</button>
+  <hr>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <div class="step-label">Firestore에 업로드</div>
+      <button id="uploadBtn" class="btn-primary" disabled>데이터 업로드</button>
+    </div>
+  </div>
 
   <div id="status"></div>
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
-// [주의] 프로젝트 관리를 위해 본인의 기존 firebaseConfig 환경 변수를 그대로 사용하십시오.
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCrYCGksB-Nv8LNIv1kZc_a8d6bIL_5CvA",
+  authDomain: "ynhs-7b5ba.firebaseapp.com",
+  projectId: "ynhs-7b5ba",
+  storageBucket: "ynhs-7b5ba.firebasestorage.app",
+  messagingSenderId: "1031618043470",
+  appId: "1:1031618043470:web:edb5b8d1f98db029916d1f"
 };
+const ALLOWED_DOMAIN = '@yeungnam.hs.kr';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const provider = new GoogleAuthProvider();
 
-const userInfo = document.getElementById('userInfo');
-const loginBtn = document.getElementById('loginBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-const excelFile = document.getElementById('excelFile');
-const fileName = document.getElementById('fileName');
-const uploadBtn = document.getElementById('uploadBtn');
-const statusDiv = document.getElementById('status');
+const loginBtn   = document.getElementById('loginBtn');
+const logoutBtn  = document.getElementById('logoutBtn');
+const fileInput  = document.getElementById('fileInput');
+const fileNameEl = document.getElementById('fileName');
+const uploadBtn  = document.getElementById('uploadBtn');
+const statusEl   = document.getElementById('status');
 
+let parsedData  = null;
 let currentUser = null;
-let parsedData = null;
 
 function setStatus(msg, type) {
-  statusDiv.style.display = 'block';
-  statusDiv.className = type === 'err' ? 'status-err' : 'status-info';
-  statusDiv.innerText = msg;
+  statusEl.textContent = msg;
+  statusEl.className = type || 'info';
+  statusEl.style.display = msg ? '' : 'none';
 }
 
-// 기존 로그인/로그아웃 버튼 기능 원상복구
 loginBtn.addEventListener('click', async () => {
   try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ hd: 'yeungnam.hs.kr' });
     await signInWithPopup(auth, provider);
-  } catch (err) {
-    console.error(err);
-    setStatus('로그인 실패: ' + err.message, 'err');
+  } catch(e) {
+    setStatus('로그인 실패: ' + e.message, 'err');
   }
 });
 
-logoutBtn.addEventListener('click', async () => {
-  try {
-    await signOut(auth);
-    setStatus('로그아웃되었습니다.', 'info');
-  } catch (err) {
-    console.error(err);
-  }
-});
+logoutBtn.addEventListener('click', () => signOut(auth));
 
-onAuthStateChanged(auth, (user) => {
-  if (user) {
+onAuthStateChanged(auth, user => {
+  if (user && user.email && user.email.endsWith(ALLOWED_DOMAIN)) {
     currentUser = user;
-    userInfo.innerText = "접속 계정: " + user.email;
-    loginBtn.style.display = 'none';
-    logoutBtn.style.display = 'block';
+    loginBtn.style.display  = 'none';
+    logoutBtn.style.display = '';
+    logoutBtn.textContent   = user.email + ' (로그아웃)';
+    fileInput.disabled      = false;
+    setStatus('로그인됨: ' + user.email, 'info');
     if (parsedData) uploadBtn.disabled = false;
   } else {
     currentUser = null;
-    userInfo.innerText = "로그인 되지 않음";
-    loginBtn.style.display = 'block';
+    loginBtn.style.display  = '';
     logoutBtn.style.display = 'none';
-    uploadBtn.disabled = true;
+    fileInput.disabled      = true;
+    uploadBtn.disabled      = true;
+    if (user) {
+      setStatus('학교 계정(' + ALLOWED_DOMAIN + ')으로만 가능합니다.', 'err');
+      signOut(auth);
+    } else {
+      setStatus('');
+    }
   }
 });
 
-excelFile.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  fileName.innerText = file.name;
-  uploadBtn.disabled = true;
-  setStatus('엑셀 파일을 해석하는 중...', 'info');
-
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files[0];
+  if (!file) { parsedData = null; return; }
+  fileNameEl.textContent = file.name;
+  setStatus('파일 분석 중...', 'info');
   try {
     parsedData = await parseExcel(file);
-    setStatus("파일 해석 성공!\n업로드 준비가 완료되었습니다.", 'info');
+    const s = parsedData;
+    setStatus(
+      '파일 분석 완료\n' +
+      '  교사: ' + s.teachers.length + '명\n' +
+      '  내선번호: ' + Object.keys(s.extMap).length + '건\n' +
+      '  시정표: ' + s.bellSchedule.length + '개 교시\n' +
+      '  묶음선택과목: ' + s.electiveBlocks.length + '개 묶음\n\n' +
+      '이상 없으면 「데이터 업로드」 버튼을 눌러주세요.', 'ok');
     if (currentUser) uploadBtn.disabled = false;
-  } catch (err) {
-    console.error(err);
+  } catch(e) {
     parsedData = null;
-    setStatus("파일 해석 실패:\n" + err.message, 'err');
+    uploadBtn.disabled = true;
+    setStatus('파일 분석 실패:\n' + e.message, 'err');
   }
 });
 
-function parseExcel(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, {type: 'array'});
-        const sheetNames = wb.SheetNames;
+async function parseExcel(file) {
+  const buf  = await file.arrayBuffer();
+  const wb   = XLSX.read(buf, {type:'array'});
+  const DAYS = ['월','화','수','목','금'];
+  const PERIODS = [1,2,3,4,5,6,7];
+  const sheetNames = wb.SheetNames;
 
-        // [에러 수정] 순서(인덱스) 대신 시트 이름에 명칭이 포함되어 있는지 찾아 할당합니다.
-        const tsName = sheetNames.find(n => n.includes('전체시간표'));
-        const extName = sheetNames.find(n => n.includes('내선번호'));
-        const bellName = sheetNames.find(n => n.includes('시정표'));
-        const electiveName = sheetNames.find(n => n.includes('묶음선택과목'));
+  const name1 = sheetNames.find(n => n.includes('전체시간표'));
+  const ws1 = name1 ? wb.Sheets[name1] : null;
+  if (!ws1) throw new Error('「전체시간표」 시트가 없습니다.');
+  const rows1 = XLSX.utils.sheet_to_json(ws1, {header:1, range:1});
+  const teachers = [];
+  for (let ri = 1; ri < rows1.length; ri++) {
+    const row  = rows1[ri];
+    const name = (row[1] || '').toString().trim();
+    if (!name) continue;
+    const schedule = {};
+    DAYS.forEach((d, di) => {
+      schedule[d] = PERIODS.map((p, pi) => {
+        const cell = (row[2 + di * 7 + pi] || '').toString().trim();
+        if (!cell) return null;
+        const slash = cell.indexOf('/');
+        return slash === -1
+          ? {period: p, subject: cell, class: null}
+          : {period: p, subject: cell.slice(0, slash), class: cell.slice(slash + 1)};
+      }).filter(Boolean);
+    });
+    teachers.push({
+      no: String(ri),
+      name,
+      schedule,
+      total_hours: (row[37] || '').toString().trim() || null,
+      homeroom:    (row[38] || '').toString().trim() || null,
+      remarks:     (row[39] || '').toString().trim() || null,
+    });
+  }
+  if (teachers.length < 10) throw new Error('교사 수가 너무 적습니다 (' + teachers.length + '명). 전체시간표 탭을 확인해주세요.');
 
-        if (!tsName) throw new Error("엑셀 파일에서 '전체시간표' 탭을 찾을 수 없습니다.");
-        if (!extName) throw new Error("엑셀 파일에서 '내선번호' 탭을 찾을 수 없습니다.");
-        if (!bellName) throw new Error("엑셀 파일에서 '시정표' 탭을 찾을 수 없습니다.");
-        if (!electiveName) throw new Error("엑셀 파일에서 '묶음선택과목' 탭을 찾을 수 없습니다.");
+  const name2 = sheetNames.find(n => n.includes('내선번호'));
+  const ws2 = name2 ? wb.Sheets[name2] : null;
+  if (!ws2) throw new Error('「내선번호」 시트가 없습니다.');
+  const rows2 = XLSX.utils.sheet_to_json(ws2, {header:1, range:1});
+  const extMap = {};
+  for (let ri = 1; ri < rows2.length; ri++) {
+    const name = (rows2[ri][0] || '').toString().trim();
+    const ext  = (rows2[ri][1] || '').toString().trim();
+    if (name && ext) extMap[name] = ext;
+  }
 
-        const sheet1 = wb.Sheets[tsName];
-        const sheet2 = wb.Sheets[extName];
-        const sheet3 = wb.Sheets[bellName];
-        const sheet4 = wb.Sheets[electiveName];
+  const name3 = sheetNames.find(n => n.includes('시정표'));
+  const ws3 = name3 ? wb.Sheets[name3] : null;
+  if (!ws3) throw new Error('「시정표」 시트가 없습니다.');
+  const rows3 = XLSX.utils.sheet_to_json(ws3, {header:1, range:1});
+  const bellSchedule = [];
+  for (let ri = 1; ri < rows3.length; ri++) {
+    const pRaw  = (rows3[ri][0] || '').toString().trim();
+    const start = (rows3[ri][1] || '').toString().trim();
+    const end   = (rows3[ri][2] || '').toString().trim();
+    if (!pRaw || !start || !end) continue;
+    const period = pRaw === 'lunch' ? 'lunch' : parseInt(pRaw, 10);
+    if (pRaw !== 'lunch' && isNaN(period)) continue;
+    bellSchedule.push({period, start, end});
+  }
+  if (bellSchedule.length < 7) throw new Error('시정표가 부족합니다 (' + bellSchedule.length + '개). 시정표 탭을 확인해주세요.');
 
-        const rows1 = XLSX.utils.sheet_to_json(sheet1, {header: 1});
-        const rows2 = XLSX.utils.sheet_to_json(sheet2, {header: 1});
-        const rows3 = XLSX.utils.sheet_to_json(sheet3, {header: 1});
-        const rows4 = XLSX.utils.sheet_to_json(sheet4, {header: 1});
+  const name4 = sheetNames.find(n => n.includes('묶음선택과목'));
+  const ws4 = name4 ? wb.Sheets[name4] : null;
+  if (!ws4) throw new Error('「묶음선택과목」 시트가 없습니다.');
+  const rows4 = XLSX.utils.sheet_to_json(ws4, {header:1, range:1});
+  const blockMap = {};
+  for (let ri = 1; ri < rows4.length; ri++) {
+    const bn     = (rows4[ri][0] || '').toString().trim();
+    const tname  = (rows4[ri][1] || '').toString().trim();
+    const day    = (rows4[ri][2] || '').toString().trim();
+    const period = parseInt((rows4[ri][3] || '').toString().trim(), 10);
+    if (!bn || !tname || !day || isNaN(period)) continue;
+    if (!blockMap[bn]) blockMap[bn] = {teachers: new Set(), slots: new Set()};
+    blockMap[bn].teachers.add(tname);
+    blockMap[bn].slots.add(day + '|' + period);
+  }
+  const electiveBlocks = Object.values(blockMap).map(b => ({
+    teachers: [...b.teachers],
+    slots:    [...b.slots].map(s => { const [d, p] = s.split('|'); return {day: d, period: parseInt(p, 10)}; })
+  }));
 
-        // 1. 전체시간표 처리
-        const teachers = [];
-        let headerIdx = -1;
-        for (let i = 0; i < rows1.length; i++) {
-          if (rows1[i] && rows1[i].includes('교사명')) {
-            headerIdx = i;
-            break;
-          }
-        }
-        if (headerIdx === -1) headerIdx = 1;
-
-        const days = ['월', '화', '수', '목', '금'];
-        for (let ri = headerIdx + 1; ri < rows1.length; ri++) {
-          const r = rows1[ri];
-          if (!r || !r[1]) continue;
-          const tname = r[1].toString().trim();
-          if (!tname || tname.includes('[입력')) continue;
-
-          const schedule = {};
-          days.forEach(d => { schedule[d] = {}; });
-
-          const headerRow = rows1[headerIdx];
-          for (let ci = 2; ci < r.length; ci++) {
-            const hVal = (headerRow[ci] || '').toString().trim();
-            if (!hVal) continue;
-            const match = hVal.match(/^([월화수목금])([1-7])$/);
-            if (match) {
-              const d = match[1];
-              const p = parseInt(match[2], 10);
-              if (r[ci]) {
-                schedule[d][p] = r[ci].toString().trim();
-              }
-            }
-          }
-
-          let homeroom = '';
-          let totalHours = 0;
-          const homeroomCtx = headerRow.indexOf('담임');
-          const hoursCtx = headerRow.indexOf('시수');
-          if (homeroomCtx !== -1 && r[homeroomCtx]) homeroom = r[homeroomCtx].toString().trim();
-          if (hoursCtx !== -1 && r[hoursCtx]) totalHours = parseInt(r[hoursCtx], 10) || 0;
-
-          teachers.push({ name: tname, schedule, homeroom, totalHours });
-        }
-
-        // 2. 내선번호 처리
-        const extMap = {};
-        for (let ri = 1; ri < rows2.length; ri++) {
-          const r = rows2[ri];
-          if (!r || !r[0]) continue;
-          const name = r[0].toString().trim();
-          const ext = (r[1] || '').toString().trim();
-          if (!name || name.includes('[입력')) continue;
-          extMap[name] = ext;
-        }
-
-        // 3. 시정표 처리
-        const bellSchedule = [];
-        for (let ri = 1; ri < rows3.length; ri++) {
-          const r = rows3[ri];
-          if (!r || !r[0]) continue;
-          const period = r[0].toString().trim();
-          const start = (r[1] || '').toString().trim();
-          const end = (r[2] || '').toString().trim();
-          if (!period || period.includes('[입력')) continue;
-          bellSchedule.push({ period, start, end });
-        }
-
-        // 4. 묶음선택과목 처리
-        const blockMap = {};
-        for (let ri = 1; ri < rows4.length; ri++) {
-          const r = rows4[ri];
-          if (!r || !r[0]) continue;
-          const bn = r[0].toString().trim();
-          const tname = (r[1] || '').toString().trim();
-          const day = (r[2] || '').toString().trim();
-          const period = parseInt((r[3] || '').toString().trim(), 10);
-
-          if (!bn || !tname || !day || isNaN(period) || bn.includes('[입력')) continue;
-
-          if (!blockMap[bn]) blockMap[bn] = { teachers: new Set(), slots: new Set() };
-          blockMap[bn].teachers.add(tname);
-          blockMap[bn].slots.add(day + '|' + period);
-        }
-
-        const electiveBlocks = Object.values(blockMap).map(b => ({
-          teachers: [...b.teachers],
-          slots: [...b.slots].map(s => {
-            const [d, p] = s.split('|');
-            return { day: d, period: parseInt(p, 10) };
-          })
-        }));
-
-        resolve({ teachers, extMap, bellSchedule, electiveBlocks });
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = () => reject(new Error('파일을 읽는 중 오류가 발생했습니다.'));
-    reader.readAsArrayBuffer(file);
-  });
+  return {teachers, extMap, bellSchedule, electiveBlocks};
 }
 
 uploadBtn.addEventListener('click', async () => {
@@ -292,17 +264,18 @@ uploadBtn.addEventListener('click', async () => {
   uploadBtn.disabled = true;
   setStatus('Firestore에 업로드 중...', 'info');
   try {
-    await setDoc(doc(db, 'appdata', 'main'), { ...parsedData, updatedAt: new Date().toISOString() });
+    await setDoc(doc(db, 'appdata', 'main'), {...parsedData, updatedAt: new Date().toISOString()});
     setStatus(
       '업로드 완료!\n\n' +
       '  교사: ' + parsedData.teachers.length + '명\n' +
       '  내선번호: ' + Object.keys(parsedData.extMap).length + '건\n' +
-      '  시정표: ' + parsedData.bellSchedule.length + '건\n' +
-      '  묶음선택과목: ' + parsedData.electiveBlocks.length + '개 블록'
-    , 'info');
-  } catch (error) {
-    console.error(error);
-    setStatus('업로드 실패: ' + error.message, 'err');
+      '  시정표: ' + parsedData.bellSchedule.length + '개 교시\n' +
+      '  묶음선택과목: ' + parsedData.electiveBlocks.length + '개 묶음\n\n' +
+      '앱을 새로고침하면 새 데이터가 즉시 반영됩니다.', 'ok');
+    uploadBtn.disabled = false;
+  } catch(e) {
+    console.error('upload error:', e);
+    setStatus('업로드 실패:\n' + e.code + '\n' + e.message, 'err');
     uploadBtn.disabled = false;
   }
 });
