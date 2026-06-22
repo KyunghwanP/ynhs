@@ -31,10 +31,10 @@ if ('serviceWorker' in navigator) {
   .file-label:hover{border-color:#2F5D62;color:#2F5D62;}
   #fileInput{display:none;}
   #fileName{font-size:11.5px;color:#888;margin-top:6px;}
-  #status{margin-top:24px;padding:14px 16px;border-radius:8px;background:#f0f4f3;font-size:12.5px;line-height:1.8;white-space:pre-wrap;display:none;}
-  #status.ok{background:#e6f7e6;color:#1a6b1a;}
-  #status.err{background:#fdeaea;color:#a02626;}
-  #status.info{background:#e8f4f8;color:#1a4a6b;}
+  #status{margin-top:24px;padding:14px 16px;border-radius:8px;font-size:12.5px;line-height:1.8;white-space:pre-wrap;display:none;}
+  #status.ok{background:#e6f7e6;color:#1a6b1a;display:block;}
+  #status.err{background:#fdeaea;color:#a02626;display:block;}
+  #status.info{background:#e8f4f8;color:#1a4a6b;display:block;}
   hr{border:none;border-top:1px solid #eee;margin:16px 0;}
 </style>
 </head>
@@ -110,7 +110,6 @@ function setStatus(msg, type) {
   statusEl.textContent = msg;
   statusEl.className = type || 'info';
   statusEl.style.display = msg ? 'block' : 'none';
-  if(msg) statusEl.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 loginBtn.addEventListener('click', async () => {
@@ -177,8 +176,10 @@ async function parseExcel(file) {
   const wb   = XLSX.read(buf, {type:'array'});
   const DAYS = ['월','화','수','목','금'];
   const PERIODS = [1,2,3,4,5,6,7];
+  const sheetNames = wb.SheetNames;
 
-  const ws1 = wb.Sheets['전체시간표'];
+  const name1 = sheetNames.find(n => n.includes('전체시간표'));
+  const ws1 = name1 ? wb.Sheets[name1] : null;
   if (!ws1) throw new Error('「전체시간표」 시트가 없습니다.');
   const rows1 = XLSX.utils.sheet_to_json(ws1, {header:1, range:1});
   const teachers = [];
@@ -208,7 +209,8 @@ async function parseExcel(file) {
   }
   if (teachers.length < 10) throw new Error('교사 수가 너무 적습니다 (' + teachers.length + '명). 전체시간표 탭을 확인해주세요.');
 
-  const ws2 = wb.Sheets['내선번호'];
+  const name2 = sheetNames.find(n => n.includes('내선번호'));
+  const ws2 = name2 ? wb.Sheets[name2] : null;
   if (!ws2) throw new Error('「내선번호」 시트가 없습니다.');
   const rows2 = XLSX.utils.sheet_to_json(ws2, {header:1, range:1});
   const extMap = {};
@@ -218,7 +220,8 @@ async function parseExcel(file) {
     if (name && ext) extMap[name] = ext;
   }
 
-  const ws3 = wb.Sheets['시정표'];
+  const name3 = sheetNames.find(n => n.includes('시정표'));
+  const ws3 = name3 ? wb.Sheets[name3] : null;
   if (!ws3) throw new Error('「시정표」 시트가 없습니다.');
   const rows3 = XLSX.utils.sheet_to_json(ws3, {header:1, range:1});
   const bellSchedule = [];
@@ -233,7 +236,8 @@ async function parseExcel(file) {
   }
   if (bellSchedule.length < 7) throw new Error('시정표가 부족합니다 (' + bellSchedule.length + '개). 시정표 탭을 확인해주세요.');
 
-  const ws4 = wb.Sheets['묶음선택과목'];
+  const name4 = sheetNames.find(n => n.includes('묶음선택과목'));
+  const ws4 = name4 ? wb.Sheets[name4] : null;
   if (!ws4) throw new Error('「묶음선택과목」 시트가 없습니다.');
   const rows4 = XLSX.utils.sheet_to_json(ws4, {header:1, range:1});
   const blockMap = {};
@@ -247,9 +251,13 @@ async function parseExcel(file) {
     blockMap[bn].teachers.add(tname);
     blockMap[bn].slots.add(day + '|' + period);
   }
+  // slots을 객체 형태로 변환 (Firestore는 중첩 배열 미지원)
   const electiveBlocks = Object.values(blockMap).map(b => ({
     teachers: [...b.teachers],
-    slots:    [...b.slots].map(s => { const [d, p] = s.split('|'); return [d, parseInt(p, 10)]; })
+    slots: [...b.slots].map(s => {
+      const [d, p] = s.split('|');
+      return {day: d, period: parseInt(p, 10)};
+    })
   }));
 
   return {teachers, extMap, bellSchedule, electiveBlocks};
@@ -262,7 +270,7 @@ uploadBtn.addEventListener('click', async () => {
   try {
     await setDoc(doc(db, 'appdata', 'main'), {...parsedData, updatedAt: new Date().toISOString()});
     setStatus(
-      '업로드 완료!\n\n' +
+      '✅ 업로드 완료!\n\n' +
       '  교사: ' + parsedData.teachers.length + '명\n' +
       '  내선번호: ' + Object.keys(parsedData.extMap).length + '건\n' +
       '  시정표: ' + parsedData.bellSchedule.length + '개 교시\n' +
@@ -271,7 +279,7 @@ uploadBtn.addEventListener('click', async () => {
     uploadBtn.disabled = false;
   } catch(e) {
     console.error('upload error:', e);
-    setStatus('업로드 실패:\n' + e.code + '\n' + e.message, 'err');
+    setStatus('❌ 업로드 실패:\n' + e.code + '\n' + e.message, 'err');
     uploadBtn.disabled = false;
   }
 });
