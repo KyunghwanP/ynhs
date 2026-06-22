@@ -19,11 +19,14 @@ if ('serviceWorker' in navigator) {
   h1{font-size:18px;font-weight:900;color:#2F5D62;margin-bottom:6px;}
   .subtitle{font-size:12.5px;color:#666;margin-bottom:24px;line-height:1.6;}
   
-  /* 로그인 상태 표시 바 */
-  .auth-bar {background:#eef2f1;border:1px solid #d3e0dd;border-radius:6px;padding:12px 16px;margin-bottom:24px;display:flex;justify-content:between;align-items:center;font-size:13px;}
-  .auth-status {font-weight:700;color:#333;}
+  /* 인증 컨트롤 영역 */
+  .auth-container {background:#eef2f1;border:1px solid #d3e0dd;border-radius:8px;padding:16px;margin-bottom:24px;display:flex;flex-direction:column;gap:10px;}
+  .auth-row {display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+  .auth-status {font-weight:700;}
   .auth-status.logged-in {color:#2F5D62;}
   .auth-status.logged-out {color:#c53030;}
+  .auth-btn {background:#fff;border:1px solid #b5c7c4;color:#333;padding:6px 12px;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s;}
+  .auth-btn:hover {background:#f4f7f6;}
 
   .step-box{background:#f8faf9;border:1px solid #e4ebe9;border-radius:8px;padding:20px;margin-bottom:20px;}
   .step-title{font-size:13px;font-weight:700;color:#2F5D62;margin-bottom:12px;display:flex;align-items:center;}
@@ -46,11 +49,15 @@ if ('serviceWorker' in navigator) {
 <body>
 
 <div class="card">
-  <h1>영남고 시간표 데이터 업로드1</h1>
-  <div class="subtitle">사용설명서 탭을 포함한 원본 엑셀 파일(.xlsx)을 수정 없이 그대로 업로드할 수 있습니다.</div>
+  <h1>영남고 시간표 데이터 업로드2</h1>
+  <div class="subtitle">사용설명서 탭이 포함된 상태 그대로 업로드할 수 있습니다. 관리자 로그인 후 진행하십시오.</div>
   
-  <div class="auth-bar">
-    <div>인증 상태: <span id="authStatus" class="auth-status logged-out">확인 중...</span></div>
+  <div class="auth-container">
+    <div class="auth-row">
+      <div>계정 상태: <span id="authStatus" class="auth-status logged-out">확인 중...</span></div>
+      <button id="loginBtn" class="auth-btn" style="display:none;">Google 로그인</button>
+      <button id="logoutBtn" class="auth-btn" style="display:none;">로그아웃</button>
+    </div>
   </div>
 
   <div class="step-box">
@@ -69,10 +76,10 @@ if ('serviceWorker' in navigator) {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// 의존성 유지를 위해 기존 사용하시던 firebaseConfig 오브젝트를 그대로 복사하여 붙여넣으십시오.
+// 기존 시스템의 설정을 복사하여 적용해 주십시오.
 const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_AUTH_DOMAIN",
@@ -85,8 +92,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
 
 const authStatus = document.getElementById('authStatus');
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
 const excelFile = document.getElementById('excelFile');
 const fileName = document.getElementById('fileName');
 const uploadBtn = document.getElementById('uploadBtn');
@@ -101,37 +111,60 @@ function setStatus(msg, type) {
   statusDiv.innerText = msg;
 }
 
-// Firebase Authentication 상태 감지 모니터링 로직
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    currentUser = user;
-    authStatus.innerText = `${user.email} (관리자 계정)`;
-    authStatus.className = "auth-status logged-in";
-    if (parsedData) uploadBtn.disabled = false;
-  } else {
-    currentUser = null;
-    authStatus.innerText = "로그인 되지 않음 (권한 없음)";
-    authStatus.className = "auth-status logged-out";
-    uploadBtn.disabled = true;
-    setStatus('시스템 보안 정책: 업로드 권한이 없습니다. 먼저 호스트 계정으로 접근해 주십시오.', 'err');
+// 1. 로그인 / 로그아웃 버튼 이벤트 리스너 정의
+loginBtn.addEventListener('click', async () => {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (err) {
+    console.error(err);
+    setStatus(`로그인 실패: ${err.message}`, 'err');
   }
 });
 
+logoutBtn.addEventListener('click', async () => {
+  try {
+    await signOut(auth);
+    setStatus('로그아웃되었습니다.', 'info');
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+// 2. 인증 상태 변화 추적
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    currentUser = user;
+    authStatus.innerText = `${user.email} (관리자)`;
+    authStatus.className = "auth-status logged-in";
+    loginBtn.style.display = 'none';
+    logoutBtn.style.display = 'block';
+    if (parsedData) uploadBtn.disabled = false;
+  } else {
+    currentUser = null;
+    authStatus.innerText = "로그인 되지 않음";
+    authStatus.className = "auth-status logged-out";
+    loginBtn.style.display = 'block';
+    logoutBtn.style.display = 'none';
+    uploadBtn.disabled = true;
+  }
+});
+
+// 3. 엑셀 파싱 핸들러
 excelFile.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   fileName.innerText = file.name;
   uploadBtn.disabled = true;
-  setStatus('엑셀 데이터 검증 및 내부 테이블 파싱 중...', 'info');
+  setStatus('엑셀 데이터 구조 검증 및 정제 중...', 'info');
 
   try {
     parsedData = await parseExcel(file);
-    setStatus(`파일 분석 및 구조 검증 성공!\n업로드 대기 상태입니다.`, 'info');
+    setStatus(`엑셀 파싱 완료!\nFirestore 업로드 대기 중입니다.`, 'info');
     if (currentUser) uploadBtn.disabled = false;
   } catch (err) {
     console.error(err);
     parsedData = null;
-    setStatus(`데이터 구조 오류:\n${err.message}`, 'err');
+    setStatus(`규격 불일치 오류:\n${err.message}`, 'err');
   }
 });
 
@@ -144,23 +177,23 @@ function parseExcel(file) {
         const wb = XLSX.read(data, {type: 'array'});
         const sheetNames = wb.SheetNames;
 
-        // 사용설명서가 포함되어 있어도 명칭 기반으로 정확히 필요한 4개 탭 검출
+        // 사용설명서 탭의 인덱스 변화를 무력화하는 명칭 기반 탭 탐색
         const tsName = sheetNames.find(n => n.includes('전체시간표'));
         const extName = sheetNames.find(n => n.includes('내선번호'));
         const bellName = sheetNames.find(n => n.includes('시정표'));
         const electiveName = sheetNames.find(n => n.includes('묶음선택과목'));
 
-        if (!tsName) throw new Error("'전체시간표' 탭을 식별할 수 없습니다.");
-        if (!extName) throw new Error("'내선번호' 탭을 식별할 수 없습니다.");
-        if (!bellName) throw new Error("'시정표' 탭을 식별할 수 없습니다.");
-        if (!electiveName) throw new Error("'묶음선택과목' 탭을 식별할 수 없습니다.");
+        if (!tsName) throw new Error("'전체시간표' 탭이 확인되지 않습니다.");
+        if (!extName) throw new Error("'내선번호' 탭이 확인되지 않습니다.");
+        if (!bellName) throw new Error("'시정표' 탭이 확인되지 않습니다.");
+        if (!electiveName) throw new Error("'묶음선택과목' 탭이 확인되지 않습니다.");
 
         const rows1 = XLSX.utils.sheet_to_json(wb.Sheets[tsName], {header: 1});
         const rows2 = XLSX.utils.sheet_to_json(wb.Sheets[extName], {header: 1});
         const rows3 = XLSX.utils.sheet_to_json(wb.Sheets[bellName], {header: 1});
         const rows4 = XLSX.utils.sheet_to_json(wb.Sheets[electiveName], {header: 1});
 
-        // --- [시트1: 전체시간표 데이터 정제] ---
+        // --- [시트1: 전체시간표 처리] ---
         const teachers = [];
         let headerIdx = -1;
         for (let i = 0; i < rows1.length; i++) {
@@ -169,7 +202,7 @@ function parseExcel(file) {
             break;
           }
         }
-        if (headerIdx === -1) throw new Error("'전체시간표' 탭 내 규격화된 헤더('교사명')가 누락되었습니다.");
+        if (headerIdx === -1) throw new Error("'전체시간표' 내부의 '교사명' 기준 열(Header)을 식별할 수 없습니다.");
 
         const days = ['월', '화', '수', '목', '금'];
         const headerRow = rows1[headerIdx];
@@ -209,7 +242,7 @@ function parseExcel(file) {
           teachers.push({ name: tname, schedule, homeroom, totalHours });
         }
 
-        // --- [시트2: 내선번호 데이터 정제] ---
+        // --- [시트2: 내선번호 처리] ---
         const extMap = {};
         if (rows2) {
           rows2.forEach(r => {
@@ -222,7 +255,7 @@ function parseExcel(file) {
           });
         }
 
-        // --- [시트3: 시정표 데이터 정제] ---
+        // --- [시트3: 시정표 처리] ---
         const bellSchedule = [];
         if (rows3) {
           rows3.forEach(r => {
@@ -236,7 +269,7 @@ function parseExcel(file) {
           });
         }
 
-        // --- [시트4: 묶음선택과목 데이터 정제] ---
+        // --- [시트4: 묶음선택과목 처리] ---
         const blockMap = {};
         if (rows4) {
           rows4.forEach(r => {
@@ -269,27 +302,28 @@ function parseExcel(file) {
         reject(err);
       }
     };
-    reader.onerror = () => reject(new Error('파일 스트림 해독 오류가 발생했습니다.'));
+    reader.onerror = () => reject(new Error('파일 스트림 처리 오류'));
     reader.readAsArrayBuffer(file);
   });
 }
 
+// 4. Firestore 최종 커밋 제어
 uploadBtn.addEventListener('click', async () => {
-  if (!parsedData || !currentUser) { setStatus('정상적인 접근이 아닙니다. 계정 권한 또는 파싱 상태를 확인하십시오.', 'err'); return; }
+  if (!parsedData || !currentUser) { setStatus('트랜잭션 실행 실패: 인증 또는 파싱 상태 누락', 'err'); return; }
   uploadBtn.disabled = true;
-  setStatus('Firestore 트랜잭션 진행 중...', 'info');
+  setStatus('Firestore에 최종 패키지 업로드 중...', 'info');
   try {
     await setDoc(doc(db, 'appdata', 'main'), { ...parsedData, updatedAt: new Date().toISOString() });
     setStatus(
-      '업로드 검증 완료!\n\n' +
-      '  교사 풀: ' + parsedData.teachers.length + '명 등록\n' +
-      '  내선 맵핑: ' + Object.keys(parsedData.extMap).length + '건 처리\n' +
-      '  마스터 시정표: ' + parsedData.bellSchedule.length + '개 교시 확정\n' +
-      '  선택 과목 블록: ' + parsedData.electiveBlocks.length + '개 그룹 동기화 완료'
+      '동기화 및 업로드 완료!\n\n' +
+      '  - 교사 데이터: ' + parsedData.teachers.length + '명 등록\n' +
+      '  - 내선 번호부: ' + Object.keys(parsedData.extMap).length + '건 처리\n' +
+      '  - 시정 계획표: ' + parsedData.bellSchedule.length + '개 교시 세팅\n' +
+      '  - 묶음 연동 정보: ' + parsedData.electiveBlocks.length + '개 블록 갱신'
     , 'info');
   } catch (error) {
     console.error(error);
-    setStatus('서버 저장 실패 (데이터 검증 에러):\n' + error.message, 'err');
+    setStatus('서버 쓰기 에러 발생:\n' + error.message, 'err');
     uploadBtn.disabled = false;
   }
 });
