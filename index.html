@@ -1770,11 +1770,14 @@ async function loadDataFromFirestore(){
   }
 }
 
+let appInitialized = false;
+
 onAuthStateChanged(fbAuth, async (user) => {
   if(!user){
     authGate.classList.add('open');
     logoutBtn.style.display = 'none';
     setAuthStatus('');
+    appInitialized = false;
     return;
   }
 
@@ -1792,9 +1795,22 @@ onAuthStateChanged(fbAuth, async (user) => {
     initAppUI();
     authGate.classList.remove('open');
     logoutBtn.style.display = '';
+    appInitialized = true;
   }catch(e){
     setAuthStatus('데이터를 불러오지 못했습니다: ' + e.message + ' (인터넷 연결을 확인하고 새로고침해주세요)', true);
   }
+});
+
+// 탭으로 돌아오거나 새로고침할 때마다 Firestore에서 최신 데이터를 다시 가져옴
+document.addEventListener('visibilitychange', async () => {
+  if(document.visibilityState !== 'visible') return;
+  if(!appInitialized) return;
+  const user = fbAuth.currentUser;
+  if(!user || !user.email.endsWith(ALLOWED_EMAIL_DOMAIN)) return;
+  try{
+    await loadDataFromFirestore();
+    refreshCurrentView();
+  }catch(e){}
 });
 
 </script>
