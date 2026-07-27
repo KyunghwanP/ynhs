@@ -365,18 +365,14 @@ PositionHandle(widgetHwnd) {
         return
     w := WidgetWins[widgetHwnd]
     WidgetVisibleRect(widgetHwnd, &wx, &wy, &wW, &wH)
-    ; 이 위젯이 놓인 모니터의 배율(DPI)에 맞춰 손잡이 크기·글꼴을 계산 → 혼합 배율에서도 자연스럽게
-    dpi := DllCall("user32\GetDpiForWindow", "ptr", widgetHwnd, "uint")
-    s := (dpi ? dpi : 96) / 96.0
-    hh  := Round(HANDLE_H * s)
-    top := Round(HANDLE_TOP * s)
-    w.handleGui.SetFont("s" Round(9 * s))
-    w.hlbl.Move(Round(8*s),        Round(5*s), wW - Round(190*s), Round(16*s))
-    w.hsld.Move(wW - Round(178*s), Round(4*s), Round(78*s),       Round(18*s))
-    w.hApp.Move(wW - Round(94*s),  Round(3*s), Round(58*s),       Round(20*s))
-    w.hX.Move(wW - Round(30*s),    Round(3*s), Round(26*s),       Round(20*s))
+    ; Per-Monitor-V2 + -DPIScale 상태라 컨트롤/글꼴은 창이 놓인 모니터 배율로 이미 그려짐 →
+    ;   기본값 그대로 두고, 위치·폭만 물리좌표(wx·wW)로 지정하면 어느 모니터에서도 정확히 겹침.
+    w.hlbl.Move(8, 5, wW - 190, 16)
+    w.hsld.Move(wW - 178, 4)
+    w.hApp.Move(wW - 94, 3)
+    w.hX.Move(wW - 30, 3)
     ; 맨 위 HANDLE_TOP 만큼 비워 위쪽 테두리로 크기조절 가능하게(손잡이는 그 아래에 겹침)
-    w.handleGui.Show(Format("x{} y{} w{} h{} NoActivate", wx, wy + top, wW, hh))
+    w.handleGui.Show(Format("x{} y{} w{} h{} NoActivate", wx, wy + HANDLE_TOP, wW, HANDLE_H))
 }
 
 SetWidgetOpacity(hwnd, val) {
@@ -433,10 +429,8 @@ HoverCheck() {
         target := HandleToWidget[root]            ; 손잡이 바 위 → 계속 표시
     else if WidgetWins.Has(root) {
         WinGetPos(&wx, &wy, , , "ahk_id " root)
-        ; 맨 위 HANDLE_TOP(리사이즈용 여백)~손잡이 아래까지가 손잡이 표시 영역 (모니터 배율 반영)
-        dpi := DllCall("user32\GetDpiForWindow", "ptr", root, "uint")
-        s := (dpi ? dpi : 96) / 96.0
-        if (my >= wy + Round(HANDLE_TOP*s) && my <= wy + Round((HANDLE_TOP + HANDLE_H)*s) + 4)
+        ; 맨 위 HANDLE_TOP(리사이즈용 여백)~손잡이 아래까지가 손잡이 표시 영역
+        if (my >= wy + HANDLE_TOP && my <= wy + HANDLE_TOP + HANDLE_H + 4)
             target := root
     }
     if dragHwnd
