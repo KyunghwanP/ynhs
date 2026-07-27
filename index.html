@@ -23,6 +23,58 @@
     document.title = '영남고 위젯 · ' + (names[p] || p);
   })();
 </script>
+<!-- ── 위젯 손잡이 바(웹 내장) ──────────────────────────────────
+     네이티브 오버레이 대신 WebView가 직접 그리는 HTML 바 → DPI·겹침 문제 없음.
+     버튼은 window.chrome.webview.postMessage 로 AHK에 전달(투명도/닫기/앱/이동). -->
+<script>
+  (function(){
+    var p = new URLSearchParams(location.search).get('widget');
+    if(!p) return;
+    var host = (window.chrome && window.chrome.webview) ? window.chrome.webview : null;
+    function post(m){ try{ if(host) host.postMessage(m); }catch(e){} }
+    function build(){
+      if(!document.body || document.getElementById('wgtBar')) return;
+      var qs = new URLSearchParams(location.search);
+      var op = parseInt(qs.get('op')||'240',10);
+      var names = {meal:'🍱 급식',weather:'🌤 날씨',schedule:'📆 학사일정',cal:'🗓 달력',
+        task:'📌 진행중 업무',consult:'🗓️ 상담 일정',timetable:'📅 오늘 시간표',fulltt:'📅 내 시간표',
+        classtt:'🏫 우리반 시간표',classorg:'🏫 학급 편성',ai:'🤖 주간 요약'};
+      var css = document.createElement('style');
+      css.textContent =
+        '#wgtBar{position:fixed;top:0;left:0;right:0;height:28px;z-index:2147483647;display:flex;'
+        +'align-items:center;gap:6px;padding:0 6px;background:rgba(248,250,252,.96);'
+        +'border-bottom:1px solid rgba(0,0,0,.08);font:600 12px/1 "맑은 고딕",sans-serif;color:#555;'
+        +'opacity:0;transition:opacity .12s;pointer-events:none;-webkit-user-select:none;user-select:none;}'
+        +'html.dark #wgtBar{background:rgba(17,26,45,.96);color:#9fb0c9;border-color:rgba(255,255,255,.08);}'
+        +'#wgtBar.show{opacity:1;pointer-events:auto;}'
+        +'#wgtBar .wgt-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:move;}'
+        +'#wgtBar input[type=range]{width:70px;}'
+        +'#wgtBar button{border:none;background:transparent;cursor:pointer;font:inherit;color:inherit;'
+        +'padding:3px 7px;border-radius:6px;}#wgtBar button:hover{background:rgba(0,0,0,.08);}'
+        +'html.dark #wgtBar button:hover{background:rgba(255,255,255,.12);}';
+      document.head.appendChild(css);
+      var bar = document.createElement('div');
+      bar.id='wgtBar';
+      bar.innerHTML =
+        '<span class="wgt-title" id="wgtDrag">'+(names[p]||p)+'</span>'
+        +'<input type="range" id="wgtOp" min="70" max="255" value="'+op+'" title="투명도">'
+        +'<button id="wgtApp" title="앱에서 열기">↗ 앱</button>'
+        +'<button id="wgtClose" title="닫기">✕</button>';
+      document.body.appendChild(bar);
+      // 마우스가 맨 위에 가면 바 표시(웹 위에 겹침, 내용 안 밀림)
+      document.addEventListener('mousemove', function(e){
+        if(e.clientY <= 30) bar.classList.add('show');
+        else if(e.clientY > 40) bar.classList.remove('show');
+      });
+      // 드래그(제목 영역) → AHK가 창 이동
+      document.getElementById('wgtDrag').addEventListener('mousedown', function(e){ e.preventDefault(); post('drag'); });
+      document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
+      document.getElementById('wgtApp').addEventListener('click', function(){ post('app'); });
+      document.getElementById('wgtClose').addEventListener('click', function(){ post('close'); });
+    }
+    if(document.readyState!=='loading') build(); else document.addEventListener('DOMContentLoaded', build);
+  })();
+</script>
 <style>
   html.widget-mode, html.widget-mode body { height:100%; margin:0; background:#f1f5f9; overflow:hidden; }
   html.dark.widget-mode, html.dark.widget-mode body { background:#0B1220; }

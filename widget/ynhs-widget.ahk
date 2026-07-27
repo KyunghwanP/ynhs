@@ -138,7 +138,8 @@ A_TrayMenu.Add("종료", (*) => ExitApp())
 A_TrayMenu.Default := "위젯 추가 / 선택"
 
 ShowSelector()
-SetTimer(HoverCheck, 120)    ; 마우스 올린 위젯만 손잡이 바 표시
+; 손잡이 바는 이제 웹(HTML)에 내장 → 네이티브 오버레이/호버 타이머 미사용(DPI·겹침 문제 제거)
+; SetTimer(HoverCheck, 120)
 
 ; Win+D를 우리가 직접 처리 → 위젯은 남기고 '다른 앱 창'만 최소화/복원(정상 토글 유지)
 global gDesktopShown := false
@@ -294,7 +295,9 @@ CreateWidget(p) {
             return
         }
     }
-    wvc.CoreWebView2.Navigate(PanelUrl(key) "&t=" A_Now)   ; &t= : 실행마다 최신 페이지 로드(캐시 지연 방지)
+    wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&t=" A_Now)   ; &t= : 최신 로드, &op= : 초기 투명도
+    ; 웹 내장 손잡이 바(HTML) → AHK 브릿지: 투명도/닫기/앱/이동. 네이티브 손잡이 대체.
+    try wvc.CoreWebView2.add_WebMessageReceived(OnWebMsg.Bind(g.hwnd, key))
     g.OnEvent("Size", OnResize)
     SetWidgetOpacity(g.hwnd, op)   ; 창 전체 반투명(슬라이더) — 어느 윈도우에서나 확실히 동작
 
@@ -586,6 +589,32 @@ LaunchMain(panel) {
         Run('"' appExe '"', A_ScriptDir)
     else
         Run(APP_URL "?goto=" page)
+}
+
+; ── 웹 내장 손잡이 바에서 온 메시지 처리 (투명도/닫기/앱/이동) ──
+OnWebMsg(gh, key, sender, args) {
+    m := ""
+    try m := args.TryGetWebMessageAsString()
+    if (m = "")
+        try m := Trim(args.WebMessageAsJson, '"')
+    if (m = "close")
+        SetTimer(() => DestroyWidget(gh, true), -1)   ; 이벤트 끝난 뒤 파괴(즉시 파괴 시 크래시)
+    else if (m = "app")
+        LaunchMain(key)
+    else if (m = "drag")
+        StartDragFromMouse(gh)
+    else if (SubStr(m, 1, 3) = "op:")
+        SetWidgetOpacity(gh, Integer(SubStr(m, 4)))
+}
+; 웹에서 드래그 시작 신호 → 현재 마우스 기준으로 창 이동 시작(기존 DragMove 재사용)
+StartDragFromMouse(gh) {
+    global dragHwnd, grabOffX, grabOffY, dragW, dragH
+    if !WinExist("ahk_id " gh)
+        return
+    MouseGetPos(&cx, &cy)
+    WinGetPos(&wx, &wy, &wW, &wH, "ahk_id " gh)
+    dragHwnd := gh, grabOffX := cx - wx, grabOffY := cy - wy, dragW := wW, dragH := wH
+    SetTimer(DragMove, 10)
 }
 
 ; 위젯 페이지 URL — 메모는 독립 페이지(memo2.html), 나머지는 index.html?widget=
