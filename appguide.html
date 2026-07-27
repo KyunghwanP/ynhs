@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대학 수시 모집요강 조회</title>
+    <script>
+      // 본체(index.html) iframe 안에서 열리면 embed 모드 — 자체 헤더를 숨기고 뷰어를 화면에 꽉 채움
+      if (window.self !== window.top) document.documentElement.classList.add('embed');
+    </script>
+    <!--
+      대학 수시 모집요강(adiga 공개 PDF) 조회기 — 진로진학 허브 하위 페이지
+      - 데이터: appguide.csv (조회연도, 대학명, 대학코드, 문서종류, 다운로드링크)
+      - PDF는 CORS 우회 프록시(Cloudflare Worker)를 통해 pdf.js로 렌더링
+      - 대학 필터: 이름 입력형 콤보박스 / PDF 내부 텍스트 검색(다음·이전·건수) 지원
+      - 성능: 페이지 지연 렌더링(IntersectionObserver) + 본문 텍스트는 백그라운드 색인
+      - 디자인: jindan.html과 동일한 슬레이트·인디고 톤
+    -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --indigo: #4f46e5; --indigo-dark: #4338ca; --indigo-50: #eef2ff; --indigo-100: #e0e7ff;
+            --slate-900: #0f172a; --slate-800: #1e293b; --slate-500: #64748b; --slate-400: #94a3b8;
+            --slate-300: #cbd5e1; --slate-200: #e2e8f0; --slate-100: #f1f5f9; --slate-50: #f8fafc;
+        }
+        html, body { height: 100%; }
+        body {
+            font-family: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+            letter-spacing: -0.02em; background: var(--slate-50); color: var(--slate-900);
+            -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; min-height: 100%;
+        }
+        button, input { font-family: inherit; }
+        .serif { font-weight: 900; letter-spacing: -0.04em; }
+
+        /* ── 헤더 ── */
+        .site-header { background: #fff; border-bottom: 1px solid var(--slate-200); position: sticky; top: 0; z-index: 30; }
+        .site-header-inner { max-width: 72rem; margin: 0 auto; padding: 10px 16px; min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .brand { display: flex; align-items: center; gap: 11px; }
+        .brand-badge { background: var(--indigo); padding: 9px; border-radius: 11px; font-size: 20px; line-height: 1; }
+        .brand h1 { font-size: 18px; line-height: 1.15; }
+        .brand .sub { font-size: 10.5px; color: var(--indigo); font-weight: 900; letter-spacing: .22em; text-transform: uppercase; margin-top: 3px; }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+        #db-count { font-size: 11.5px; font-weight: 900; color: var(--indigo); background: var(--indigo-50); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--indigo-100); white-space: nowrap; }
+        .back-link { font-size: 12.5px; font-weight: 800; color: var(--slate-500); text-decoration: none; background: #fff; border: 1px solid var(--slate-200); padding: 7px 13px; border-radius: 11px; }
+        .back-link:hover { border-color: var(--indigo); color: var(--indigo); }
+
+        main { flex: 1; width: 100%; max-width: 72rem; margin: 0 auto; padding: 20px 16px 40px; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+
+        /* ── 대학 선택 콤보박스 ── */
+        .picker { background: #fff; border: 1px solid var(--slate-200); border-radius: 20px; padding: 20px; box-shadow: 0 4px 20px rgba(148,163,184,.12); }
+        .picker-label { display: block; font-size: 11px; font-weight: 900; color: var(--slate-400); text-transform: uppercase; letter-spacing: .15em; margin: 0 0 9px 4px; }
+        .combo { position: relative; }
+        .combo-input { display: flex; align-items: center; gap: 10px; background: #fff; border: 1.5px solid var(--slate-200); border-radius: 14px; padding: 0 16px; transition: border-color .15s, box-shadow .15s; }
+        .combo-input.focus { border-color: var(--indigo); box-shadow: 0 0 0 6px rgba(99,102,241,.08); }
+        .combo-input .ico { font-size: 17px; }
+        .combo-input input { flex: 1; border: none; outline: none; background: transparent; padding: 15px 0; font-size: 15.5px; font-weight: 700; color: var(--slate-800); min-width: 0; }
+        .combo-input .clear { border: none; background: var(--slate-100); color: var(--slate-500); width: 26px; height: 26px; border-radius: 50%; font-size: 14px; cursor: pointer; display: none; flex-shrink: 0; }
+        .combo-input .clear:hover { background: var(--slate-200); }
+        .combo-list { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0; background: #fff; border: 1px solid var(--slate-200); border-radius: 14px; box-shadow: 0 16px 40px rgba(15,23,42,.14); max-height: 340px; overflow-y: auto; display: none; padding: 6px; }
+        .combo-list.open { display: block; }
+        .combo-opt { padding: 11px 14px; border-radius: 10px; cursor: pointer; font-size: 14.5px; font-weight: 700; color: var(--slate-800); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .combo-opt:hover, .combo-opt.active { background: var(--indigo-50); color: var(--indigo-dark); }
+        .combo-opt .campus { flex-shrink: 0; font-size: 12.5px; font-weight: 900; color: #fff; background: var(--indigo); padding: 3px 11px; border-radius: 999px; letter-spacing: .01em; }
+        .combo-opt.active .campus { background: var(--indigo-dark); }
+        .combo-empty { padding: 16px; text-align: center; font-size: 13.5px; font-weight: 700; color: var(--slate-400); }
+        .picker-hint { font-size: 12px; color: var(--slate-400); font-weight: 600; margin: 11px 0 0 4px; }
+
+        /* ── 뷰어 ── */
+        .viewer { flex: 1; display: flex; flex-direction: column; min-height: 420px; background: #fff; border: 1px solid var(--slate-200); border-radius: 20px; overflow: hidden; box-shadow: 0 4px 20px rgba(148,163,184,.12); }
+        .viewer[hidden] { display: none; }
+        .viewer-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--slate-200); background: var(--slate-50); }
+        .vt-title { font-size: 15px; font-weight: 900; color: var(--slate-900); display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .vt-title .yr { font-size: 10.5px; font-weight: 900; color: var(--indigo); background: var(--indigo-50); border: 1px solid var(--indigo-100); padding: 3px 8px; border-radius: 999px; flex-shrink: 0; }
+        .vt-title .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* 페이지 이동 (##/##) — 대학명과 검색 사이 */
+        .pdf-pagenav { display: flex; align-items: center; gap: 5px; margin-left: 4px; background: #fff; border: 1.5px solid var(--slate-200); border-radius: 12px; padding: 6px 11px; font-size: 13px; font-weight: 800; color: var(--slate-500); }
+        .pdf-pagenav[hidden] { display: none; }
+        .pdf-pagenav.focus { border-color: var(--indigo); box-shadow: 0 0 0 5px rgba(99,102,241,.08); }
+        .pdf-pagenav input { width: 34px; border: none; outline: none; background: transparent; text-align: right; font-size: 13px; font-weight: 800; color: var(--slate-800); font-variant-numeric: tabular-nums; }
+        .pdf-pagenav input:disabled { color: var(--slate-300); }
+        .pdf-pagenav .pp-sep { color: var(--slate-300); }
+        .pdf-pagenav #pdfPageTotal { min-width: 14px; color: var(--slate-500); font-variant-numeric: tabular-nums; }
+        .pdf-search { display: flex; align-items: center; gap: 6px; margin-left: auto; background: #fff; border: 1.5px solid var(--slate-200); border-radius: 12px; padding: 4px 6px 4px 12px; }
+        .pdf-search.focus { border-color: var(--indigo); box-shadow: 0 0 0 5px rgba(99,102,241,.08); }
+        .pdf-search input { border: none; outline: none; background: transparent; font-size: 14px; font-weight: 700; color: var(--slate-800); width: 190px; max-width: 42vw; }
+        .ps-count { font-size: 12px; font-weight: 800; color: var(--slate-400); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 44px; text-align: center; }
+        .ps-btn { border: none; background: var(--slate-100); color: var(--slate-600); width: 30px; height: 30px; border-radius: 8px; font-size: 13px; font-weight: 900; cursor: pointer; }
+        .ps-btn:hover:not(:disabled) { background: var(--indigo); color: #fff; }
+        .ps-btn:disabled { opacity: .4; cursor: default; }
+        /* 확대/축소 */
+        .pdf-zoom { display: flex; align-items: center; gap: 4px; }
+        .pdf-zoom[hidden] { display: none; }
+        .pz-val { font-size: 12px; font-weight: 800; color: var(--slate-500); min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
+        .pz-fit { width: auto; padding: 0 10px; font-size: 11.5px; }
+        .vt-dl { font-size: 12.5px; font-weight: 800; color: var(--slate-500); text-decoration: none; border: 1px solid var(--slate-200); padding: 7px 12px; border-radius: 10px; white-space: nowrap; }
+        .vt-dl:hover { border-color: var(--indigo); color: var(--indigo); }
+
+        .pdf-status { font-size: 12.5px; font-weight: 700; color: var(--slate-500); padding: 8px 16px; border-bottom: 1px solid var(--slate-100); display: none; align-items: center; gap: 8px; }
+        .pdf-status.show { display: flex; }
+        .pdf-status .spin { width: 14px; height: 14px; border: 2px solid var(--slate-200); border-top-color: var(--indigo); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #pdfContainer { flex: 1; overflow-y: auto; overflow-x: auto; background: var(--slate-100); padding: 16px 0 32px; -webkit-overflow-scrolling: touch; }
+        .pdf-page { position: relative; margin: 0 auto 14px; background: #fff; box-shadow: 0 2px 10px rgba(15,23,42,.14); border-radius: 3px; overflow: hidden; }
+        .pdf-page canvas { display: block; }
+        .pdf-page .ph { display: flex; align-items: center; justify-content: center; color: var(--slate-300); font-size: 12px; font-weight: 800; height: 100%; }
+        .pdf-page.flash { animation: pageFlash .8s ease-out; }
+        @keyframes pageFlash { 0%,100% { box-shadow: 0 2px 10px rgba(15,23,42,.14); } 30% { box-shadow: 0 0 0 3px var(--indigo); } }
+
+        /* pdf.js 텍스트 레이어 (검색 하이라이트용) */
+        .textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; z-index: 2; }
+        .textLayer span, .textLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+        .textLayer ::selection { background: rgba(79,70,229,.28); }
+        .textLayer mark { background: rgba(250,204,21,.55); color: transparent; border-radius: 2px; }
+        .textLayer mark.cur { background: rgba(245,158,11,.85); box-shadow: 0 0 0 1px rgba(245,158,11,.9); }
+
+        .viewer-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; padding: 60px 20px; color: var(--slate-400); }
+        .viewer-empty .big { font-size: 44px; }
+        .viewer-empty h3 { font-size: 17px; font-weight: 900; color: var(--slate-500); }
+        .viewer-empty p { font-size: 13.5px; font-weight: 600; line-height: 1.6; }
+        .pdf-error { color: #dc2626 !important; }
+
+        @media (max-width: 640px) {
+            .pdf-search { margin-left: 0; order: 3; width: 100%; }
+            .pdf-search input { width: 100%; max-width: none; flex: 1; }
+            .vt-dl { order: 2; }
+        }
+
+        /* ── 좁은 화면(폰·태블릿 세로): 뷰어를 화면 높이만큼 확보 ──
+           flex 배분에 맡기면 헤더·검색창을 뺀 자투리(≈420px)만 차지해
+           폭 맞춤 시 페이지 세로가 잘려 보임 → 화면 높이 기준으로 고정.
+           88px = 상단 고정 헤더(62px) + 여백. dvh를 지원하면 주소창
+           변화까지 반영(iOS 사파리에서 100vh 하단 잘림 방지). */
+        @media (max-width: 1023px) {
+            .viewer { height: calc(100vh - 88px); height: calc(100dvh - 88px); min-height: 420px; flex: none; scroll-margin-top: 74px; }
+            /* 본체 iframe 안(embed): 제목은 본체 상단바가 이미 보여주므로 자체 헤더를 숨기고
+               뷰어를 화면 높이 거의 전부로 — 스크롤을 끝까지 내리면 PDF가 화면을 꽉 채움 */
+            html.embed .site-header { display: none; }
+            html.embed main { padding-top: 10px; }
+            html.embed .viewer { height: calc(100vh - 12px); height: calc(100dvh - 12px); scroll-margin-top: 6px; }
+            /* 툴바 세로 압축 — PDF 영역 최대화. 임베드에선 대학명 타이틀도 숨김(선택창에 이미 표시) */
+            .viewer-toolbar { padding: 8px 10px; gap: 8px; }
+            #pdfContainer { padding: 8px 0 16px; }
+            html.embed .vt-title { display: none; }
+            /* PDF 스크롤 내리면 툴바 접힘 (JS가 tb-hide 토글) */
+            .viewer-toolbar { transition: max-height .25s ease, padding .25s ease; max-height: 220px; overflow: hidden; }
+            .viewer.tb-hide .viewer-toolbar { max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; }
+            /* 대학 선택 카드도 함께 접힘 — PDF는 내부 스크롤이라 페이지 스크롤로는 안 밀려남 */
+            html.embed .picker { transition: max-height .25s ease, opacity .2s ease, padding .25s ease, margin .25s ease; max-height: 420px; overflow: hidden; }
+            html.embed body.pdf-full .picker { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin: 0; border-width: 0; }
+        }
+
+        /* ── 넓은 화면: 왼쪽(선택창+전체 목록) / 오른쪽(PDF 뷰어, 상단 정렬) ── */
+        /* 페이지 전체는 스크롤하지 않고, 목록·PDF 각 영역이 내부 스크롤 */
+        @media (min-width: 1024px) {
+            body { overflow: hidden; }
+            main { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: stretch; max-width: 82rem; min-height: 0; overflow: hidden; }
+            .picker { display: flex; flex-direction: column; min-height: 0; }
+            /* .combo(중간 래퍼)도 flex 컬럼이어야 목록 높이가 전달돼 스크롤됨 */
+            .combo { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+            /* 드롭다운을 항상 보이는 정적 목록으로 (검색 입력이 필터) — 넘치면 목록만 스크롤 */
+            .combo-list { position: static; display: block !important; top: auto; left: auto; right: auto; margin-top: 10px; box-shadow: none; max-height: none; flex: 1 1 auto; min-height: 140px; }
+            .picker-hint { display: none; }
+            /* 뷰어는 grid 셀 높이에 맞추고 내부 #pdfContainer만 스크롤 */
+            .viewer, .viewer[hidden] { display: flex !important; min-height: 0; overflow: hidden; }
+        }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <div class="brand">
+                <div class="brand-badge">📑</div>
+                <div>
+                    <h1 class="serif">대학 수시 모집요강</h1>
+                    <p class="sub" id="brandSub">adiga 공개자료</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div id="db-count">불러오는 중…</div>
+                <a class="back-link" href="career.html">← 홈</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section class="picker">
+            <label class="picker-label">대학 선택</label>
+            <div class="combo">
+                <div class="combo-input" id="comboInput">
+                    <span class="ico">🏫</span>
+                    <input type="text" id="univSearch" placeholder="대학명을 입력하거나 목록에서 선택하세요" autocomplete="off">
+                    <button class="clear" id="univClear" title="지우기">✕</button>
+                </div>
+                <div class="combo-list" id="univList"></div>
+            </div>
+            <p class="picker-hint" id="pickerHint">대학을 선택하면 수시 모집요강 원문을 바로 볼 수 있어요.</p>
+        </section>
+
+        <section class="viewer" id="viewer" hidden>
+            <div class="viewer-toolbar">
+                <div class="vt-title"><span class="yr" id="vtYear">2027</span><span class="nm" id="vtName">대학명</span></div>
+                <div class="pdf-pagenav" id="pdfPageNav" hidden>
+                    <input type="text" id="pdfPageInput" inputmode="numeric" value="1" title="페이지 번호 입력 후 Enter" disabled>
+                    <span class="pp-sep">/</span>
+                    <span id="pdfPageTotal">–</span>
+                </div>
+                <div class="pdf-zoom" id="pdfZoom" hidden>
+                    <button class="ps-btn" id="zoomOut" title="축소">−</button>
+                    <span class="pz-val" id="zoomVal">130%</span>
+                    <button class="ps-btn" id="zoomIn" title="확대">＋</button>
+                    <button class="ps-btn pz-fit" id="zoomFit" title="화면 폭에 맞춤">맞춤</button>
+                </div>
+                <div class="pdf-search" id="pdfSearchBox">
+                    <input type="text" id="pdfSearch" placeholder="🔍 문서 내 검색" autocomplete="off" disabled>
+                    <span class="ps-count" id="pdfCount"></span>
+                    <button class="ps-btn" id="pdfPrev" title="이전 (Shift+Enter)" disabled>▲</button>
+                    <button class="ps-btn" id="pdfNext" title="다음 (Enter)" disabled>▼</button>
+                </div>
+                <a class="vt-dl" id="pdfDownload" target="_blank" rel="noopener">⬇ 다운로드</a>
+            </div>
+            <div class="pdf-status" id="pdfStatus"></div>
+            <div id="pdfContainer">
+                <div class="viewer-empty" id="viewerEmpty">
+                    <div class="big">📄</div>
+                    <h3>대학을 선택하세요</h3>
+                    <p>선택한 대학의 수시 모집요강 PDF가 여기에 표시됩니다.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const PROXY_URL = "https://adiga-pdf-proxy.pkh910518.workers.dev/?url=";
+        const BASE_SCALE = 1.3;  // 데스크톱 기본 렌더 배율 (CSS px 기준)
+        let cssScale = BASE_SCALE;   // 현재 배율 (확대/축소·화면 맞춤으로 변경)
+        let userZoomed = false;      // 수동 조절 후에는 자동 맞춤이 덮어쓰지 않음
+        let renderGen = 0;           // 배율 변경 시 진행 중이던 렌더 무효화
+        let baseW1 = 0;              // 1페이지 scale=1 폭 (맞춤 배율 계산용)
+
+        // ── CSV 파싱 (따옴표 필드 대응) ──
+        function parseCSVLine(line) {
+            const out = []; let cur = '', q = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (q) { if (ch === '"') { if (line[i+1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+                else { if (ch === '"') q = true; else if (ch === ',') { out.push(cur); cur = ''; } else cur += ch; }
+            }
+            out.push(cur); return out;
+        }
+        function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+        function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+        // "가톨릭대학교[제2캠퍼스]" → { base:"가톨릭대학교", campus:"제2캠퍼스" }
+        function splitName(name) { const m = name.match(/^(.*?)\[(.+)\]$/); return m ? { base: m[1].trim(), campus: m[2] } : { base: name, campus: '' }; }
+
+        // ── 상태 ──
+        let univs = [];              // { name, base, campus, code, link, year }
+        let activeIdx = -1;          // 콤보 리스트 키보드 활성 항목
+        let currentUniv = null;      // 현재 뷰어에 열린 대학 (원본 PDF 저장용)
+
+        // 파일명에 못 쓰는 문자 제거
+        function safeFileName(s) { return String(s).replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim(); }
+        // '원본 PDF' 클릭 → 서버가 filedown.do로 내려주는 무확장자 파일 대신
+        // 이미 로드된 PDF 바이트를 '연도_대학명(캠퍼스) 수시 모집요강.pdf'로 저장
+        async function downloadOriginalPdf(e) {
+            if (e) e.preventDefault();
+            const u = currentUniv;
+            if (!u) return;
+            const fname = `${u.year}_${safeFileName(u.base)}${u.campus ? '(' + safeFileName(u.campus) + ')' : ''} 수시 모집요강.pdf`;
+            const btn = document.getElementById('pdfDownload');
+            const label = btn.textContent;
+            btn.textContent = '내려받는 중…';
+            try {
+                let blob;
+                if (pdfDoc) {
+                    const data = await pdfDoc.getData();          // 렌더링에 쓴 PDF 바이트 재사용 (재다운로드 없음)
+                    blob = new Blob([data], { type: 'application/pdf' });
+                } else {
+                    const res = await fetch(PROXY_URL + encodeURIComponent(u.link));  // 아직 안 열렸으면 프록시로 받기
+                    if (!res.ok) throw new Error('proxy ' + res.status);
+                    blob = await res.blob();
+                }
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = fname;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 5000);
+            } catch (err) {
+                console.error(err);
+                window.open(u.link, '_blank', 'noopener');        // 실패 시 원본 링크로 폴백
+            } finally {
+                btn.textContent = label;
+            }
+        }
+
+        // ── 대학 목록 로드 ──
+        fetch('appguide.csv')
+            .then(res => res.text())
+            .then(csv => {
+                const lines = csv.trim().split('\n');
+                for (let i = 1; i < lines.length; i++) {
+                    const c = parseCSVLine(lines[i]).map(x => x.trim().replace(/^"|"$/g, ''));
+                    if (c.length < 5) continue;
+                    const name = c[1], link = c[4];
+                    if (!name || !/^https?:/.test(link)) continue;
+                    const { base, campus } = splitName(name);
+                    univs.push({ name, base, campus, code: c[2], link, year: c[0] });
+                }
+                univs.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+                document.getElementById('db-count').textContent = `${univs.length}개 대학`;
+                if (univs[0]) { document.getElementById('brandSub').textContent = `${univs[0].year} 수시`; document.getElementById('vtYear').textContent = univs[0].year; }
+                renderList('');
+                autoSelectFromParams();
+            })
+            .catch(() => { document.getElementById('db-count').textContent = '목록 오류'; });
+
+        // ── 콤보박스 ──
+        const searchEl = document.getElementById('univSearch');
+        const listEl = document.getElementById('univList');
+        const comboInput = document.getElementById('comboInput');
+        const clearBtn = document.getElementById('univClear');
+
+        function renderList(q) {
+            const query = q.trim().toLowerCase();
+            const items = query ? univs.filter(u => u.name.toLowerCase().includes(query)) : univs;
+            activeIdx = -1;
+            if (!items.length) { listEl.innerHTML = `<div class="combo-empty">"${escapeHtml(q)}" 검색 결과가 없습니다</div>`; return; }
+            listEl.innerHTML = items.slice(0, 300).map(u => {
+                const gi = univs.indexOf(u);
+                return `<div class="combo-opt" data-i="${gi}"><span>${escapeHtml(u.base)}</span>${u.campus ? `<span class="campus">${escapeHtml(u.campus)}</span>` : ''}</div>`;
+            }).join('');
+        }
+        function openList() { listEl.classList.add('open'); comboInput.classList.add('focus'); }
+        function closeList() { listEl.classList.remove('open'); comboInput.classList.remove('focus'); }
+
+        searchEl.addEventListener('focus', () => { renderList(searchEl.value); openList(); });
+        searchEl.addEventListener('input', () => { renderList(searchEl.value); openList(); clearBtn.style.display = searchEl.value ? 'block' : 'none'; });
+        function setActive(idx) {
+            const opts = [...listEl.querySelectorAll('.combo-opt')];
+            if (!opts.length) return;
+            activeIdx = (idx + opts.length) % opts.length;
+            opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
+            opts[activeIdx].scrollIntoView({ block: 'nearest' });
+        }
+        searchEl.addEventListener('keydown', e => {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!listEl.classList.contains('open')) { renderList(searchEl.value); openList(); }
+                setActive(activeIdx + (e.key === 'ArrowDown' ? 1 : -1));
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const opts = [...listEl.querySelectorAll('.combo-opt')];
+                const pick = activeIdx >= 0 ? opts[activeIdx] : opts[0];
+                if (pick) selectUniv(+pick.dataset.i);
+            } else if (e.key === 'Escape') closeList();
+        });
+        listEl.addEventListener('mousedown', e => { const opt = e.target.closest('.combo-opt'); if (opt) { e.preventDefault(); selectUniv(+opt.dataset.i); } });
+        clearBtn.addEventListener('click', () => { searchEl.value = ''; clearBtn.style.display = 'none'; renderList(''); searchEl.focus(); });
+        document.addEventListener('click', e => { if (!e.target.closest('.combo')) closeList(); });
+
+        function selectUniv(i) {
+            const u = univs[i]; if (!u) return;
+            searchEl.value = u.name; clearBtn.style.display = 'block'; closeList();
+            loadPdf(u);
+        }
+        // 외부(진단 모달 iframe 등)에서 ?code=대학코드 / ?uni=대학명&campus=본교 로 진입 시 자동 선택
+        // embed=1 이면 iframe 안이므로 '← 홈' 링크 숨김
+        function autoSelectFromParams() {
+            const p = new URLSearchParams(location.search);
+            if (p.get('embed')) { const b = document.querySelector('.back-link'); if (b) b.style.display = 'none'; }
+            const code = p.get('code'), uni = p.get('uni'), campus = p.get('campus');
+            let idx = -1;
+            if (code) { const n = parseInt(code, 10); if (!isNaN(n)) idx = univs.findIndex(u => parseInt(u.code, 10) === n); }
+            if (idx < 0 && uni) {
+                idx = univs.findIndex(u => u.base === uni && (!campus || u.campus === campus));
+                if (idx < 0) idx = univs.findIndex(u => u.base.includes(uni));
+            }
+            if (idx >= 0) selectUniv(idx);
+        }
+        document.getElementById('pdfDownload').addEventListener('click', downloadOriginalPdf);
+
+        // ── PDF 뷰어 / 지연 렌더링 ──
+        const viewer = document.getElementById('viewer');
+        const container = document.getElementById('pdfContainer');
+        const statusEl = document.getElementById('pdfStatus');
+        const searchInput = document.getElementById('pdfSearch');
+        const searchBox = document.getElementById('pdfSearchBox');
+        const countEl = document.getElementById('pdfCount');
+        const prevBtn = document.getElementById('pdfPrev');
+        const nextBtn = document.getElementById('pdfNext');
+        const pageNav = document.getElementById('pdfPageNav');
+        const pageInput = document.getElementById('pdfPageInput');
+        const pageTotalEl = document.getElementById('pdfPageTotal');
+
+        let pdfDoc = null;
+        let pages = [];              // { div, rendered, rendering, textDivs } per page
+        let pageItems = [];          // 검색용: 페이지별 텍스트 조각 배열
+        let loadToken = 0;           // 대학 전환 시 이전 로드 무효화
+        let query = '';
+        let occ = [];                // [{ page, k }] 전체 일치 목록
+        let curOcc = -1;
+
+        function setStatus(msg, spin, isErr) {
+            statusEl.className = 'pdf-status show' + (isErr ? ' pdf-error' : '');
+            statusEl.innerHTML = (spin ? '<span class="spin"></span>' : '') + escapeHtml(msg);
+        }
+        function hideStatus() { statusEl.className = 'pdf-status'; }
+
+        // 스크롤 위치 기준으로 화면 근처 페이지만 렌더링 (IntersectionObserver보다 환경 의존성이 낮음)
+        let scrollThrottle = null;
+        function renderVisible() {
+            if (!pages.length) return;
+            const cr = container.getBoundingClientRect();
+            const margin = 800;
+            for (let i = 0; i < pages.length; i++) {
+                const pg = pages[i];
+                if (pg.rendered || pg.rendering) continue;
+                const r = pg.div.getBoundingClientRect();
+                if (r.bottom >= cr.top - margin && r.top <= cr.bottom + margin) renderPage(i);
+            }
+        }
+        container.addEventListener('scroll', () => { if (scrollThrottle) return; scrollThrottle = setTimeout(() => { scrollThrottle = null; renderVisible(); updatePageIndicator(); }, 120); });
+
+        // 폰 임베드: PDF를 내리면 툴바(제목·검색 포함)와 본체 상단바·탭바·페이지 제목까지
+        // 모두 접어 화면 전체를 PDF에 — 위로 올리면 다시 표시.
+        // 본체 숨김은 시뮬레이터 전체화면과 같은 sim-full 클래스를 재사용(같은 도메인 iframe).
+        function setParentChrome(hide) {
+            try {
+                if (window.self === window.top) return;
+                window.parent.document.body.classList.toggle('sim-full', hide);
+            } catch (e) {}
+        }
+        // 몰입 모드: 뷰어 툴바 + 대학 선택 카드 + 본체 상단바·탭바를 한꺼번에 접었다 폈다
+        function setImmersive(on) {
+            viewer.classList.toggle('tb-hide', on);
+            document.body.classList.toggle('pdf-full', on);
+            setParentChrome(on);
+        }
+        let tbLastY = 0;
+        container.addEventListener('scroll', () => {
+            if (!(document.documentElement.classList.contains('embed') && window.matchMedia('(max-width: 1023px)').matches)) return;
+            const y = container.scrollTop;
+            if (y > tbLastY + 6 && y > 60) setImmersive(true);
+            else if (y < tbLastY - 6) setImmersive(false);
+            tbLastY = y;
+        }, { passive: true });
+        window.addEventListener('resize', () => { clearTimeout(scrollThrottle); scrollThrottle = setTimeout(() => { scrollThrottle = null; renderVisible(); }, 200); });
+
+        // ── 페이지 이동 (##/##) ──
+        // 컨테이너 상단에 걸친 페이지 번호(1-based)
+        function currentPageByScroll() {
+            if (!pages.length) return 1;
+            const probe = container.getBoundingClientRect().top + 60;
+            for (let i = 0; i < pages.length; i++) {
+                if (pages[i].div.getBoundingClientRect().bottom >= probe) return i + 1;
+            }
+            return pages.length;
+        }
+        function updatePageIndicator() {
+            if (!pages.length || document.activeElement === pageInput) return;  // 편집 중엔 덮어쓰지 않음
+            pageInput.value = currentPageByScroll();
+        }
+        function gotoPage(n) {
+            if (!pages.length) return;
+            n = Math.max(1, Math.min(pages.length, parseInt(n, 10) || 1));
+            pageInput.value = n;
+            const pg = pages[n - 1];
+            pg.div.scrollIntoView({ block: 'start', behavior: 'smooth' });
+            if (!pg.rendered) renderPage(n - 1);
+            pg.div.classList.remove('flash'); void pg.div.offsetWidth; pg.div.classList.add('flash');
+        }
+        pageInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); gotoPage(pageInput.value); pageInput.blur(); }
+            else if (e.key === 'Escape') { updatePageIndicator(); pageInput.blur(); }
+        });
+        pageInput.addEventListener('focus', () => { pageNav.classList.add('focus'); pageInput.select(); });
+        pageInput.addEventListener('blur', () => { pageNav.classList.remove('focus'); updatePageIndicator(); });
+
+        // ── 확대/축소 · 화면 폭 맞춤 ──
+        const zoomValEl = document.getElementById('zoomVal');
+        // 컨테이너 폭에 맞는 배율 (넓은 화면에서는 기본 배율 상한)
+        function fitScale() {
+            const avail = Math.max(container.clientWidth - 20, 200);
+            if (!baseW1) return BASE_SCALE;
+            return Math.min(BASE_SCALE, avail / baseW1);
+        }
+        function updateZoomVal() { zoomValEl.textContent = Math.round(cssScale * 100) + '%'; }
+        function setZoom(newScale, manual) {
+            newScale = Math.max(0.4, Math.min(3, newScale));
+            if (!pdfDoc || !pages.length || Math.abs(newScale - cssScale) < 0.001) { updateZoomVal(); return; }
+            if (manual) userZoomed = true;
+            const cur = currentPageByScroll();
+            const ratio = newScale / cssScale;
+            cssScale = newScale;
+            renderGen++;   // 진행 중이던 이전 배율 렌더 무효화
+            for (const pg of pages) {
+                pg.div.style.width = (parseFloat(pg.div.style.width) * ratio) + 'px';
+                pg.div.style.height = (parseFloat(pg.div.style.height) * ratio) + 'px';
+                pg.div.innerHTML = `<div class="ph">${pg.div.dataset.p} 쪽</div>`;
+                pg.rendered = false; pg.rendering = false; pg.textDivs = null;
+            }
+            updateZoomVal();
+            const pg = pages[cur - 1];
+            if (pg) pg.div.scrollIntoView({ block: 'start' });   // 보던 페이지 유지
+            renderVisible();
+        }
+        document.getElementById('zoomIn').addEventListener('click', () => setZoom(cssScale * 1.2, true));
+        document.getElementById('zoomOut').addEventListener('click', () => setZoom(cssScale / 1.2, true));
+        document.getElementById('zoomFit').addEventListener('click', () => { userZoomed = false; setZoom(fitScale(), false); });
+        // 창 크기 변경: 수동 조절 전이면 폭 맞춤 유지
+        window.addEventListener('resize', () => {
+            if (userZoomed || !pdfDoc) return;
+            const f = fitScale();
+            if (Math.abs(f - cssScale) > 0.02) setZoom(f, false);
+        });
+
+        async function loadPdf(u) {
+            const token = ++loadToken;
+            // 초기화
+            if (pdfDoc) { try { pdfDoc.destroy(); } catch (e) {} }
+            pdfDoc = null; pages = []; pageItems = []; occ = []; curOcc = -1; query = '';
+            resetSearchUI(); searchInput.disabled = true;
+            pageNav.hidden = true; pageInput.disabled = true; pageInput.value = '1'; pageTotalEl.textContent = '–';
+            container.innerHTML = '';
+            viewer.hidden = false;
+            setImmersive(false); tbLastY = 0;   // 새 문서: 접힌 툴바·선택 카드·본체 상단 복원
+            currentUniv = u;
+            document.getElementById('vtYear').textContent = u.year;
+            document.getElementById('vtName').textContent = u.base + (u.campus ? ` (${u.campus})` : '');
+            document.getElementById('pdfDownload').href = u.link;   // JS 실패 시 폴백용
+            setStatus('모집요강 PDF를 불러오는 중입니다…', true, false);
+            viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            try {
+                const doc = await pdfjsLib.getDocument(PROXY_URL + encodeURIComponent(u.link)).promise;
+                if (token !== loadToken) { try { doc.destroy(); } catch (e) {} return; }
+                pdfDoc = doc;
+                // 1페이지 크기로 모든 페이지 자리표시자 높이 추정
+                const p1 = await doc.getPage(1);
+                baseW1 = p1.getViewport({ scale: 1 }).width;
+                if (!userZoomed) cssScale = fitScale();   // 좁은 화면: 컨테이너 폭에 맞춤 (넓으면 기본 배율)
+                updateZoomVal();
+                document.getElementById('pdfZoom').hidden = false;
+                const vp1 = p1.getViewport({ scale: cssScale });
+                const phW = Math.round(vp1.width), phH = Math.round(vp1.height);
+                const frag = document.createDocumentFragment();
+                for (let i = 1; i <= doc.numPages; i++) {
+                    const div = document.createElement('div');
+                    div.className = 'pdf-page';
+                    div.style.width = phW + 'px'; div.style.height = phH + 'px';
+                    div.dataset.p = i;
+                    div.innerHTML = `<div class="ph">${i} 쪽</div>`;
+                    frag.appendChild(div);
+                    pages.push({ div, rendered: false, rendering: false, textDivs: null });
+                }
+                container.appendChild(frag);
+                hideStatus();
+                renderVisible();               // 첫 화면 페이지 렌더
+                pageNav.hidden = false; pageInput.disabled = false; pageInput.value = '1'; pageTotalEl.textContent = doc.numPages;
+                searchInput.disabled = false;
+                buildTextIndex(doc, token, phH);
+            } catch (err) {
+                if (token !== loadToken) return;
+                console.error(err);
+                container.innerHTML = `<div class="viewer-empty"><div class="big">⚠️</div><h3>문서를 불러올 수 없습니다</h3><p>잠시 후 다시 시도하거나 '⬇ 다운로드'로 받아 주세요.<br>(프록시 서버 응답 없음)</p></div>`;
+                hideStatus();
+            }
+        }
+
+        async function renderPage(idx) {
+            const pg = pages[idx];
+            if (!pg || pg.rendered || pg.rendering || !pdfDoc) return;
+            pg.rendering = true;
+            const token = loadToken, gen = renderGen;
+            try {
+                const page = await pdfDoc.getPage(idx + 1);
+                if (token !== loadToken || gen !== renderGen) return;
+                const viewport = page.getViewport({ scale: cssScale });
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.floor(viewport.width * dpr);
+                canvas.height = Math.floor(viewport.height * dpr);
+                canvas.style.width = Math.floor(viewport.width) + 'px';
+                canvas.style.height = Math.floor(viewport.height) + 'px';
+                pg.div.style.width = Math.floor(viewport.width) + 'px';
+                pg.div.style.height = Math.floor(viewport.height) + 'px';
+                pg.div.innerHTML = '';
+                pg.div.appendChild(canvas);
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise;
+                if (token !== loadToken || gen !== renderGen) return;
+                pg.rendered = true;                 // 캔버스가 보이면 렌더 완료로 간주 (검색 이동 가능)
+                renderVisible();                    // 이어지는 다음 페이지 채우기
+                renderTextLayerSafe(pg, page, viewport, idx, token, gen);   // 텍스트 레이어는 비차단 best-effort
+            } catch (e) {
+                if (token === loadToken) console.warn('page render fail', idx + 1, e);
+            } finally { pg.rendering = false; }
+        }
+
+        // 텍스트 레이어(검색 하이라이트용)는 실패/지연되어도 페이지 표시를 막지 않도록 분리
+        async function renderTextLayerSafe(pg, page, viewport, idx, token, gen) {
+            try {
+                const tl = document.createElement('div');
+                tl.className = 'textLayer';
+                tl.style.width = Math.floor(viewport.width) + 'px';
+                tl.style.height = Math.floor(viewport.height) + 'px';
+                tl.style.setProperty('--scale-factor', cssScale);
+                pg.div.appendChild(tl);
+                const tc = await page.getTextContent();
+                if (token !== loadToken || gen !== renderGen) { tl.remove(); return; }
+                const textDivs = [];
+                const task = pdfjsLib.renderTextLayer({ textContentSource: tc, container: tl, viewport, textDivs });
+                await Promise.race([ task.promise, new Promise((_, rej) => setTimeout(() => rej(new Error('textlayer-timeout')), 6000)) ]);
+                if (token !== loadToken || gen !== renderGen) { tl.remove(); return; }
+                pg.textDivs = textDivs;
+                if (query) highlightPage(idx);
+            } catch (e) { /* 하이라이트 없이 진행 (검색 시 페이지 이동·플래시로 안내) */ }
+        }
+
+        // 백그라운드로 전 페이지 본문 텍스트 색인 (검색 대상)
+        async function buildTextIndex(doc, token, phH) {
+            pageItems = new Array(doc.numPages).fill(null);
+            for (let i = 1; i <= doc.numPages; i++) {
+                if (token !== loadToken) return;
+                try {
+                    const page = await doc.getPage(i);
+                    const tc = await page.getTextContent();
+                    pageItems[i - 1] = tc.items.map(it => it.str || '');
+                } catch (e) { pageItems[i - 1] = []; }
+                if (i % 12 === 0 && token === loadToken && !query) setStatus(`본문 검색 준비 중… ${i}/${doc.numPages}쪽`, true, false);
+            }
+            if (token !== loadToken) return;
+            hideStatus();
+            if (query) runSearch(query);   // 색인 완료 시 대기 중이던 검색 반영
+        }
+
+        // ── 문서 내 검색 ──
+        function resetSearchUI() { searchInput.value = ''; countEl.textContent = ''; prevBtn.disabled = nextBtn.disabled = true; }
+
+        let searchTimer = null;
+        searchInput.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => runSearch(searchInput.value), 220); });
+        searchInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); if (occ.length) gotoOcc(curOcc + (e.shiftKey ? -1 : 1)); else runSearch(searchInput.value); }
+        });
+        searchBox.addEventListener('focusin', () => searchBox.classList.add('focus'));
+        searchBox.addEventListener('focusout', () => searchBox.classList.remove('focus'));
+        prevBtn.addEventListener('click', () => gotoOcc(curOcc - 1));
+        nextBtn.addEventListener('click', () => gotoOcc(curOcc + 1));
+
+        function countInItems(items, q) {
+            if (!items) return 0;
+            const re = new RegExp(escapeRegex(q), 'gi'); let n = 0;
+            for (const s of items) { const m = s.match(re); if (m) n += m.length; }
+            return n;
+        }
+        function runSearch(raw) {
+            query = raw.trim();
+            // 이전 하이라이트 제거
+            pages.forEach((pg, i) => { if (pg.rendered) clearHighlight(i); });
+            occ = []; curOcc = -1;
+            if (!query) { countEl.textContent = ''; prevBtn.disabled = nextBtn.disabled = true; return; }
+            if (!pageItems.length || pageItems.some(x => x === null)) { countEl.textContent = '색인 중…'; return; }
+            pageItems.forEach((items, p) => { const n = countInItems(items, query); for (let k = 0; k < n; k++) occ.push({ page: p, k }); });
+            if (!occ.length) { countEl.textContent = '0'; prevBtn.disabled = nextBtn.disabled = true; return; }
+            prevBtn.disabled = nextBtn.disabled = false;
+            gotoOcc(0);
+        }
+
+        function waitFor(cond, ms) { return new Promise(res => { const t0 = Date.now(); (function chk() { if (cond() || Date.now() - t0 > ms) return res(); setTimeout(chk, 80); })(); }); }
+
+        async function gotoOcc(n) {
+            if (!occ.length) return;
+            n = (n + occ.length) % occ.length;
+            curOcc = n;
+            const { page, k } = occ[n];
+            countEl.textContent = `${n + 1} / ${occ.length}`;
+            // 대상 페이지가 아직 렌더 전이면 강제 렌더 후 텍스트 레이어 준비 대기
+            if (!pages[page].rendered) { pages[page].div.scrollIntoView({ block: 'center' }); await renderPage(page); }
+            await waitFor(() => pages[page].textDivs, 3000);
+            highlightPage(page);
+            // 현재 페이지 내 k번째 mark 강조 + 스크롤
+            document.querySelectorAll('.textLayer mark.cur').forEach(m => m.classList.remove('cur'));
+            const marks = pages[page].div.querySelectorAll('.textLayer mark');
+            const target = marks[k] || marks[0];
+            if (target) { target.classList.add('cur'); target.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+            else { pages[page].div.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+            pages[page].div.classList.remove('flash'); void pages[page].div.offsetWidth; pages[page].div.classList.add('flash');
+        }
+
+        function highlightPage(idx) {
+            const pg = pages[idx];
+            if (!pg.rendered || !pg.textDivs || !query) return;
+            const re = new RegExp(escapeRegex(query), 'gi');
+            pg.textDivs.forEach(span => {
+                if (!span) return;
+                const raw = span.dataset.raw != null ? span.dataset.raw : (span.dataset.raw = span.textContent);
+                if (re.test(raw)) { re.lastIndex = 0; span.innerHTML = raw.replace(re, m => `<mark>${escapeHtml(m)}</mark>`); }
+                else if (span.querySelector('mark')) span.textContent = raw;
+                re.lastIndex = 0;
+            });
+        }
+        function clearHighlight(idx) {
+            const pg = pages[idx];
+            if (!pg.rendered || !pg.textDivs) return;
+            pg.textDivs.forEach(span => { if (span && span.dataset.raw != null && span.querySelector && span.querySelector('mark')) span.textContent = span.dataset.raw; });
+        }
+
+        // embed=1 이면 홈 링크 숨김 (앱 모달 안에서 열릴 때)
+        if (new URLSearchParams(location.search).get('embed')) { const b = document.querySelector('.back-link'); if (b) b.style.display = 'none'; }
+    </script>
+</body>
+</html>

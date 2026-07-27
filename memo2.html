@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>개인 메모 v2 (실험)</title>
+    <script>
+      // 본체(index.html) iframe 안이거나 ?embed=1(바탕화면 위젯)이면 embed 모드 — 자체 헤더를 숨김
+      if (window.self !== window.top || /[?&]embed=1/.test(location.search))
+        document.documentElement.classList.add('embed');
+      // 다크모드: 본체 이스터 에그 설정 공유 + 토글 시 실시간 동기화
+      (function(){
+        const apply = on => document.documentElement.classList.toggle('dark', on);
+        try { apply(localStorage.getItem('ynhs-dark') === '1'); } catch(e) {}
+        window.addEventListener('storage', e => { if (e.key === 'ynhs-dark') apply(e.newValue === '1'); });
+      })();
+    </script>
+    <!--
+      개인 메모 (Editor.js) — 노션식 "페이지 안의 페이지" 구조
+      - 하위 페이지 블록: 삽입 즉시 페이지 생성(제목 나중에), 클릭 = 제목 수정,
+        호버 시 우측 [열기] 버튼 → 모달로 페이지 열림. 모달 상단에서 제목 수정.
+        모달 안에서 또 페이지를 열면 모달 내 브레드크럼 스택으로 이동.
+      - 루트 에디터는 상주, 모달 에디터는 열 때마다 생성 — 저장은 active 컨텍스트
+        기준으로 프라미스 체인 직렬화(동시 저장·전환 경합 방지, ver6.08 참조)
+      - 저장: 교사 로그인 시 memos/{uid}/pages/{pageId} 자동저장(디바운스),
+        비로그인 시 localStorage(ynhs-memo-pages) 임시 저장
+      - 구버전(단일 memos/{uid} 문서·ynhs-memo-draft) 데이터는 루트 페이지로 자동 이전
+      - 페이지 블록을 지워도 그 페이지 문서는 남는다(고아 문서) — 용량 미미, 감수
+      - vendor/editorjs/ 셀프호스팅 (학교망 CDN 차단 대비, 앱 정책)
+    -->
+    <script src="vendor/editorjs/editorjs.min.js"></script>
+    <script src="vendor/editorjs/header.min.js"></script>
+    <script src="vendor/editorjs/list.min.js"></script>
+    <script src="vendor/editorjs/checklist.min.js"></script>
+    <script src="vendor/editorjs/delimiter.min.js"></script>
+    <script src="vendor/editorjs/marker.min.js"></script>
+    <script src="vendor/editorjs/dragdrop.min.js"></script>
+    <script src="vendor/editorjs/toggle.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --indigo: #4f46e5; --indigo-dark: #4338ca; --indigo-50: #eef2ff; --indigo-100: #e0e7ff;
+            --slate-900: #0f172a; --slate-800: #1e293b; --slate-500: #64748b; --slate-400: #94a3b8;
+            --slate-300: #cbd5e1; --slate-200: #e2e8f0; --slate-100: #f1f5f9; --slate-50: #f8fafc;
+            --paper: #ffffff; --ink: #0f172a; --ink-soft: #64748b; --bg: #f8fafc; --rule: #e2e8f0;
+        }
+        html.dark {
+            --paper: #151F33; --ink: #E2E8F0; --ink-soft: #8FA3BD; --bg: #0B1220; --rule: #26354F;
+            --indigo-50: #1e2742; --indigo-100: #2b3760;
+        }
+        html, body { height: 100%; }
+        body {
+            font-family: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+            letter-spacing: -0.02em; background: var(--bg); color: var(--ink);
+            -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; min-height: 100%;
+        }
+        button, input { font-family: inherit; }
+
+        /* ── 헤더 ── */
+        .site-header { background: var(--paper); border-bottom: 1px solid var(--rule); position: sticky; top: 0; z-index: 30; }
+        html.embed .site-header { display: none; }
+        .site-header-inner { max-width: 56rem; margin: 0 auto; padding: 10px 16px; min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .brand { display: flex; align-items: center; gap: 11px; }
+        .brand-badge { background: var(--indigo); padding: 9px; border-radius: 11px; font-size: 19px; line-height: 1; }
+        .brand h1 { font-size: 17px; line-height: 1.15; font-weight: 900; letter-spacing: -.04em; }
+        .brand .sub { font-size: 10.5px; color: var(--indigo); font-weight: 900; letter-spacing: .2em; text-transform: uppercase; margin-top: 3px; }
+        html.dark .brand .sub { color: #818cf8; }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+        .back-link { font-size: 12.5px; font-weight: 800; color: var(--ink-soft); text-decoration: none; background: var(--paper); border: 1px solid var(--rule); padding: 7px 13px; border-radius: 11px; }
+        .back-link:hover { border-color: var(--indigo); color: var(--indigo); }
+
+        main { flex: 1; width: 100%; max-width: 56rem; margin: 0 auto; padding: 18px 14px 60px; display: flex; flex-direction: column; gap: 10px; }
+        /* 임베드(빠른 메모 패널)에서는 여백을 줄여 패널 바닥까지 꽉 차게 */
+        html.embed main { padding: 10px 10px 12px; }
+
+        /* ── 상태 바 ── */
+        .memo-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        .memo-who { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; min-width: 0; }
+        .memo-who .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--slate-300); flex-shrink: 0; }
+        .memo-who.on .dot { background: #10b981; }
+        #save-status { font-size: 12px; font-weight: 800; color: var(--ink-soft); background: var(--paper); border: 1px solid var(--rule); padding: 5px 12px; border-radius: 999px; white-space: nowrap; transition: color .2s, border-color .2s; }
+        #save-status.saving { color: var(--indigo); border-color: var(--indigo-100); }
+        #save-status.saved { color: #10b981; }
+        #save-status.error { color: #ef4444; border-color: #fecaca; }
+        .memo-local-note { display: none; font-size: 12px; font-weight: 700; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; padding: 9px 14px; border-radius: 12px; line-height: 1.5; }
+        html.dark .memo-local-note { background: #2d2410; border-color: #5c4a1a; color: #fbbf24; }
+        .memo-local-note.show { display: block; }
+
+        /* ── 에디터 카드 ── */
+        /* 카드가 화면(임베드 시 패널) 바닥까지 채우고, 에디터가 남는 공간을 전부 차지 */
+        .memo-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; box-shadow: 0 4px 20px rgba(148,163,184,.10); padding: 18px 14px 10px; min-height: 62vh; flex: 1; display: flex; flex-direction: column; }
+        html.dark .memo-card { box-shadow: 0 4px 20px rgba(0,0,0,.35); }
+        #editorjs { min-height: 55vh; flex: 1; }
+
+        /* ── 하단 사용법 접이 패널 ── */
+        .memo-help { flex-shrink: 0; margin-top: 6px; }
+        .memo-help-toggle { display: block; margin: 0 auto; border: none; background: transparent; color: var(--slate-400); font-size: 15px; line-height: 1; padding: 4px 26px; cursor: pointer; border-radius: 8px; transition: color .15s, transform .2s; }
+        .memo-help-toggle:hover { color: var(--indigo); background: var(--indigo-50); }
+        .memo-help.open .memo-help-toggle { transform: rotate(180deg); }
+        .memo-help-body { display: none; padding: 12px 10px 6px; border-top: 1px solid var(--rule); }
+        .memo-help.open .memo-help-body { display: block; }
+        .memo-help-grid { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; align-items: center; font-size: 12px; color: var(--ink-soft); }
+        .memo-help-grid .mh-k { display: flex; gap: 3px; align-items: center; justify-content: flex-start; }
+        .memo-help-body kbd { display: inline-block; background: var(--slate-100); border: 1px solid var(--rule); border-radius: 5px; padding: 1px 7px; font-family: inherit; font-size: 11px; font-weight: 700; color: var(--ink); line-height: 1.5; }
+        html.dark .memo-help-body kbd { background: #1b2740; }
+        .memo-help-note { margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--rule); font-size: 11px; color: var(--slate-400); line-height: 1.6; }
+
+        /* ── +·⋮⋮ 버튼: 블록 줄에 마우스를 올렸을 때([열기 ›]와 같은 타이밍)만 표시 ──
+           에디터 전체 호버 기준이면 사실상 항상 떠 있게 되므로 .ce-block:hover 로 좁힌다.
+           버튼 자체·열린 메뉴 위에 있을 때는 유지, 터치 기기는 항상 표시 */
+        .ce-toolbar__plus, .ce-toolbar__settings-btn { opacity: 0; pointer-events: none; transition: opacity .15s; }
+        .codex-editor:has(.ce-block:hover) .ce-toolbar__plus, .codex-editor:has(.ce-block:hover) .ce-toolbar__settings-btn,
+        .ce-toolbar:hover .ce-toolbar__plus, .ce-toolbar:hover .ce-toolbar__settings-btn,
+        .ce-toolbar:has(.ce-popover--opened) .ce-toolbar__plus, .ce-toolbar:has(.ce-popover--opened) .ce-toolbar__settings-btn { opacity: 1; pointer-events: auto; }
+        @media (hover: none) { .ce-toolbar__plus, .ce-toolbar__settings-btn { opacity: 1; pointer-events: auto; } }
+
+        /* ── 하위 페이지 블록 ── */
+        .subpage-block { display: flex; align-items: center; gap: 9px; padding: 7px 10px; margin: 2px 0; border-radius: 10px; cursor: pointer; border: 1px solid transparent; transition: background .12s; min-height: 40px; }
+        .subpage-block:hover { background: var(--indigo-50); border-color: var(--indigo-100); }
+        .subpage-block .sp-icon { font-size: 17px; flex-shrink: 0; }
+        /* 글자 영역(좌우 패딩 넉넉히) 클릭 = 제목 수정, 그 외 행 클릭 = 페이지 열기 */
+        .subpage-block .sp-title { font-weight: 800; color: var(--ink); text-decoration: underline; text-decoration-color: var(--slate-300); text-decoration-thickness: 1.5px; text-underline-offset: 3px; padding: 6px 18px; margin: -6px -8px; border-radius: 8px; cursor: text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .subpage-block .sp-title:hover { background: rgba(99,102,241,.10); }
+        .subpage-block .sp-title.untitled { color: var(--slate-400); font-weight: 600; }
+        .subpage-block .sp-open { margin-left: auto; flex-shrink: 0; font-size: 11.5px; font-weight: 800; color: var(--indigo); background: var(--paper); border: 1px solid var(--indigo-100); border-radius: 8px; padding: 4px 10px; cursor: pointer; opacity: 0; transition: opacity .12s; }
+        html.dark .subpage-block .sp-open { color: #818cf8; }
+        .subpage-block:hover .sp-open { opacity: 1; }
+        @media (hover: none) { .subpage-block .sp-open { opacity: 1; } }
+        .subpage-block input { border: none; outline: none; background: transparent; font: inherit; font-weight: 800; color: var(--ink); flex: 1; min-width: 0; }
+        .subpage-block input::placeholder { color: var(--slate-400); font-weight: 600; }
+        .subpage-block.editing { cursor: text; background: var(--indigo-50); border-color: var(--indigo-100); }
+
+        /* ── v2: 문단·제목 = 페이지 ── */
+        .pg-para { display: flex; align-items: flex-start; gap: 8px; padding: 3px 6px; border-radius: 8px; min-height: 32px; }
+        .pg-para:hover { background: var(--indigo-50); }
+        .pg-para.has-page .pg-text { text-decoration: underline; text-decoration-color: var(--slate-300); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+        .pg-para:hover .pg-open, .pg-para.has-page .pg-open { opacity: 1; }
+        /* 제목 레벨 */
+        .pg-para.pg-h2 { margin-top: 14px; }
+        .pg-para.pg-h3 { margin-top: 10px; }
+        .pg-para.pg-h2 .pg-text { font-size: 25px; font-weight: 900; letter-spacing: -.03em; }
+        .pg-para.pg-h3 .pg-text { font-size: 20px; font-weight: 900; letter-spacing: -.02em; }
+        .pg-para.pg-h4 .pg-text { font-size: 17px; font-weight: 800; }
+        .pg-para[class*="pg-h"] .pg-open { margin-top: 5px; }
+
+        /* ── v2: 항목별 페이지 목록 ── */
+        .pg-items { counter-reset: pgnum; }
+        .pg-row { display: flex; align-items: flex-start; gap: 8px; padding: 3px 6px; border-radius: 8px; min-height: 32px; }
+        .pg-row:hover { background: var(--indigo-50); }
+        .pg-mark { flex-shrink: 0; margin-top: 4px; width: 18px; text-align: center; user-select: none; }
+        /* 체크박스 */
+        .pg-check { width: 17px; height: 17px; border: 2px solid var(--slate-300); border-radius: 5px; cursor: pointer; position: relative; }
+        .pg-check.on { background: var(--indigo); border-color: var(--indigo); }
+        .pg-check.on::after { content: '✓'; position: absolute; inset: 0; color: #fff; font-size: 12px; font-weight: 900; line-height: 13px; text-align: center; }
+        /* 불렛 / 번호 */
+        .pg-bullet .pg-mark::before { content: '•'; color: var(--ink-soft); font-size: 17px; line-height: 1; }
+        .pg-number .pg-row { counter-increment: pgnum; }
+        .pg-number .pg-mark::before { content: counter(pgnum) '.'; color: var(--ink-soft); font-size: 13px; font-weight: 800; }
+        /* Tab 들여쓰기 (0~4단계) — 단계마다 불렛 모양이 바뀐다 (Tab=깊게, Shift+Tab=얕게) */
+        .pg-row.pg-ind1 { margin-left: 24px; }
+        .pg-row.pg-ind2 { margin-left: 48px; }
+        .pg-row.pg-ind3 { margin-left: 72px; }
+        .pg-row.pg-ind4 { margin-left: 96px; }
+        .pg-bullet .pg-row.pg-ind1 .pg-mark::before { content: '◦'; }
+        .pg-bullet .pg-row.pg-ind2 .pg-mark::before { content: '▪'; font-size: 12px; }
+        .pg-bullet .pg-row.pg-ind3 .pg-mark::before { content: '‣'; }
+        .pg-bullet .pg-row.pg-ind4 .pg-mark::before { content: '◦'; }
+        /* 텍스트 */
+        .pg-text { flex: 1; min-width: 0; outline: none; line-height: 1.6; padding: 2px 0; word-break: break-word; }
+        /* 안내문(placeholder)은 커서가 있는 빈 줄 + 맨 첫 빈 줄에만 — 빈 줄마다 떠서 지저분하던 것 정리 */
+        .pg-text:empty:focus::before, .ce-block:first-child .pg-para .pg-text:empty::before { content: attr(data-ph); color: var(--slate-300); pointer-events: none; }
+        .pg-row.done .pg-text { color: var(--ink-soft); text-decoration: line-through; }
+        /* 페이지 열기 버튼 — 하위 페이지 블록과 동일한 [열기 ›] 스타일 */
+        .pg-open { flex-shrink: 0; font-size: 11.5px; font-weight: 800; color: var(--indigo); background: var(--paper); border: 1px solid var(--indigo-100); border-radius: 8px; padding: 4px 10px; cursor: pointer; opacity: 0; transition: opacity .12s; white-space: nowrap; margin-top: 2px; }
+        html.dark .pg-open { color: #818cf8; }
+        .pg-open:hover { background: var(--indigo-50); }
+        .pg-row:hover .pg-open, .pg-row.has-page .pg-open { opacity: 1; }
+        /* 페이지가 있는 항목은 제목에 밑줄로 표시 */
+        .pg-row.has-page .pg-text { text-decoration: underline; text-decoration-color: var(--slate-300); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+        @media (hover: none) { .pg-open { opacity: 1; } }
+        /* 페이지가 된 줄/항목: 📄 아이콘 + 굵은 글씨 */
+        .pg-badge { flex-shrink: 0; display: none; font-size: 15px; line-height: 1.6; padding: 2px 0; user-select: none; }
+        .pg-para.has-page .pg-badge, .pg-row.has-page .pg-badge { display: block; }
+        .pg-para.has-page .pg-text, .pg-row.has-page .pg-text { font-weight: 800; }
+        .pg-para[class*="pg-h"] .pg-badge { margin-top: 3px; }
+        /* ── 항목·토글 제목 레벨 (#, ##, ### 마크다운) — 체크박스·토글 기능은 유지한 채 글자만 커짐 ── */
+        .pg-row.pg-lv2 .pg-text { font-size: 25px; font-weight: 900; letter-spacing: -.03em; }
+        .pg-row.pg-lv3 .pg-text { font-size: 20px; font-weight: 900; letter-spacing: -.02em; }
+        .pg-row.pg-lv4 .pg-text { font-size: 17px; font-weight: 800; }
+        .pg-row.pg-lv2 .pg-mark { margin-top: 12px; }
+        .pg-row.pg-lv3 .pg-mark { margin-top: 8px; }
+        .pg-row.pg-lv4 .pg-mark { margin-top: 6px; }
+        .toggle-block__input.tg-h2 { font-size: 25px; font-weight: 900; letter-spacing: -.03em; }
+        .toggle-block__input.tg-h3 { font-size: 20px; font-weight: 900; letter-spacing: -.02em; }
+        .toggle-block__input.tg-h4 { font-size: 17px; font-weight: 800; }
+
+        /* ── 페이지 모달 ── */
+        .page-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px 12px; }
+        .page-modal[hidden] { display: none; }
+        .page-modal-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.45); }
+        html.dark .page-modal-backdrop { background: rgba(0,0,0,.6); }
+        .page-modal-card { position: relative; background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; box-shadow: 0 20px 60px rgba(15,23,42,.25); width: min(44rem, 96vw); height: min(82vh, 900px); display: flex; flex-direction: column; overflow: hidden; }
+        .page-modal-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 0; min-height: 40px; }
+        .modal-crumbs { flex: 1; display: flex; align-items: center; gap: 2px; flex-wrap: wrap; font-size: 12.5px; font-weight: 800; min-width: 0; }
+        .modal-crumbs .crumb { color: var(--ink-soft); cursor: pointer; padding: 3px 7px; border-radius: 7px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .modal-crumbs .crumb:hover { background: var(--rule); color: var(--ink); }
+        .modal-crumbs .crumb.here { color: var(--ink); cursor: default; }
+        .modal-crumbs .crumb.here:hover { background: transparent; }
+        .modal-crumbs .crumb-sep { color: var(--slate-400); font-weight: 400; font-size: 11px; }
+        .modal-close { flex-shrink: 0; border: 1px solid var(--rule); background: var(--paper); color: var(--ink-soft); font-size: 14px; font-weight: 800; width: 30px; height: 30px; border-radius: 9px; cursor: pointer; line-height: 1; }
+        .modal-close:hover { border-color: #ef4444; color: #ef4444; }
+        .modal-title { border: none; outline: none; background: transparent; width: 100%; padding: 8px 22px 2px; font-size: 23px; font-weight: 900; letter-spacing: -.04em; color: var(--ink); }
+        .modal-title::placeholder { color: var(--slate-300); }
+        html.dark .modal-title::placeholder { color: #3e4f6e; }
+        .modal-editor-wrap { flex: 1; overflow-y: auto; padding: 6px 22px 40px; }
+        #editorjs-modal { min-height: 100%; }
+        #modal-boot { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 50px 0; color: var(--ink-soft); font-size: 13px; font-weight: 700; }
+        #modal-boot .spin { width: 15px; height: 15px; border: 2.5px solid var(--rule); border-top-color: var(--indigo); border-radius: 50%; animation: spin 1s linear infinite; }
+        @media (max-width: 640px) { .page-modal { padding: 8px 6px; } .page-modal-card { height: 94vh; width: 100%; } .modal-title, .modal-editor-wrap { padding-left: 14px; padding-right: 14px; } }
+
+        /* Editor.js 톤 맞춤 + 다크모드 */
+        .ce-block__content, .ce-toolbar__content { max-width: 100%; }
+        .codex-editor__redactor { padding-bottom: 120px !important; }
+        .ce-paragraph, .ce-header { color: var(--ink); }
+        .ce-header { font-weight: 900; letter-spacing: -.03em; }
+        h2.ce-header { font-size: 23px; }
+        h3.ce-header { font-size: 19px; }
+        h4.ce-header { font-size: 16px; }
+        .cdx-checklist__item-text, .cdx-list__item { color: var(--ink); }
+        .toggle-block__selector { color: var(--ink); }
+        .toggle-block__input { color: var(--ink); font-weight: 700; }
+        .toggle-block__input:empty::before { color: var(--slate-400); }
+        .toggle-block__icon svg { fill: var(--ink-soft); }
+        .cdx-marker { background: rgba(245,158,11,.45); padding: 0 1px; border-radius: 2px; }
+        ::selection { background: rgba(99,102,241,.25); }
+        html.dark .ce-toolbar__plus, html.dark .ce-toolbar__settings-btn { color: var(--ink-soft); }
+        html.dark .ce-toolbar__plus:hover, html.dark .ce-toolbar__settings-btn:hover { background: var(--rule); color: var(--ink); }
+        html.dark .ce-popover { --color-background: #1b2740; --color-text-primary: #E2E8F0; --color-text-secondary: #8FA3BD; --color-border: #26354F; --color-background-item-hover: #26354F; --color-background-item-focus: rgba(99,102,241,.25); }
+        html.dark .ce-inline-toolbar, html.dark .ce-conversion-toolbar { background: #1b2740; border-color: #26354F; color: #E2E8F0; }
+        html.dark .ce-inline-tool, html.dark .ce-conversion-tool { color: #E2E8F0; }
+        html.dark .ce-inline-tool:hover, html.dark .ce-conversion-tool:hover { background: #26354F; }
+        html.dark .cdx-checklist__item-checkbox-check { background: var(--paper); border-color: var(--rule); }
+        html.dark .ce-block--selected .ce-block__content { background: rgba(99,102,241,.18); }
+
+        /* 로더 */
+        #boot { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 60px 0; color: var(--ink-soft); font-size: 13.5px; font-weight: 700; }
+        #boot .spin { width: 16px; height: 16px; border: 2.5px solid var(--rule); border-top-color: var(--indigo); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <div class="brand">
+                <div class="brand-badge">📝</div>
+                <div>
+                    <h1>개인 메모 v2 <span style="font-size:11px;color:#f59e0b;">실험</span></h1>
+                    <p class="sub">My Notes</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <a class="back-link" href="index.html">← 홈</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="memo-bar">
+            <span class="memo-who" id="memo-who"><span class="dot"></span><span id="who-text">로그인 확인 중…</span></span>
+            <span id="save-status">—</span>
+        </div>
+        <p class="memo-local-note" id="local-note">🔒 로그인되지 않아 <b>이 기기(브라우저)에만 임시 저장</b>됩니다. 본체 앱에 로그인하면 계정에 저장돼 어디서든 볼 수 있어요.</p>
+        <div class="memo-card">
+            <div id="boot"><span class="spin"></span>메모를 불러오는 중…</div>
+            <div id="editorjs" style="display:none;"></div>
+            <div class="memo-help" id="memo-help">
+                <div class="memo-help-body">
+                    <div class="memo-help-grid">
+                        <span class="mh-k"><kbd>#</kbd><kbd>##</kbd><kbd>###</kbd></span><span>제목 (크기 3단계)</span>
+                        <span class="mh-k"><kbd>&gt;</kbd></span><span>토글 (접기/펼치기)</span>
+                        <span class="mh-k"><kbd>[]</kbd></span><span>체크리스트</span>
+                        <span class="mh-k"><kbd>-</kbd><kbd>1.</kbd></span><span>목록 · 번호 목록</span>
+                        <span class="mh-k"><kbd>/</kbd></span><span>블록 메뉴 열기</span>
+                        <span class="mh-k"><kbd>Tab</kbd></span><span>들여쓰기 (<kbd>Shift+Tab</kbd> 해제)</span>
+                        <span class="mh-k"><kbd>열기 ›</kbd></span><span>그 줄을 하위 페이지로</span>
+                    </div>
+                    <div class="memo-help-note">기호는 빈 줄에서 입력 후 스페이스 · 토글/체크리스트 안에서 <kbd>#</kbd> = 기능 유지한 채 글자만 커짐</div>
+                </div>
+                <button class="memo-help-toggle" id="memo-help-toggle" title="간단 사용법">⌃</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- 페이지 모달 -->
+    <div class="page-modal" id="page-modal" hidden>
+        <div class="page-modal-backdrop" id="modal-backdrop"></div>
+        <div class="page-modal-card">
+            <div class="page-modal-head">
+                <nav class="modal-crumbs" id="modal-crumbs"></nav>
+                <button class="modal-close" id="modal-close" title="닫기 (Esc)">✕</button>
+            </div>
+            <input class="modal-title" id="modal-title" placeholder="제목 없음" maxlength="60">
+            <div class="modal-editor-wrap">
+                <div id="modal-boot"><span class="spin"></span>페이지를 여는 중…</div>
+                <div id="editorjs-modal" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+        const app = initializeApp({
+            apiKey: "AIzaSyCrYCGksB-Nv8LNIv1kZc_a8d6bIL_5CvA",
+            authDomain: "ynhs-7b5ba.firebaseapp.com",
+            projectId: "ynhs-7b5ba",
+            storageBucket: "ynhs-7b5ba.firebasestorage.app",
+            messagingSenderId: "1031618043470",
+            appId: "1:1031618043470:web:edb5b8d1f98db029916d1f"
+        });
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // 실험판(v2) 전용 저장소 — 기존 메모(memos/ynhs-memo-pages)와 완전히 분리
+        const MEMO_COL = 'memos2';
+        const LOCAL_PAGES = 'ynhs-memo2-pages';
+        const LOCAL_LEGACY = 'ynhs-memo2-draft';
+
+        const statusEl = document.getElementById('save-status');
+        const whoEl = document.getElementById('memo-who');
+        const whoText = document.getElementById('who-text');
+        const localNote = document.getElementById('local-note');
+        const bootEl = document.getElementById('boot');
+        const editorEl = document.getElementById('editorjs');
+        const modalEl = document.getElementById('page-modal');
+        const modalCrumbsEl = document.getElementById('modal-crumbs');
+        const modalTitleEl = document.getElementById('modal-title');
+        const modalBootEl = document.getElementById('modal-boot');
+        const modalEditorEl = document.getElementById('editorjs-modal');
+
+        let uid = null;                 // 로그인 uid (없으면 localStorage 모드)
+        // 저장 대상 컨텍스트: 루트 에디터는 상주, 모달 열리면 active가 모달 쪽으로 바뀐다
+        const rootCtx = { editor: null, ready: false, id: 'root', title: '내 메모' };
+        let active = rootCtx;
+        let modalEditor = null;
+        let modalStack = [];            // 모달 안 페이지 스택 [{id,title},...]
+        let saveTimer = null;
+        let dirty = false;
+        let savePromise = Promise.resolve();  // 저장 직렬화 체인 — 동시 저장 방지
+        let switching = false;          // 페이지 전환/모달 개폐 중 중복 진입 방지
+        let titleTimer = null;
+
+        // 세션 내 이름 변경 캐시 — 부모 페이지 문서가 아직 옛 제목을 들고 있어도
+        // 블록이 다시 그려질 때 최신 제목을 쓰게 한다 (모달 스택 복귀 대비)
+        const renamedTitles = new Map();
+        // 살아 있는 하위 페이지 블록 인스턴스: pageId → Set<SubPageTool>
+        const pageBlocks = new Map();
+
+        const isTeacher = u => u && /@yeungnam\.hs\.kr$/.test(u.email || '') && !/^[0-9]{7}@/.test(u.email || '');
+        function setStatus(cls, text) { statusEl.className = cls; statusEl.textContent = text; }
+        const hhmm = () => { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+        const newPageId = () => (crypto.randomUUID ? crypto.randomUUID() : 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+
+        // ── 비로그인 localStorage 저장소 ──
+        function localPages() { try { return JSON.parse(localStorage.getItem(LOCAL_PAGES) || '{}'); } catch (e) { return {}; } }
+        function localSavePage(pageId, patch) {
+            const all = localPages();
+            all[pageId] = { ...(all[pageId] || {}), ...patch };
+            localStorage.setItem(LOCAL_PAGES, JSON.stringify(all));
+        }
+
+        // ── 저장 (디바운스 1.5초, 체인 직렬화 — ver6.08 경합 수정 참조) ──
+        function scheduleSave() {
+            dirty = true;
+            setStatus('saving', '입력 중…');
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(saveNow, 1500);
+        }
+        function saveNow() {
+            savePromise = savePromise.then(doSave).catch(() => {});
+            return savePromise;
+        }
+        async function doSave() {
+            if (!active.editor || !active.ready || !dirty) return;
+            const myEditor = active.editor, pid = active.id, title = active.title;  // 시작 시점 기준 고정
+            dirty = false;   // 지금부터의 변경은 다음 저장 몫
+            setStatus('saving', '저장 중…');
+            let data;
+            try {
+                data = await myEditor.save();
+            } catch (e) {
+                // 에디터 캡처 실패 — 에디터가 살아 있어야 하므로 일반 재시도
+                console.error(e);
+                dirty = true;
+                setStatus('error', '저장 실패 — 잠시 후 재시도');
+                clearTimeout(saveTimer);
+                saveTimer = setTimeout(saveNow, 4000);
+                return;
+            }
+            // 쓰기 실패 재시도는 캡처된 payload(pid·title·data)로 수행 —
+            // 그 사이 모달이 닫혀 active가 바뀌어도 이 페이지 내용이 유실되지 않는다
+            // (기존 버그: 실패 후 saveNow 재시도가 '그 시점의 active'를 저장해 모달 내용 증발)
+            await writePage(pid, title, data, 0);
+        }
+        async function writePage(pid, title, data, attempt) {
+            try {
+                if (uid) {
+                    await setDoc(doc(db, MEMO_COL, uid, 'pages', pid), { title, data, updatedAt: serverTimestamp() });
+                } else {
+                    localSavePage(pid, { title, data });
+                }
+                setStatus('saved', `✓ 저장됨 ${hhmm()}`);
+            } catch (e) {
+                console.error(e);
+                if (attempt < 5) {
+                    setStatus('error', `저장 실패 — 재시도 중 (${attempt + 1}/5)`);
+                    setTimeout(() => {
+                        savePromise = savePromise.then(() => writePage(pid, title, data, attempt + 1)).catch(() => {});
+                    }, 4000);
+                } else {
+                    setStatus('error', '저장 실패 — 네트워크 확인 후 다시 입력해 주세요');
+                }
+            }
+        }
+        document.addEventListener('visibilitychange', () => { if (document.hidden && dirty) { clearTimeout(saveTimer); saveNow(); } });
+        window.addEventListener('beforeunload', () => { if (dirty) { clearTimeout(saveTimer); saveNow(); } });
+
+        // ── 페이지 제목 변경: 문서 + 살아 있는 블록 + 세션 캐시 동기화 ──
+        function renamePage(pageId, title) {
+            renamedTitles.set(pageId, title);
+            if (uid) setDoc(doc(db, MEMO_COL, uid, 'pages', pageId), { title }, { merge: true }).catch(console.error);
+            else localSavePage(pageId, { title });
+            const set = pageBlocks.get(pageId);
+            if (set) set.forEach(inst => inst.setTitle(title));
+        }
+
+        // ── 하위 페이지 커스텀 블록 ──
+        // 삽입 즉시 페이지 생성(제목 입력 대기), 클릭 = 제목 수정, [열기] 버튼 = 모달
+        class SubPageTool {
+            static get toolbox() { return { title: '하위 페이지', icon: '📄' }; }
+            // 변환 메뉴 지원: 문단으로 적어둔 텍스트 → "하위 페이지"로 전환 시 제목이 됨
+            static get conversionConfig() { return { import: 'title', export: data => data.title || '' }; }
+            constructor({ data, block }) {
+                this.block = block;
+                this.data = { pageId: (data && data.pageId) || null, title: (data && data.title) || '' };
+                this.isNew = !this.data.pageId;
+                if (!this.data.pageId) this.data.pageId = newPageId();
+                if (renamedTitles.has(this.data.pageId)) this.data.title = renamedTitles.get(this.data.pageId);
+                if (!pageBlocks.has(this.data.pageId)) pageBlocks.set(this.data.pageId, new Set());
+                pageBlocks.get(this.data.pageId).add(this);
+            }
+            render() {
+                this.wrap = document.createElement('div');
+                this.wrap.className = 'subpage-block';
+                if (this.isNew && this.data.title) {
+                    // 변환으로 생성 (문단 텍스트 → 제목) — 바로 행으로
+                    this.isNew = false;
+                    // 변환 시 인라인 태그가 섞여올 수 있어 텍스트만 남긴다
+                    const tmp = document.createElement('div'); tmp.innerHTML = this.data.title;
+                    this.data.title = tmp.textContent.trim();
+                    renamePage(this.data.pageId, this.data.title);
+                    scheduleSave();
+                    this.renderRow();
+                } else if (this.isNew) { this.isNew = false; this.renderInput(); }  // 새 블록은 제목 입력 모드
+                else this.renderRow();
+                return this.wrap;
+            }
+            renderInput() {
+                this.wrap.classList.add('editing');
+                this.wrap.onclick = null;
+                this.wrap.innerHTML = '<span class="sp-icon">📄</span>';
+                const input = document.createElement('input');
+                input.placeholder = '페이지 제목 (Enter로 확정)';
+                input.value = this.data.title;
+                // Editor.js가 Enter/Backspace를 블록 조작으로 가로채지 않게 차단
+                input.addEventListener('keydown', e => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); this.commitTitle(); }
+                });
+                input.addEventListener('blur', () => { if (this.wrap.classList.contains('editing')) this.commitTitle(); });
+                this.wrap.appendChild(input);
+                setTimeout(() => { input.focus(); input.select(); }, 50);
+            }
+            commitTitle() {
+                const input = this.wrap.querySelector('input');
+                this.data.title = input ? input.value.trim() : this.data.title;
+                this.wrap.classList.remove('editing');
+                this.renderRow();
+                renamePage(this.data.pageId, this.data.title);
+                // dispatchChange의 onChange는 비동기 — dirty를 동기로 세워 flush 유실 방지
+                scheduleSave();
+                try { this.block.dispatchChange(); } catch (e) {}
+            }
+            renderRow() {
+                const title = this.data.title;
+                this.wrap.innerHTML = `<span class="sp-icon">📄</span><span class="sp-title${title ? '' : ' untitled'}"></span><span class="sp-open">열기 ›</span>`;
+                this.wrap.querySelector('.sp-title').textContent = title || '제목 없음';
+                // 글자 영역 클릭 = 제목 수정, 그 외 행 어디든 = 페이지 열기
+                this.wrap.onclick = () => openPageModal({ ...this.data });
+                this.wrap.querySelector('.sp-title').addEventListener('click', e => {
+                    e.stopPropagation();
+                    this.renderInput();
+                });
+            }
+            setTitle(title) {   // renamePage → 다른 곳에서 바뀐 제목 반영
+                if (this.data.title === title) return;
+                this.data.title = title;
+                const span = this.wrap && this.wrap.querySelector('.sp-title');
+                if (span) { span.textContent = title || '제목 없음'; span.classList.toggle('untitled', !title); }
+            }
+            save() { return { pageId: this.data.pageId, title: this.data.title }; }
+            destroy() { const set = pageBlocks.get(this.data.pageId); if (set) set.delete(this); }
+        }
+
+        // ── 유틸 ──
+        function stripTags(html) { const d = document.createElement('div'); d.innerHTML = html || ''; return (d.textContent || '').trim(); }
+        function placeCaretEnd(el) {
+            el.focus();
+            const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+            const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        }
+
+        // ══ 문단·제목 = 페이지 (v2 핵심) ══
+        // 문단이든 제목이든 그냥 내용만 입력하면 그 줄이 곧 하나의 페이지 — [열기]로 하위 내용을 연다.
+        // level: 0=문단, 2~4=제목
+        class PageBlock {
+            static get toolbox() { return { title: '텍스트', icon: 'T' }; }
+            static get conversionConfig() { return { import: 'text', export: 'text' }; }
+            constructor({ data, block, api, config }) {
+                this.block = block; this.api = api;
+                this.level = (config && config.level) || 0;
+                this.data = {
+                    text: (data && data.text) || '',
+                    level: (data && data.level) || this.level,
+                    pageId: (data && data.pageId) || null,
+                };
+                this.level = this.data.level || 0;
+            }
+            render() {
+                this.wrap = document.createElement('div');
+                this.wrap.className = 'pg-para' + (this.level ? ' pg-h' + this.level : '') + (this.data.pageId ? ' has-page' : '');
+
+                // 페이지가 된 줄 표시용 아이콘 (has-page일 때만 CSS로 노출)
+                this.badge = document.createElement('span');
+                this.badge.className = 'pg-badge';
+                this.badge.contentEditable = 'false';
+                this.badge.textContent = '📄';
+
+                this.txt = document.createElement('div');
+                this.txt.className = 'pg-text';
+                this.txt.contentEditable = 'true';
+                this.txt.innerHTML = this.data.text || '';
+                this.txt.dataset.ph = this.level ? '제목' : '내용을 입력하세요 — [열기]로 이 줄이 페이지가 돼요';
+                this.txt.addEventListener('input', () => { this.data.text = this.txt.innerHTML; });
+                // 기본 문단을 커스텀 툴로 대체하면 Editor의 기본 Enter 분기가 걸리지 않으므로 직접 처리
+                this.txt.addEventListener('keydown', e => {
+                    // 노션식 2단계: 빈 줄에서 Backspace → 블록 삭제 (제목 줄은 먼저 일반 텍스트로 해제)
+                    // 페이지 연결(pageId)된 줄은 실수 삭제 방지를 위해 Editor 기본 동작(merge)에 맡긴다
+                    if (e.key === 'Backspace' && !e.shiftKey && !stripTags(this.txt.innerHTML) && !this.data.pageId) {
+                        // 꾹 누름(자동 반복)으로는 블록이 연쇄 삭제되지 않게 — 새로 누를 때만 삭제
+                        if (e.repeat) { e.preventDefault(); e.stopPropagation(); return; }
+                        let idx = -1;
+                        try { if (this.block && this.block.id != null) idx = this.api.blocks.getBlockIndex(this.block.id); } catch (err) {}
+                        if (idx < 0) idx = this.api.blocks.getCurrentBlockIndex();
+                        if (!this.level && idx <= 0) return;   // 문서 맨 위의 빈 텍스트 줄은 유지
+                        e.preventDefault(); e.stopPropagation();
+                        if (this.level) {
+                            // 제목 줄 → 일반 텍스트로 (기능 해제)
+                            this.api.blocks.insert('para', { text: '', pageId: null }, undefined, idx, false, true);
+                            const f = () => {
+                                const nb = this.api.blocks.getBlockByIndex(idx);
+                                const t = nb && nb.holder && nb.holder.querySelector('.pg-text');
+                                if (t) placeCaretEnd(t);
+                            };
+                            f(); requestAnimationFrame(f); setTimeout(f, 30); setTimeout(f, 90);
+                        } else {
+                            // 일반 텍스트 빈 줄 → 블록 삭제 후 이전 블록 끝으로
+                            this.api.blocks.delete(idx);
+                            const f = () => {
+                                const pb = this.api.blocks.getBlockByIndex(Math.max(0, idx - 1));
+                                if (!pb || !pb.holder) return;
+                                const eds = pb.holder.querySelectorAll('[contenteditable="true"]');
+                                if (eds.length) placeCaretEnd(eds[eds.length - 1]);
+                            };
+                            f(); requestAnimationFrame(f); setTimeout(f, 30); setTimeout(f, 90);
+                        }
+                        scheduleSave();
+                        return;
+                    }
+                    if (e.key !== 'Enter' || e.shiftKey) return;
+                    e.preventDefault(); e.stopPropagation();
+                    // '현재 블록'이 아니라 이 블록의 실제 인덱스를 써야 정확히 아래에 삽입된다
+                    let idx = -1;
+                    try { if (this.block && this.block.id != null) idx = this.api.blocks.getBlockIndex(this.block.id); } catch (err) {}
+                    if (idx < 0) idx = this.api.blocks.getCurrentBlockIndex();
+                    this.api.blocks.insert('para', { text: '', pageId: null }, undefined, idx + 1, false, false);
+                    // Editor 내부 currentBlockIndex 동기화 — 이게 stale이면 이어지는
+                    // 마크다운 변환 등이 위 블록을 대상으로 삼는다 (커서는 아래에서 직접 처리)
+                    try { this.api.caret.setToBlock(idx + 1); } catch (err) {}
+                    const focusNew = () => {
+                        const nb = this.api.blocks.getBlockByIndex(idx + 1);
+                        const t = nb && nb.holder && nb.holder.querySelector('.pg-text');
+                        if (t) placeCaretEnd(t);
+                    };
+                    focusNew();
+                    requestAnimationFrame(focusNew);
+                    setTimeout(focusNew, 30);
+                    setTimeout(focusNew, 90);
+                    scheduleSave();
+                });
+
+                const open = document.createElement('button');
+                open.type = 'button';
+                open.className = 'pg-open';
+                open.title = '이 내용을 페이지로 열기';
+                open.textContent = '열기 ›';
+                open.addEventListener('mousedown', e => e.preventDefault());
+                open.addEventListener('click', async e => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (!this.data.pageId) {
+                        this.data.pageId = newPageId();
+                        this.wrap.classList.add('has-page');
+                        try { this.block.dispatchChange(); } catch (err) {}
+                        // dispatchChange의 onChange는 비동기 — dirty를 동기로 세워
+                        // 아래 saveNow가 dirty=false로 스킵되며 pageId가 유실되는 경합 방지
+                        scheduleSave();
+                        // 모달이 열리면 저장 대상(active)이 모달로 바뀌므로, 부모의 pageId를 먼저 확정 저장
+                        clearTimeout(saveTimer);
+                        await saveNow();
+                    }
+                    openPageModal({ pageId: this.data.pageId, title: stripTags(this.txt.innerHTML) });
+                });
+
+                this.wrap.append(this.badge, this.txt, open);
+                return this.wrap;
+            }
+            merge(data) {   // Backspace로 이전 블록과 합쳐질 때
+                this.txt.innerHTML = this.txt.innerHTML + (data.text || '');
+                this.data.text = this.txt.innerHTML;
+                if (!this.data.pageId && data.pageId) this.data.pageId = data.pageId;
+            }
+            save() { return { text: this.txt.innerHTML, level: this.level || 0, pageId: this.data.pageId || null }; }
+            static get sanitize() { return { text: { br: true, b: true, i: true, a: true, mark: true }, level: false, pageId: false }; }
+        }
+
+        // ══ 항목별 페이지 목록 툴 (v2 핵심) ══
+        // 체크리스트·불렛·번호 목록의 "모든 항목이 곧 하나의 페이지".
+        // 각 항목은 {text, checked, pageId}를 갖고, 우측 [열기] 버튼으로 그 항목의 페이지를 연다.
+        class PageItems {
+            static get toolbox() { return { title: '목록', icon: '•' }; }
+            constructor({ data, config, api, block }) {
+                this.api = api; this.block = block;
+                this.mode = (config && config.mode) || 'todo';   // todo | bullet | number
+                const src = (data && Array.isArray(data.items) && data.items.length) ? data.items : [{}];
+                this.items = src.map(it => ({
+                    text: (typeof it === 'string' ? it : (it && (it.text || it.content))) || '',
+                    checked: !!(it && it.checked),
+                    pageId: (it && it.pageId) || null,
+                    level: (it && it.level) || 0,   // 항목 제목 레벨 (#=2, ##=3, ###=4) — 0이면 일반
+                    indent: (it && it.indent) || 0, // Tab 들여쓰기 단계 (0~4)
+                }));
+            }
+            render() {
+                this.wrap = document.createElement('div');
+                this.wrap.className = 'pg-items pg-' + this.mode;
+                this.items.forEach(item => this.wrap.appendChild(this.renderRow(item)));
+                return this.wrap;
+            }
+            renderRow(item) {
+                const row = document.createElement('div');
+                row.className = 'pg-row' + (item.checked ? ' done' : '') + (item.pageId ? ' has-page' : '') + (item.level ? ' pg-lv' + item.level : '') + (item.indent ? ' pg-ind' + item.indent : '');
+                row._item = item;
+
+                const mark = document.createElement('span');
+                mark.className = 'pg-mark';
+                if (this.mode === 'todo') {
+                    mark.classList.add('pg-check');
+                    mark.classList.toggle('on', item.checked);
+                    mark.addEventListener('mousedown', e => e.preventDefault());
+                    mark.addEventListener('click', () => {
+                        item.checked = !item.checked;
+                        mark.classList.toggle('on', item.checked);
+                        row.classList.toggle('done', item.checked);
+                        this.change();
+                    });
+                }   // bullet·number 마커는 CSS(::before)로 표시
+
+                const badge = document.createElement('span');
+                badge.className = 'pg-badge';
+                badge.contentEditable = 'false';
+                badge.textContent = '📄';
+
+                const txt = document.createElement('div');
+                txt.className = 'pg-text';
+                txt.contentEditable = 'true';
+                txt.innerHTML = item.text || '';
+                txt.dataset.ph = '내용을 입력하고 [열기]로 페이지를 여세요';
+                txt.addEventListener('keydown', e => this.onKey(e, row));
+                txt.addEventListener('input', () => { item.text = txt.innerHTML; this.change(); });
+
+                const open = document.createElement('button');
+                open.type = 'button';
+                open.className = 'pg-open';
+                open.title = '이 항목을 페이지로 열기';
+                open.textContent = '열기 ›';
+                open.addEventListener('mousedown', e => e.preventDefault());   // 커서 뺏기 방지
+                open.addEventListener('click', async e => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (!item.pageId) {
+                        item.pageId = newPageId();
+                        row.classList.add('has-page');
+                        this.change();
+                        // 모달이 열리면 저장 대상이 바뀌므로 부모의 pageId를 먼저 확정 저장
+                        clearTimeout(saveTimer);
+                        await saveNow();
+                    }
+                    openPageModal({ pageId: item.pageId, title: stripTags(item.text) });
+                });
+
+                row.append(mark, badge, txt, open);
+                return row;
+            }
+            onKey(e, row) {
+                const txt = row.querySelector('.pg-text');
+                if (e.key === 'Tab') {
+                    // Tab = 한 단계 들여쓰기(불렛 모양 변경), Shift+Tab = 내어쓰기
+                    e.preventDefault(); e.stopPropagation();
+                    const item = row._item;
+                    const next = Math.max(0, Math.min(4, (item.indent || 0) + (e.shiftKey ? -1 : 1)));
+                    if (next === (item.indent || 0)) return;
+                    item.indent = next;
+                    row.classList.remove('pg-ind1', 'pg-ind2', 'pg-ind3', 'pg-ind4');
+                    if (next) row.classList.add('pg-ind' + next);
+                    this.change();
+                } else if (e.key === 'Enter' && !e.shiftKey) {
+                    // 새 항목 추가 후 바로 이어서 입력 (들여쓰기 단계 승계)
+                    e.preventDefault(); e.stopPropagation();
+                    const item = { text: '', checked: false, pageId: null, level: 0, indent: row._item.indent || 0 };
+                    this.items.splice(this.items.indexOf(row._item) + 1, 0, item);
+                    const newRow = this.renderRow(item);
+                    row.after(newRow);
+                    newRow.querySelector('.pg-text').focus();
+                    this.change();
+                } else if (e.key === 'Backspace' && !stripTags(txt.innerHTML)) {
+                    // 꾹 누름(자동 반복)으로는 항목·블록이 연쇄 삭제되지 않게 — 새로 누를 때만 동작
+                    if (e.repeat) { e.preventDefault(); e.stopPropagation(); return; }
+                    // 들여쓰기된 항목은 먼저 한 단계씩 내어쓰기 (노션식)
+                    if (row._item.indent) {
+                        e.preventDefault(); e.stopPropagation();
+                        row._item.indent--;
+                        row.classList.remove('pg-ind1', 'pg-ind2', 'pg-ind3', 'pg-ind4');
+                        if (row._item.indent) row.classList.add('pg-ind' + row._item.indent);
+                        this.change();
+                        return;
+                    }
+                    // 노션식 1단계: 빈 항목에서 Backspace → 체크박스·마커 기능을 해제하고
+                    // 일반 텍스트 줄로 전환 (그 줄에서 한 번 더 Backspace → PageBlock이 삭제 처리)
+                    e.preventDefault(); e.stopPropagation();
+                    const idx = this.items.indexOf(row._item);
+                    let blockIdx = -1;
+                    try { if (this.block && this.block.id != null) blockIdx = this.api.blocks.getBlockIndex(this.block.id); } catch (err) {}
+                    if (blockIdx < 0) blockIdx = this.api.blocks.getCurrentBlockIndex();
+                    const paraData = { text: '', pageId: row._item.pageId || null };   // 페이지 연결은 텍스트 줄로 승계
+                    const focusPara = i => {
+                        const f = () => {
+                            const nb = this.api.blocks.getBlockByIndex(i);
+                            const t = nb && nb.holder && nb.holder.querySelector('.pg-text');
+                            if (t) placeCaretEnd(t);
+                        };
+                        f(); requestAnimationFrame(f); setTimeout(f, 30); setTimeout(f, 90);
+                    };
+                    if (this.items.length === 1) {
+                        // 항목이 하나뿐 → 블록 자체를 텍스트 줄로 교체
+                        this.api.blocks.insert('para', paraData, undefined, blockIdx, false, true);
+                        focusPara(blockIdx);
+                    } else if (idx === this.items.length - 1) {
+                        // 마지막 항목 → 항목 제거 + 목록 바로 아래 텍스트 줄
+                        this.items.splice(idx, 1); row.remove(); this.change();
+                        this.api.blocks.insert('para', paraData, undefined, blockIdx + 1, false, false);
+                        focusPara(blockIdx + 1);
+                    } else if (idx === 0) {
+                        // 첫 항목 → 항목 제거 + 목록 위 텍스트 줄
+                        this.items.splice(idx, 1); row.remove(); this.change();
+                        this.api.blocks.insert('para', paraData, undefined, blockIdx, false, false);
+                        focusPara(blockIdx);
+                    } else {
+                        // 중간 항목 → 목록을 둘로 쪼개고 사이에 텍스트 줄
+                        const afterItems = this.items.slice(idx + 1);
+                        const tailRows = []; let n = row.nextElementSibling;
+                        while (n) { tailRows.push(n); n = n.nextElementSibling; }
+                        this.items.splice(idx);   // 현재 항목부터 끝까지 이 블록에서 제거
+                        row.remove(); tailRows.forEach(r => r.remove());
+                        this.change();
+                        this.api.blocks.insert('para', paraData, undefined, blockIdx + 1, false, false);
+                        this.api.blocks.insert(this.mode, { items: afterItems }, undefined, blockIdx + 2, false, false);
+                        focusPara(blockIdx + 1);
+                    }
+                    scheduleSave();
+                }
+            }
+            change() { try { this.block.dispatchChange(); } catch (e) {} scheduleSave(); }
+            save() {
+                return {
+                    items: [...this.wrap.querySelectorAll('.pg-row')].map(r => ({
+                        text: r.querySelector('.pg-text').innerHTML,
+                        checked: !!r._item.checked,
+                        pageId: r._item.pageId || null,
+                        level: r._item.level || 0,
+                        indent: r._item.indent || 0,
+                    })).filter(it => stripTags(it.text) || it.pageId),
+                };
+            }
+            static get sanitize() { return { items: { text: { br: true, b: true, i: true, a: true, mark: true }, checked: false, pageId: false, level: false, indent: false } }; }
+        }
+
+        // ── 토글 확장: 제목 레벨(#, ##, ###) 지원 ──
+        // 토글 기능(접기/펼치기·하위 블록)은 그대로 두고 제목 글자 크기만 바꾼다.
+        // wrapper에 인스턴스를 걸어 두어 마크다운 핸들러가 setLevel·setAttributesToNewBlock에 접근.
+        class ToggleTool extends window.ToggleBlock {
+            constructor(args) {
+                super(args);
+                this.data.level = (args.data && args.data.level) || 0;
+            }
+            render() {
+                const w = super.render();
+                w.__toggleTool = this;
+                if (this.data.level) {
+                    const input = w.querySelector('.toggle-block__input');
+                    if (input) input.classList.add('tg-h' + this.data.level);
+                }
+                return w;
+            }
+            setLevel(n) {
+                this.data.level = n;
+                const input = this.wrapper && this.wrapper.querySelector('.toggle-block__input');
+                if (input) {
+                    input.classList.remove('tg-h2', 'tg-h3', 'tg-h4');
+                    if (n) input.classList.add('tg-h' + n);
+                }
+            }
+            save(w) {
+                const d = super.save(w);
+                d.level = this.data.level || 0;
+                return d;
+            }
+        }
+
+        // ── 페이지 데이터 로드 (+ 구버전 자동 이전) ──
+        // 반환: { data, title } — title은 문서에 저장된 최신 제목(부모 블록보다 우선)
+        async function loadPageData(pageId) {
+            if (uid) {
+                const snap = await getDoc(doc(db, MEMO_COL, uid, 'pages', pageId));
+                if (snap.exists()) return { data: snap.data().data || null, title: snap.data().title || null };
+                if (pageId === 'root') {
+                    const legacy = await getDoc(doc(db, MEMO_COL, uid));
+                    if (legacy.exists() && legacy.data().data) return { data: legacy.data().data, title: null };
+                }
+                return { data: null, title: null };
+            } else {
+                const all = localPages();
+                if (all[pageId]) return { data: all[pageId].data || null, title: all[pageId].title || null };
+                if (pageId === 'root') {
+                    try { return { data: JSON.parse(localStorage.getItem(LOCAL_LEGACY) || 'null'), title: null }; } catch (e) { return { data: null, title: null }; }
+                }
+                return { data: null, title: null };
+            }
+        }
+
+        // ── 에디터 생성 (루트·모달 공용) ──
+        function makeEditor(holderId, savedData, ctx, revealFn) {
+            const ListTool = window.EditorjsList || window.List;
+            const ed = new EditorJS({
+                holder: holderId,
+                placeholder: '메모를 입력하세요. "/" 를 입력하면 블록 메뉴가 열려요.',
+                defaultBlock: 'para',   // v2: 기본 블록이 곧 페이지 (그냥 입력해도 페이지가 됨)
+                data: savedData || undefined,
+                tools: {
+                    // v2: 문단·제목 모두 페이지 (기본 header 대체)
+                    para: { class: PageBlock, config: { level: 0 }, inlineToolbar: ['marker'], toolbox: { title: '텍스트', icon: 'T' } },
+                    h2:   { class: PageBlock, config: { level: 2 }, inlineToolbar: ['marker'], toolbox: { title: '제목 1', icon: 'H1' } },
+                    h3:   { class: PageBlock, config: { level: 3 }, inlineToolbar: ['marker'], toolbox: { title: '제목 2', icon: 'H2' } },
+                    h4:   { class: PageBlock, config: { level: 4 }, inlineToolbar: ['marker'], toolbox: { title: '제목 3', icon: 'H3' } },
+                    page: { class: SubPageTool },
+                    // v2: 모든 항목이 페이지인 커스텀 목록 (기본 list/checklist 대체)
+                    todo:   { class: PageItems, config: { mode: 'todo' },   inlineToolbar: ['marker'], toolbox: { title: '체크리스트', icon: '☑' } },
+                    bullet: { class: PageItems, config: { mode: 'bullet' }, inlineToolbar: ['marker'], toolbox: { title: '목록', icon: '•' } },
+                    number: { class: PageItems, config: { mode: 'number' }, inlineToolbar: ['marker'], toolbox: { title: '번호 목록', icon: '1.' } },
+                    toggle: { class: ToggleTool, inlineToolbar: true },
+                    delimiter: window.Delimiter,
+                    marker: window.Marker,
+                },
+                i18n: {
+                    messages: {
+                        toolNames: { 'Text': '텍스트', 'Heading': '제목', 'List': '목록', 'Unordered List': '목록', 'Ordered List': '번호 목록', 'Checklist': '체크리스트', 'Toggle': '토글 (접기/펼치기)', 'Delimiter': '구분선', 'Marker': '형광펜', 'Bold': '굵게', 'Italic': '기울임', 'Link': '링크' },
+                        ui: {
+                            'blockTunes': { 'toggler': { 'Click to tune': '블록 설정', 'or drag to move': '드래그로 이동' } },
+                            'toolbar': { 'toolbox': { 'Add': '블록 추가' } },
+                            'popover': { 'Filter': '검색', 'Nothing found': '결과 없음', 'Convert to': '변환' }
+                        },
+                        blockTunes: {
+                            'delete': { 'Delete': '삭제', 'Click to delete': '한 번 더 누르면 삭제' },
+                            'moveUp': { 'Move up': '위로' },
+                            'moveDown': { 'Move down': '아래로' }
+                        }
+                    }
+                },
+                onChange: scheduleSave,
+                onReady: () => {
+                    ctx.ready = true;
+                    revealFn();
+                    if (window.DragDrop) { try { new DragDrop(ed); } catch (e) {} }
+                    // Editor.js 자체 onChange가 두 번째 인스턴스부터 DOM 변형(타이핑)을
+                    // 감지하지 못하는 버그가 있어(모달 에디터에서 저장 누락 확인),
+                    // 블록 영역에 자체 MutationObserver를 붙여 저장을 직접 트리거한다.
+                    // 루트에서는 네이티브 onChange와 중복 발화하지만 디바운스가 흡수.
+                    const zone = document.getElementById(holderId).querySelector('.codex-editor__redactor');
+                    if (zone) {
+                        const mo = new MutationObserver(muts => {
+                            const meaningful = muts.some(m => {
+                                if (m.type === 'attributes') {
+                                    if (m.attributeName === 'data-empty') return false;   // Editor.js 내부 마킹
+                                    if (m.attributeName === 'class' && m.target.classList && m.target.classList.contains('ce-block')) return false;   // 블록 선택 하이라이트
+                                }
+                                return true;
+                            });
+                            if (meaningful) scheduleSave();
+                        });
+                        mo.observe(zone, { childList: true, subtree: true, characterData: true, attributes: true });
+                        ed.__memoObserver = mo;
+                    }
+                    // 노션식 마크다운 단축 입력: 빈 문단에 기호만 친 뒤 스페이스 → 블록 변환
+                    // (#=제목1, ##=제목2, ###=제목3, >=토글, -=불렛, 1.=번호, []=체크리스트)
+                    const MD_MAP = {
+                        '#':   ['h2', { text: '', level: 2, pageId: null }],
+                        '##':  ['h3', { text: '', level: 3, pageId: null }],
+                        '###': ['h4', { text: '', level: 4, pageId: null }],
+                        '>':   ['toggle', { text: '', status: 'open' }],
+                        '-':   ['bullet', { items: [{ text: '', checked: false, pageId: null }] }],
+                        '1.':  ['number', { items: [{ text: '', checked: false, pageId: null }] }],
+                        '[]':  ['todo',   { items: [{ text: '', checked: false, pageId: null }] }]
+                    };
+                    const holderEl = document.getElementById(holderId);
+                    // 에디터를 재생성해도 holder는 그대로라 리스너가 누적됨 —
+                    // 파괴된 에디터를 참조하는 옛 리스너를 제거하고 새로 단다
+                    if (holderEl.__mdKeydown) holderEl.removeEventListener('keydown', holderEl.__mdKeydown);
+                    // #/##/### 를 토글 제목·목록 항목 "안"에서 치면: 블록을 갈아치우지 않고
+                    // 글자 크기(레벨)만 적용 — 토글·체크박스 기능이 그대로 살아 있다.
+                    const HEAD_LV = { '#': 2, '##': 3, '###': 4 };
+                    holderEl.__mdKeydown = e => {
+                        if (e.key !== ' ') return;
+                        const sel = getSelection();
+                        if (!sel || !sel.anchorNode) return;
+                        const el = sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement;
+                        if (!el || !el.closest || !holderEl.contains(el)) return;
+
+                        // 1) 토글 제목: # → 토글 기능 유지 + 제목 크기
+                        const tgInput = el.closest('.toggle-block__input');
+                        if (tgInput) {
+                            const lv = HEAD_LV[tgInput.textContent.trim()];
+                            if (!lv) return;
+                            e.preventDefault(); e.stopPropagation();
+                            const rootWrap = tgInput.closest('.toggle-block__selector');
+                            const inst = rootWrap && rootWrap.__toggleTool;
+                            if (inst) inst.setLevel(lv);
+                            else { tgInput.classList.remove('tg-h2', 'tg-h3', 'tg-h4'); tgInput.classList.add('tg-h' + lv); }
+                            tgInput.textContent = '';
+                            placeCaretEnd(tgInput);
+                            scheduleSave();
+                            return;
+                        }
+
+                        // 2) 체크리스트·목록 항목: # → 체크박스/마커 유지 + 제목 크기
+                        const itemTxt = el.closest('.pg-row .pg-text');
+                        if (itemTxt) {
+                            const lv = HEAD_LV[itemTxt.textContent.trim()];
+                            if (!lv) return;
+                            e.preventDefault(); e.stopPropagation();
+                            const row = itemTxt.closest('.pg-row');
+                            if (row._item) { row._item.level = lv; row._item.text = ''; }
+                            row.classList.remove('pg-lv2', 'pg-lv3', 'pg-lv4');
+                            row.classList.add('pg-lv' + lv);
+                            itemTxt.innerHTML = '';
+                            placeCaretEnd(itemTxt);
+                            scheduleSave();
+                            return;
+                        }
+
+                        // 3) 빈 문단 → 블록 변환 (v2: 기본 블록이 커스텀 .pg-para이므로 그 편집영역도 인식)
+                        const para = el.closest('.ce-paragraph') || el.closest('.pg-para > .pg-text');
+                        if (!para) return;
+                        const trigger = para.textContent.trim();
+                        if (!MD_MAP[trigger]) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // 커서가 있는 블록의 인덱스를 DOM 위치로 직접 계산 —
+                        // 커스텀 블록(PageBlock)의 Enter가 Editor 내부 currentBlockIndex를
+                        // 갱신하지 못해, getCurrentBlockIndex()가 '위 블록'을 가리킨 채
+                        // 변환이 위 블록을 토글로 교체해 사라지게 하던 버그 수정
+                        const blockEl = para.closest('.ce-block');
+                        let idx = blockEl ? [...holderEl.querySelectorAll('.ce-block')].indexOf(blockEl) : -1;
+                        if (idx < 0) idx = ed.blocks.getCurrentBlockIndex();
+                        if (idx < 0) return;
+                        // 토글 안의 문단이면 소속(foreignKey)을 기억해 뒀다가 변환된 블록에 승계 —
+                        // insert(replace)가 새 holder를 만들며 속성이 날아가 토글 밖으로 탈출하던 버그 수정
+                        const curBlk = ed.blocks.getBlockByIndex(idx);
+                        const fk = curBlk && curBlk.holder ? curBlk.holder.getAttribute('foreignKey') : null;
+                        const [type, data] = MD_MAP[trigger];
+                        ed.blocks.insert(type, JSON.parse(JSON.stringify(data)), undefined, idx, false, true);   // 현재 블록 대체 (포커스는 아래에서 직접 처리)
+                        // Editor 내부 currentBlockIndex 동기화 (이후 토글 라이브러리 등이 참조)
+                        try { ed.caret.setToBlock(idx); } catch (err) {}
+                        if (fk) {
+                            try {
+                                const rootWrap = document.getElementById(fk);
+                                const inst = rootWrap && rootWrap.__toggleTool;
+                                if (inst) inst.setAttributesToNewBlock(idx);   // 라이브러리 정식 경로 (itemsId 장부까지 등록)
+                                else {
+                                    const nb = ed.blocks.getBlockByIndex(idx);
+                                    if (nb && nb.holder) {
+                                        nb.holder.setAttribute('foreignKey', fk);
+                                        nb.holder.setAttribute('id', newPageId());
+                                        nb.holder.classList.add('toggle-block__item');
+                                    }
+                                }
+                            } catch (err) { console.error(err); }
+                        }
+                        // 새 블록의 편집 요소에 커서를 직접 놓아 이어서 바로 입력 가능하게
+                        // (needToFocus·caret.setToBlock은 체크리스트/리스트 등에서 비동기 렌더와 타이밍이 안 맞아 포커스가 풀림)
+                        // 새 블록의 편집 요소에 커서를 직접 안착 — Editor가 첫 프레임 이후 포커스를 덮어쓰므로
+                        // rAF + 짧은 setTimeout으로 여러 번 시도해 최종적으로 커서가 새 블록에 놓이게 한다.
+                        const focusNewBlock = () => {
+                            const blockEl = holderEl.querySelectorAll('.ce-block')[idx];
+                            const editable = blockEl && blockEl.querySelector('[contenteditable="true"], [contenteditable=""]');
+                            if (!editable) return;
+                            editable.focus();
+                            const range = document.createRange();
+                            range.selectNodeContents(editable);
+                            range.collapse(true);
+                            const s = getSelection(); s.removeAllRanges(); s.addRange(range);
+                        };
+                        requestAnimationFrame(focusNewBlock);
+                        setTimeout(focusNewBlock, 30);
+                        setTimeout(focusNewBlock, 90);
+                    };
+                    holderEl.addEventListener('keydown', holderEl.__mdKeydown);
+
+                    // 블록 밖 빈 영역 클릭: Editor.js가 빈 블록을 계속 쌓는 대신
+                    // '가장 위의 빈 줄'에 커서를 놓는다 (빈 줄이 없을 때만 맨 끝에 하나 생성)
+                    if (holderEl.__bgClick) ['mousedown', 'click'].forEach(t => holderEl.removeEventListener(t, holderEl.__bgClick, true));
+                    holderEl.__bgClick = e => {
+                        if (e.target.closest('.ce-block, .ce-toolbar, .ce-inline-toolbar, .ce-popover, .ce-conversion-toolbar')) return;
+                        e.preventDefault(); e.stopPropagation();
+                        if (e.type !== 'mousedown') return;
+                        let target = null;
+                        for (const t of holderEl.querySelectorAll('.ce-block .pg-para:not(.has-page) .pg-text')) {
+                            if (!t.textContent.trim() && t.offsetParent !== null) { target = t; break; }
+                        }
+                        if (target) { placeCaretEnd(target); return; }
+                        try {
+                            const cnt = ed.blocks.getBlocksCount();
+                            ed.blocks.insert('para', { text: '', pageId: null }, undefined, cnt, false, false);
+                            const nb = ed.blocks.getBlockByIndex(cnt);
+                            const t2 = nb && nb.holder && nb.holder.querySelector('.pg-text');
+                            if (t2) placeCaretEnd(t2);
+                            scheduleSave();
+                        } catch (err) {}
+                    };
+                    ['mousedown', 'click'].forEach(t => holderEl.addEventListener(t, holderEl.__bgClick, true));
+                }
+            });
+            ctx.editor = ed;
+            return ed;
+        }
+        async function destroyEditor(ed) {
+            if (!ed) return;
+            if (ed.__memoObserver) { ed.__memoObserver.disconnect(); ed.__memoObserver = null; }
+            try { await ed.isReady; ed.destroy(); } catch (e) {}
+        }
+
+        // ── 모달: 페이지 열기/이동/닫기 ──
+        const curModalPage = () => modalStack[modalStack.length - 1];
+
+        function renderModalCrumbs() {
+            modalCrumbsEl.innerHTML = '';
+            if (modalStack.length < 2) return;   // 한 단계뿐이면 경로 표시 생략
+            modalStack.forEach((p, i) => {
+                if (i > 0) {
+                    const sep = document.createElement('span');
+                    sep.className = 'crumb-sep'; sep.textContent = '›';
+                    modalCrumbsEl.appendChild(sep);
+                }
+                const c = document.createElement('span');
+                c.className = 'crumb' + (i === modalStack.length - 1 ? ' here' : '');
+                c.textContent = p.title || '제목 없음';
+                if (i < modalStack.length - 1) c.onclick = () => modalBack(i);
+                modalCrumbsEl.appendChild(c);
+            });
+        }
+
+        async function showModalPage() {
+            const top = curModalPage();
+            renderModalCrumbs();
+            modalTitleEl.value = top.title || '';
+            modalBootEl.style.display = 'flex';
+            modalEditorEl.style.display = 'none';
+            await destroyEditor(modalEditor); modalEditor = null;
+            // 이 시점부터 저장 대상은 모달 페이지 (로드 완료 전엔 ready=false로 저장 차단)
+            // title은 getter — 저장 시점에 모달에서 수정된 최신 제목이 반영되게
+            const ctx = { editor: null, ready: false, id: top.id, get title() { return top.title || '제목 없음'; } };
+            active = ctx;
+            let loaded = { data: null, title: null };
+            try { loaded = await loadPageData(top.id); }
+            catch (e) { console.error(e); setStatus('error', '불러오기 실패'); }
+            // 문서에 저장된 제목이 부모 블록 제목보다 최신 (다른 기기에서 바꾼 경우 등)
+            if (loaded.title && loaded.title !== top.title) {
+                top.title = loaded.title;
+                modalTitleEl.value = loaded.title;
+                renderModalCrumbs();
+                renamePage(top.id, loaded.title);   // 부모 블록에도 반영
+            }
+            dirty = false;
+            modalEditor = makeEditor('editorjs-modal', loaded.data, ctx, () => {
+                modalBootEl.style.display = 'none';
+                modalEditorEl.style.display = '';
+            });
+            setStatus('', loaded.data ? '' : '새 페이지');
+        }
+
+        async function openPageModal(d) {   // d = {pageId, title}
+            if (switching) return;
+            switching = true;
+            try {
+                clearTimeout(saveTimer);
+                await saveNow();   // 진행 중 저장까지 체인으로 대기
+                // Editor.js는 인스턴스 2개가 동시에 살아 있으면 변경 감지·이벤트 버스가
+                // 꼬인다(모달 저장 누락·빈 렌더 재현됨) → 루트를 파괴하고 모달만 살린다.
+                // 닫을 때 closeModal이 루트를 재생성한다. (항상 단일 인스턴스 유지)
+                await destroyEditor(rootCtx.editor);
+                rootCtx.editor = null; rootCtx.ready = false;
+                bootEl.style.display = 'flex';
+                editorEl.style.display = 'none';
+                modalStack.push({ id: d.pageId, title: d.title || '' });
+                modalEl.hidden = false;
+                document.body.style.overflow = 'hidden';
+                await showModalPage();
+                setTimeout(() => { if (!modalTitleEl.value) modalTitleEl.focus(); }, 100);
+            } finally { switching = false; }
+        }
+
+        async function modalBack(i) {
+            if (switching || i >= modalStack.length - 1) return;
+            switching = true;
+            try {
+                clearTimeout(saveTimer);
+                await saveNow();
+                modalStack = modalStack.slice(0, i + 1);
+                await showModalPage();
+                // 자식 페이지 제목이 바뀌었을 수 있음 — 복귀한 페이지 다시 저장 예약
+                scheduleSave();
+            } finally { switching = false; }
+        }
+
+        async function closeModal() {
+            if (switching || modalEl.hidden) return;
+            switching = true;
+            try {
+                clearTimeout(saveTimer);
+                clearTimeout(titleTimer);
+                await saveNow();
+                await destroyEditor(modalEditor); modalEditor = null;
+                modalStack = [];
+                modalEl.hidden = true;
+                document.body.style.overflow = '';
+                // 루트 에디터 재생성 (열 때 파괴했음 — 단일 인스턴스 유지)
+                active = rootCtx;
+                let loaded = { data: null };
+                try { loaded = await loadPageData('root'); }
+                catch (e) { console.error(e); setStatus('error', '불러오기 실패'); }
+                dirty = false;
+                makeEditor('editorjs', loaded.data, rootCtx, () => {
+                    bootEl.style.display = 'none';
+                    editorEl.style.display = '';
+                });
+                // 모달에서 바뀐 하위 페이지 제목을 부모(루트) 데이터에도 반영
+                scheduleSave();
+            } finally { switching = false; }
+        }
+
+        document.getElementById('modal-close').addEventListener('click', closeModal);
+        document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modalEl.hidden) closeModal(); });
+
+        // 모달 제목 입력 → 현재 페이지·문서·부모 블록 동기화 (디바운스 0.6초)
+        modalTitleEl.addEventListener('input', () => {
+            const top = curModalPage();
+            if (!top) return;
+            top.title = modalTitleEl.value.trim();
+            clearTimeout(titleTimer);
+            titleTimer = setTimeout(() => {
+                renamePage(top.id, top.title);
+                renderModalCrumbs();
+            }, 600);
+        });
+        modalTitleEl.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); modalTitleEl.blur(); }
+        });
+
+        // 하단 ⌃ 사용법 패널 여닫기
+        document.getElementById('memo-help-toggle').addEventListener('click', () => {
+            document.getElementById('memo-help').classList.toggle('open');
+        });
+
+        // ── 시작 ──
+        let booted = false;
+        onAuthStateChanged(auth, async user => {
+            if (booted) return;   // 최초 1회만 (세션 갱신에 에디터 재생성 방지)
+            booted = true;
+            if (isTeacher(user)) {
+                uid = user.uid;
+                whoEl.classList.add('on');
+                whoText.textContent = `${user.displayName || user.email} · 계정에 저장됨`;
+            } else {
+                uid = null;
+                whoText.textContent = '비로그인 — 임시 저장 모드';
+                localNote.classList.add('show');
+            }
+            let loaded = { data: null };
+            try { loaded = await loadPageData('root'); }
+            catch (e) { console.error(e); setStatus('error', '불러오기 실패'); }
+            setStatus('', loaded.data ? '저장된 메모 불러옴' : '새 메모');
+            makeEditor('editorjs', loaded.data, rootCtx, () => {
+                bootEl.style.display = 'none';
+                editorEl.style.display = '';
+            });
+        });
+    </script>
+</body>
+</html>

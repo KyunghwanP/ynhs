@@ -1,0 +1,166 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /appdata/{docId} {
+      allow read, write: if request.auth != null
+                        && request.auth.token.email.matches('.*@yeungnam[.]hs[.]kr$')
+                        && !request.auth.token.email.matches('^[0-9]{7}@yeungnam[.]hs[.]kr$')
+                        && request.auth.token.email_verified == true;
+    }
+    match /weeklyData/{docId} {
+      allow read, write: if request.auth != null
+                        && request.auth.token.email.matches('.*@yeungnam[.]hs[.]kr$')
+                        && !request.auth.token.email.matches('^[0-9]{7}@yeungnam[.]hs[.]kr$')
+                        && request.auth.token.email_verified == true;
+    }
+    match /contacts/{docId} {
+      allow read, write: if request.auth != null
+                        && request.auth.token.email.matches('.*@yeungnam[.]hs[.]kr$')
+                        && !request.auth.token.email.matches('^[0-9]{7}@yeungnam[.]hs[.]kr$')
+                        && request.auth.token.email_verified == true;
+    }
+    match /students/{docId} {
+      allow read, write: if request.auth != null
+                        && request.auth.token.email.matches('.*@yeungnam[.]hs[.]kr$')
+                        && !request.auth.token.email.matches('^[0-9]{7}@yeungnam[.]hs[.]kr$')
+                        && request.auth.token.email_verified == true;
+    }
+    // 동아리 메타데이터 (지도교사·전공·교실·정원·학년) — 교사 읽기/쓰기
+    match /clubs/{docId} {
+      allow read, write: if request.auth != null
+                        && request.auth.token.email.matches('.*@yeungnam[.]hs[.]kr$')
+                        && !request.auth.token.email.matches('^[0-9]{7}@yeungnam[.]hs[.]kr$')
+                        && request.auth.token.email_verified == true;
+    }
+    match /schedule/{docId} {
+      allow read: if request.auth != null
+                 && request.auth.token.email.matches('.*@yeungnam[.]hs[.]kr$')
+                 && !request.auth.token.email.matches('^[0-9]{7}@yeungnam[.]hs[.]kr$')
+                 && request.auth.token.email_verified == true;
+      allow write: if false;
+    }
+    match /riro_points/{docId} {
+      allow read: if request.auth != null
+                 && request.auth.token.email.matches('.*@yeungnam[.]hs[.]kr$')
+                 && !request.auth.token.email.matches('^[0-9]{7}@yeungnam[.]hs[.]kr$')
+                 && request.auth.token.email_verified == true;
+      allow write: if false;
+    }
+    // ── 성적 열람 권한 문서 (sync-grades Actions가 매일 생성) ──
+    // { managers: [이메일...], homerooms: { 이메일: '학년-반' } }
+    // 교사 읽기 허용(앱이 탭 노출 판단에 사용). 쓰기는 서비스 계정만.
+    match /acl/{docId} {
+      allow read: if isYnhsTeacher();
+      allow write: if false;
+    }
+    // ── 모의고사 성적 (진로진학부 시트 → GitHub Actions 동기화) ──
+    // 읽기: 전체열람 권한자(관리자·교장·교감·부장) 또는 자기 반 담임만.
+    // 담임은 학생 트리(index)와 자기 반 문서만 읽을 수 있다.
+    // 쓰기는 서비스 계정(Admin SDK, 규칙 미적용)의 동기화만 수행.
+    match /gradesMock/{docId} {
+      allow read: if canReadGrades(docId);
+      allow write: if false;
+    }
+    // ── 졸업생 수시 합격 현황 (진로진학부 시트 → GitHub Actions 동기화) ──
+    match /gradesSusi/{docId} {
+      allow read: if isYnhsTeacher();
+      allow write: if false;
+    }
+    // ── 수시·정시 입결 (진로진학부 시트 → GitHub Actions 동기화) ──
+    match /gradesIpgyeol/{docId} {
+      allow read: if isYnhsTeacher();
+      allow write: if false;
+    }
+    // ── 학생 선택과목 (교육과정 현황 시트 → GitHub Actions 동기화) ──
+    match /electives/{docId} {
+      allow read: if isYnhsTeacher();
+      allow write: if false;
+    }
+    // 업무 캘린더
+    match /tasks/{userId}/items/{itemId} {
+      // 학교 교사면 읽기 가능 (공유 일정 구독)
+      allow read: if isYnhsTeacher();
+      // 소유자는 전체 쓰기 가능
+      allow write: if isYnhsTeacher() && request.auth.uid == userId;
+      // 공유받은 사람은 status / comments 필드만 수정 가능
+      // (기존 문서가 있고, 본인이 sharedWith에 포함된 경우)
+      allow update: if isYnhsTeacher()
+                   && resource.data.sharedWith != null
+                   && isSharedWithMe(resource.data.sharedWith)
+                   && onlyStatusOrComments();
+    }
+    // (혹시 하위 경로를 더 쓰는 경우 대비) 그 외 tasks 문서는 소유자만
+    match /tasks/{userId}/{document=**} {
+      allow read: if isYnhsTeacher();
+      allow write: if isYnhsTeacher() && request.auth.uid == userId;
+    }
+    // ── 학부모 상담 예약 ──
+    // 학부모(비로그인)는 Firestore를 직접 접근하지 않는다. 조회·예약·취소는
+    // 모두 GAS(서비스계정)가 처리하며, 서비스계정은 보안 규칙의 적용을 받지
+    // 않으므로(관리자 권한) 학부모용 동작은 여기서 전부 차단해도 된다.
+    // → 교사(학교 계정 로그인)만 직접 읽기/쓰기 가능. 외부인은 차단.
+    match /consultations/{classKey} {
+      allow read, write: if isYnhsTeacher();
+    }
+    // ── 특별실 사용 예약 ──
+    // _config(특별실 목록)·{roomId}_{주} 예약 문서. 교사만 접근.
+    // (취소 권한 등 세부 제어는 클라이언트에서 처리 — 상담 예약과 동일한 신뢰 모델)
+    match /roomBookings/{docId} {
+      allow read, write: if isYnhsTeacher();
+    }
+    // ── 개인 메모 (memo.html) — 본인 것만 읽기/쓰기 ──
+    // 루트 문서(구버전 단일 메모) + pages 하위 컬렉션(노션식 페이지) 모두 포함
+    match /memos/{userId}/{document=**} {
+      allow read, write: if isYnhsTeacher() && request.auth.uid == userId;
+    }
+    // ── 개인 메모 실험판 (memo2.html) — 본인 것만. 기존 memos와 분리 ──
+    match /memos2/{userId}/{document=**} {
+      allow read, write: if isYnhsTeacher() && request.auth.uid == userId;
+    }
+    // ── 업무자료 엑셀 시트 데이터 (편성·명렬표 등) ──
+    // 학생 개인정보 포함 — 퍼블릭 저장소(GitHub Pages)에 파일로 올릴 수 없어
+    // 교사가 앱에서 직접 업로드(SheetJS 파싱)해 여기에 저장. 교사만 읽기/쓰기.
+    match /docsSheets/{docId} {
+      allow read, write: if isYnhsTeacher();
+    }
+    // ── 사진명렬 (학생 사진) — 반별 문서 {학년-반}.photos = { 번호: dataURL } ──
+    // 학생 개인정보(얼굴) 포함 — 원본 xlsx는 저장소에 못 올려, 교사가 앱에서
+    // 브라우저로 파싱·압축해 사진만 저장. 교사만 읽기/쓰기.
+    match /studentPhotos/{docId} {
+      allow read, write: if isYnhsTeacher();
+    }
+    // ── 공통 함수 ──
+    function isYnhsTeacher() {
+      return request.auth != null
+        && request.auth.token.email.matches('.*@yeungnam[.]hs[.]kr$')
+        && !request.auth.token.email.matches('^[0-9]{7}@yeungnam[.]hs[.]kr$')
+        && request.auth.token.email_verified == true;
+    }
+    // 성적 열람 권한: acl/gradeRoles 문서 기준
+    // (문서가 아직 없으면 get() 오류 → 전면 거부되므로, 규칙 적용 전에
+    //  sync-grades Actions를 한 번 실행해 문서를 만들어 둘 것)
+    function gradeAcl() {
+      return get(/databases/$(database)/documents/acl/gradeRoles).data;
+    }
+    function canReadGrades(docId) {
+      return isYnhsTeacher() && (
+        request.auth.token.email in gradeAcl().managers
+        || (request.auth.token.email in gradeAcl().homerooms
+            && (docId == 'index'
+                || gradeAcl().homerooms[request.auth.token.email] == docId))
+      );
+    }
+    // sharedWith 배열에 내 식별자(email 또는 displayName/name)가 있는지
+    function isSharedWithMe(sharedWith) {
+      return sharedWith.hasAny([request.auth.token.email, request.auth.token.name]);
+    }
+    // 이번 수정이 status / comments / sharedWith / doneBy 필드만 건드렸는지 검사
+    // (sharedWith: 공유받은 사람이 '공유 나가기'로 본인 제거,
+    //  doneBy: '각자 완료 방식' 일정에서 본인 완료 체크)
+    function onlyStatusOrComments() {
+      return request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['status', 'comments', 'sharedWith', 'updatedAt', 'doneBy']);
+    }
+  }
+}

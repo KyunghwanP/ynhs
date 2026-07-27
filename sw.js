@@ -1,36 +1,42 @@
-const CACHE_NAME = 'timetable-app-v3';
-const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE_NAME = 'ynhs-v454';
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
+self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
-// GET 요청만 처리 (POST 등 Firestore/Firebase 요청은 절대 건드리지 않음)
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  // 외부 API 요청(Firebase, Google 등)은 캐시 없이 네트워크로만
-  const url = new URL(event.request.url);
-  if (url.origin !== location.origin) return;
-
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        return response;
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  if (!e.request.url.startsWith(self.location.origin)) return;
+  // 대용량 PDF(/docs/)는 sw 미개입 — 브라우저가 range 요청 직접 처리, 캐시 낭비 방지
+  if (new URL(e.request.url).pathname.includes('/docs/')) return;
+  e.respondWith(
+    fetch(e.request)
+      .then(res => {
+        if(res.ok && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+        }
+        return res;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(e.request))
+  );
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) { if ('focus' in c) return c.focus(); }
+      return clients.openWindow('./');
+    })
   );
 });
