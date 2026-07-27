@@ -303,8 +303,9 @@ CreateWidget(p) {
     ;   테두리를 살리고, 대신 은은한 그림자는 유지(둥근 창엔 자연스러움).
     StyleWindow(g.hwnd)   ; 둥근 모서리 + 얇은 파란 테두리(Win11)
 
-    ; ── 손잡이 바(별도 최상위 창) — 호버 시 웹 위에 '겹쳐' 나타남 → 내용이 밀리지 않는다
-    h := Gui("-Caption +AlwaysOnTop +ToolWindow -Resize")
+    ; ── 손잡이 바(본체 g의 '자식 창') — 웹뷰 위 z-order에 얹어 '겹쳐' 뜬다(내용 안 밀림).
+    ;   본체의 자식이라 이동·DPI가 본체와 자동으로 일치 → 멀티모니터·혼합 배율에서도 정확.
+    h := Gui("+Parent" g.hwnd " -Caption")
     h.BackColor := "FFFFFF"
     h.SetFont("s9 c555555", "맑은 고딕")
     hlbl := h.Add("Text",   Format("x8 y5 w{} h16 +0x200", ww - 190), label)
@@ -316,7 +317,6 @@ CreateWidget(p) {
     ; ✕ 는 자기 자신(손잡이 창) 안에서 그 창을 파괴하므로, 이벤트가 끝난 뒤 실행하도록 미룸
     ; (즉시 파괴하면 스크립트가 크래시 → 위젯이 전부 사라짐)
     hX.OnEvent("Click", (*) => SetTimer(() => DestroyWidget(g.hwnd, true), -1))
-    StyleWindow(h.hwnd)   ; 손잡이 바도 둥근 모서리 + 테두리 없음(위젯과 통일)
 
     ; 모든 위젯: 소유자=바탕화면(뒤 레이어)이되 최상위 창이라 클릭·타이핑 O.
     ;   Win+D 최소화는 위의 최소화-복원 훅이 즉시 되돌린다(사용자 선택).
@@ -332,9 +332,11 @@ CreateWidget(p) {
                            handleShown: false, pinned: wantPin}
     HandleToWidget[h.hwnd] := g.hwnd
 
-    ; 크기 조절 시 웹뷰 리사이즈 + 크기 저장(디바운스). 손잡이 폭은 표시될 때 재배치(PositionHandle)
+    ; 크기 조절 시 웹뷰 리사이즈 + (손잡이 떠 있으면) 폭 갱신 + 크기 저장(디바운스)
     OnResize(gg, minmax, w, hgt) {
         SetWebViewBounds(wvc, g.hwnd, 0)
+        if (WidgetWins.Has(g.hwnd) && WidgetWins[g.hwnd].handleShown)
+            PositionHandle(g.hwnd)
         pendingSaveHwnd := g.hwnd
         SetTimer(FlushSave, -500)   ; 마지막 리사이즈 0.5초 후 1회 저장(같은 타이머로 디바운스)
     }
@@ -358,13 +360,16 @@ PositionHandle(widgetHwnd) {
     if !WidgetWins.Has(widgetHwnd)
         return
     w := WidgetWins[widgetHwnd]
-    WidgetVisibleRect(widgetHwnd, &wx, &wy, &wW, &wH)
-    w.hlbl.Move(8, 5, wW - 190, 16)
-    w.hsld.Move(wW - 178, 4)
-    w.hApp.Move(wW - 94, 3)
-    w.hX.Move(wW - 30, 3)
-    ; 맨 위 HANDLE_TOP 만큼 비워 위쪽 테두리로 크기조절 가능하게(손잡이는 그 아래에 겹침)
-    w.handleGui.Show(Format("x{} y{} w{} h{} NoActivate", wx, wy + HANDLE_TOP, wW, HANDLE_H))
+    ; 자식 창이므로 좌표는 본체 '클라이언트' 기준(0,HANDLE_TOP). 폭은 본체 클라이언트 폭.
+    DllCall("GetClientRect", "ptr", widgetHwnd, "ptr", rc := Buffer(16))
+    cw := NumGet(rc, 8, "int")
+    w.hlbl.Move(8, 5, cw - 190, 16)
+    w.hsld.Move(cw - 178, 4)
+    w.hApp.Move(cw - 94, 3)
+    w.hX.Move(cw - 30, 3)
+    w.handleGui.Show(Format("x0 y{} w{} h{} NoActivate", HANDLE_TOP, cw, HANDLE_H))
+    ; 웹뷰보다 위(z-order)로 올려 겹치게 (HWND_TOP, SWP_NOMOVE|NOSIZE|NOACTIVATE)
+    DllCall("SetWindowPos", "ptr", w.handleGui.hwnd, "ptr", 0, "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)
 }
 
 SetWidgetOpacity(hwnd, val) {
@@ -496,10 +501,7 @@ DragMove() {
         }
     }
     WinMove(nx, ny, , , "ahk_id " dragHwnd)
-    if WidgetWins.Has(dragHwnd) {          ; 손잡이 바도 위젯의 '보이는' 위치로 따라 이동
-        WidgetVisibleRect(dragHwnd, &vx, &vy, &vw, &vh)
-        try WidgetWins[dragHwnd].handleGui.Move(vx, vy + HANDLE_TOP)
-    }
+    ; 손잡이는 본체의 자식이라 본체가 움직이면 자동으로 함께 이동(수동 이동 불필요)
 }
 
 ; ── 크기 조절 시 테두리 자석 스냅(WM_SIZING) ───────────────
