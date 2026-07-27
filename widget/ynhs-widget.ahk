@@ -370,9 +370,14 @@ PositionHandle(widgetHwnd) {
     ;   · 컨트롤 크기·여백(px)은 자동으로 안 커지므로 배율(s)만큼 직접 키운다.
     ;   · 위치·폭은 물리좌표(wx·wW) 그대로.
     dpi := DllCall("user32\GetDpiForWindow", "ptr", widgetHwnd, "uint")
-    s := (dpi ? dpi : 96) / 96.0
+    dpi := dpi ? dpi : 96
+    s := dpi / 96.0
     hh  := Round(HANDLE_H * s)
     top := Round(HANDLE_TOP * s)
+    ; 글꼴: AHK는 pt 글꼴을 '주 모니터(A_ScreenDPI)' 기준으로 확대하므로, 그 창이 놓인
+    ;   모니터 배율에 맞게 (dpi/주모니터DPI)로 역보정해야 어느 모니터에서든 크기가 맞다.
+    ref := A_ScreenDPI ? A_ScreenDPI : 96
+    w.handleGui.SetFont("s" Round(9 * dpi / ref))
     w.hlbl.Move(Round(8*s),        Round(5*s), wW - Round(190*s), Round(16*s))
     w.hsld.Move(wW - Round(178*s), Round(4*s), Round(78*s),       Round(18*s))
     w.hApp.Move(wW - Round(94*s),  Round(3*s), Round(58*s),       Round(20*s))
@@ -580,21 +585,27 @@ DestroyWidget(hwnd, fromButton := false) {
     try g.Destroy()
 }
 
-; ↗ 앱: 브라우저 새 창이 아니라 통합앱(영남고.exe) 창을 띄운다.
-;   · 이미 실행 중이면 그 창만 보이게(앱이 등록한 메시지를 브로드캐스트).
-;   · 안 떠 있으면 같은 폴더의 영남고.exe 실행. 그것도 없으면(구 standalone) 브라우저.
+; ↗ 앱: 브라우저 새 창이 아니라 통합앱(영남고.exe) 창을 '해당 패널 페이지'로 띄운다.
+;   · 이동할 페이지를 공유 파일(goto.txt)에 적어두면 앱이 읽어 그 페이지로 이동.
+;   · 이미 실행 중이면 GOTO 메시지 브로드캐스트, 아니면 영남고.exe 실행(앱이 시작 시 읽음).
+;   · 영남고.exe가 없으면(구 standalone) 브라우저로 ?goto= 열기.
 LaunchMain(panel) {
     global APP_URL
+    page := PanelToPage(panel)
+    dir := A_AppData "\YnhsApp"
+    try DirCreate(dir)
+    try FileDelete(dir "\goto.txt")
+    try FileAppend(page, dir "\goto.txt")
     if ProcessExist("영남고.exe") {
-        msg := DllCall("RegisterWindowMessage", "str", "YNHS_APP_SHOW_v1", "uint")
-        PostMessage(msg, 0, 0, , "ahk_id 0xFFFF")   ; HWND_BROADCAST → 앱 창 표시
+        msg := DllCall("RegisterWindowMessage", "str", "YNHS_APP_GOTO_v1", "uint")
+        PostMessage(msg, 0, 0, , "ahk_id 0xFFFF")   ; HWND_BROADCAST → 앱이 그 페이지로 이동+표시
         return
     }
     appExe := A_ScriptDir "\영남고.exe"
     if FileExist(appExe)
         Run('"' appExe '"', A_ScriptDir)
     else
-        Run(APP_URL)
+        Run(APP_URL "?goto=" page)
 }
 
 ; 위젯 페이지 URL — 메모는 독립 페이지(memo2.html), 나머지는 index.html?widget=

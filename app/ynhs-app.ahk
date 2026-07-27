@@ -17,9 +17,11 @@ main := 0
 wvc := 0
 WIDGET_EXE := A_ScriptDir "\위젯.exe"          ; 바탕화면 위젯(별도 서명 AutoHotkey)
 WIDGET_PREF := A_AppData "\YnhsApp\widget.on"  ; 위젯 켜짐 상태 기억(파일 존재=켜짐)
+GOTO_FILE := A_AppData "\YnhsApp\goto.txt"     ; 위젯 ↗앱이 적어두는 이동할 페이지
 
-; 두 번째 인스턴스 → 기존 창 띄우기 신호(시스템 전역 고유 메시지)
+; 두 번째 인스턴스 → 기존 창 띄우기 신호 / 위젯 ↗앱 → 특정 페이지로 이동 신호 (시스템 전역 고유 메시지)
 MSG_SHOW := DllCall("RegisterWindowMessage", "str", "YNHS_APP_SHOW_v1", "uint")
+MSG_GOTO := DllCall("RegisterWindowMessage", "str", "YNHS_APP_GOTO_v1", "uint")
 
 ; ── 중복 실행 방지(이름 있는 뮤텍스) ──
 hMutex := DllCall("CreateMutexW", "ptr", 0, "int", 0, "str", "Local\YnhsAppSingleton_v1", "ptr")
@@ -63,8 +65,9 @@ if FileExist(WIDGET_PREF)
     StartWidget()
 RefreshWidgetCheck()
 
-; 두 번째 실행 신호 수신 → 창 띄우기
+; 두 번째 실행 신호 수신 → 창 띄우기 / 위젯 ↗앱 신호 → 해당 페이지로 이동+표시
 OnMessage(MSG_SHOW, (*) => ShowApp())
+OnMessage(MSG_GOTO, (*) => GotoFromFile())
 
 ; 바탕화면 바로가기(영남고 로고) — 없으면 생성
 EnsureDesktopShortcut()
@@ -75,7 +78,9 @@ try DirCreate(SESSION)
 try {
     env := WebView2.CreateEnvironmentAsync(0, SESSION, "", DLL).await()
     wvc := env.CreateCoreWebView2ControllerAsync(main.Hwnd).await()
-    wvc.CoreWebView2.Navigate(APP_URL)
+    ; 위젯 ↗앱으로 실행됐으면 goto.txt의 페이지로 바로 진입, 아니면 메인
+    startPage := ReadGoto()
+    wvc.CoreWebView2.Navigate(startPage != "" ? APP_URL "?goto=" startPage : APP_URL)
     try wvc.CoreWebView2.add_NewWindowRequested(OnNewWindow)   ; 새 창 → 기본 브라우저
     SetBounds()
 } catch as e {
@@ -83,6 +88,27 @@ try {
 }
 
 ; ── 함수 ──
+; 위젯 ↗앱이 적어둔 이동 페이지를 한 번 읽고 지운다(없으면 "")
+ReadGoto() {
+    global GOTO_FILE
+    p := ""
+    try {
+        if FileExist(GOTO_FILE) {
+            p := Trim(FileRead(GOTO_FILE), " `t`r`n")
+            FileDelete(GOTO_FILE)
+        }
+    }
+    return p
+}
+; 위젯 ↗앱 신호: goto.txt 페이지로 WebView 이동 + 창 표시
+GotoFromFile() {
+    global wvc, APP_URL
+    p := ReadGoto()
+    if (p != "" && wvc)
+        try wvc.CoreWebView2.Navigate(APP_URL "?goto=" p)
+    ShowApp()
+}
+
 ShowApp(*) {
     global main
     if !main
