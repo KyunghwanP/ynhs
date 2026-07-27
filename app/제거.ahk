@@ -18,8 +18,10 @@ if (res != "Yes")
 try ProcessClose("영남고.exe")
 Sleep 700
 
-; 바로가기 삭제
+; 바로가기 삭제 (바탕화면·시작메뉴·시작프로그램)
 try FileDelete(A_Desktop "\영남고.lnk")
+try FileDelete(A_Programs "\영남고.lnk")
+try FileDelete(A_Programs "\영남고 제거.lnk")
 try FileDelete(A_Startup "\영남고.lnk")
 
 ; 로그인/설정 데이터 삭제
