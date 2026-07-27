@@ -8,6 +8,7 @@ on:
     paths:
       - 'app/ynhs-app.ahk'
       - 'app/ynhs-app-launcher.ahk'
+      - 'app/제거.ahk'
       - '.github/workflows/build-app-ahk.yml'
   workflow_dispatch:
 
@@ -70,6 +71,9 @@ jobs:
           $p2 = Start-Process -FilePath $env:AHK_BASE -Wait -PassThru -NoNewWindow -ArgumentList @(
             '/ErrorStdOut', '/validate', (Resolve-Path app/ynhs-app-launcher.ahk).Path)
           if ($p2.ExitCode -ne 0) { throw "런처 스크립트 문법 오류 (exit $($p2.ExitCode))" }
+          $p3 = Start-Process -FilePath $env:AHK_BASE -Wait -PassThru -NoNewWindow -ArgumentList @(
+            '/ErrorStdOut', '/validate', (Resolve-Path 'app/제거.ahk').Path)
+          if ($p3.ExitCode -ne 0) { throw "제거기 스크립트 문법 오류 (exit $($p3.ExitCode))" }
 
       - name: 포터블 패키지 조립(서명된 AutoHotkey + 스크립트 + 라이브러리)
         shell: pwsh
@@ -86,16 +90,23 @@ jobs:
           # 서명된 AutoHotkey64.exe를 '영남고.exe'로 → 같은 이름의 '영남고.ahk'(=런처)를 자동 실행(서명 유지)
           Copy-Item $env:AHK_BASE (Join-Path $stage '영남고.exe') -Force
           Copy-Item app/ynhs-app-launcher.ahk (Join-Path $stage '영남고.ahk') -Force
+          # 제거기: 서명된 AutoHotkey를 '제거.exe'로 → 같은 이름의 '제거.ahk' 실행
+          Copy-Item $env:AHK_BASE (Join-Path $stage '제거.exe') -Force
+          Copy-Item 'app/제거.ahk' (Join-Path $stage '제거.ahk') -Force
           @"
           영남고 통합앱 (무설치 포터블)
 
-          1) 이 폴더를 원하는 위치(바탕화면/문서 등)에 통째로 둡니다.
+          1) 이 폴더를 원하는 위치(문서 등)에 통째로 둡니다. (폴더는 옮기지 말고 고정 위치 권장)
           2) 영남고.exe 를 더블클릭하면 앱이 뜹니다. (최초 1회 구글 로그인)
+             - 첫 실행 때 '바탕화면에 영남고 바로가기'가 자동으로 생깁니다. 다음부터는 그걸 쓰세요.
              - 영남고.exe 는 '서명된 정품 AutoHotkey' 이고, 같은 이름의 영남고.ahk 를 실행합니다.
-          3) 부팅 시 자동 실행: Win+R -> shell:startup -> 영남고.exe 의 바로가기를 넣기.
+          3) 부팅 시 자동 실행(선택): Win+R -> shell:startup -> 영남고.exe(또는 바탕화면 바로가기)의 바로가기를 넣기.
 
           · 닫기(X)는 종료가 아니라 트레이로 숨김입니다. 트레이 아이콘에서 열기/종료.
           · 이미 실행 중일 때 다시 실행하면 기존 창이 그대로 떠오릅니다.
+
+          [제거] 제거.exe 를 실행하면 앱 종료 + 바탕화면 바로가기 + 데이터 + 이 폴더까지 삭제됩니다.
+
           ※ 폴더 안 파일을 지우지 마세요. 영남고.exe 만 실행하면 됩니다.
           "@ | Out-File -FilePath (Join-Path $stage '읽어주세요.txt') -Encoding utf8
 

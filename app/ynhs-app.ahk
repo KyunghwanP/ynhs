@@ -57,6 +57,9 @@ A_TrayMenu.Default := "열기"
 ; 두 번째 실행 신호 수신 → 창 띄우기
 OnMessage(MSG_SHOW, (*) => ShowApp())
 
+; 바탕화면 바로가기(영남고 로고) — 없으면 생성
+EnsureDesktopShortcut()
+
 ; ── WebView2 로드 ──
 SESSION := A_AppData "\YnhsApp\Session"
 try DirCreate(SESSION)
@@ -105,6 +108,17 @@ OnNewWindow(sender, args) {
         if (u != "")
             Run(u)
     }
+}
+
+; 바탕화면에 '영남고' 바로가기 생성(로고 아이콘). 이미 있으면 건너뜀.
+EnsureDesktopShortcut() {
+    lnk := A_Desktop "\영남고.lnk"
+    if FileExist(lnk)
+        return
+    exe := A_ScriptDir "\영남고.exe"
+    if !FileExist(exe)          ; 개발 중(다른 이름) 등엔 만들지 않음
+        return
+    try FileCreateShortcut(exe, lnk, A_ScriptDir, "", "영남고 포털", A_ScriptDir "\icon.ico")
 }
 
 SetWindowIcon() {
