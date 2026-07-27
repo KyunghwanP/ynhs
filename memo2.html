@@ -15,6 +15,49 @@
         window.addEventListener('storage', e => { if (e.key === 'ynhs-dark') apply(e.newValue === '1'); });
       })();
     </script>
+    <!-- ── 위젯 손잡이 바(웹 내장) — 데스크톱 위젯(WebView 최상위)일 때만 ── -->
+    <script>
+      (function(){
+        var host = (window.self===window.top && window.chrome && window.chrome.webview) ? window.chrome.webview : null;
+        if(!host) return;                       // 포털 안 iframe/일반 브라우저에선 미표시
+        function post(m){ try{ host.postMessage(m); }catch(e){} }
+        function build(){
+          if(!document.body || document.getElementById('wgtBar')) return;
+          var op = parseInt(new URLSearchParams(location.search).get('op')||'240',10);
+          var css = document.createElement('style');
+          css.textContent =
+            '#wgtBar{position:fixed;top:0;left:0;right:0;height:28px;z-index:2147483647;display:flex;'
+            +'align-items:center;gap:6px;padding:0 6px;background:rgba(248,250,252,.96);'
+            +'border-bottom:1px solid rgba(0,0,0,.08);font:600 12px/1 "맑은 고딕",sans-serif;color:#555;'
+            +'opacity:0;transition:opacity .12s;pointer-events:none;-webkit-user-select:none;user-select:none;}'
+            +'html.dark #wgtBar{background:rgba(17,26,45,.96);color:#9fb0c9;border-color:rgba(255,255,255,.08);}'
+            +'#wgtBar.show{opacity:1;pointer-events:auto;}'
+            +'#wgtBar .wgt-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:move;}'
+            +'#wgtBar input[type=range]{width:70px;}'
+            +'#wgtBar button{border:none;background:transparent;cursor:pointer;font:inherit;color:inherit;'
+            +'padding:3px 7px;border-radius:6px;}#wgtBar button:hover{background:rgba(0,0,0,.08);}'
+            +'html.dark #wgtBar button:hover{background:rgba(255,255,255,.12);}';
+          document.head.appendChild(css);
+          var bar = document.createElement('div');
+          bar.id='wgtBar';
+          bar.innerHTML =
+            '<span class="wgt-title" id="wgtDrag">📝 빠른 메모</span>'
+            +'<input type="range" id="wgtOp" min="70" max="255" value="'+op+'" title="투명도">'
+            +'<button id="wgtApp" title="앱에서 열기">↗ 앱</button>'
+            +'<button id="wgtClose" title="닫기">✕</button>';
+          document.body.appendChild(bar);
+          document.addEventListener('mousemove', function(e){
+            if(e.clientY <= 30) bar.classList.add('show');
+            else if(e.clientY > 40) bar.classList.remove('show');
+          });
+          document.getElementById('wgtDrag').addEventListener('mousedown', function(e){ e.preventDefault(); post('drag'); });
+          document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
+          document.getElementById('wgtApp').addEventListener('click', function(){ post('app'); });
+          document.getElementById('wgtClose').addEventListener('click', function(){ post('close'); });
+        }
+        if(document.readyState!=='loading') build(); else document.addEventListener('DOMContentLoaded', build);
+      })();
+    </script>
     <!--
       개인 메모 (Editor.js) — 노션식 "페이지 안의 페이지" 구조
       - 하위 페이지 블록: 삽입 즉시 페이지 생성(제목 나중에), 클릭 = 제목 수정,
