@@ -15,6 +15,8 @@ Persistent()
 APP_URL := "https://kyunghwanp.github.io/ynhs/"
 main := 0
 wvc := 0
+WIDGET_EXE := A_ScriptDir "\위젯.exe"          ; 바탕화면 위젯(별도 서명 AutoHotkey)
+WIDGET_PREF := A_AppData "\YnhsApp\widget.on"  ; 위젯 켜짐 상태 기억(파일 존재=켜짐)
 
 ; 두 번째 인스턴스 → 기존 창 띄우기 신호(시스템 전역 고유 메시지)
 MSG_SHOW := DllCall("RegisterWindowMessage", "str", "YNHS_APP_SHOW_v1", "uint")
@@ -51,8 +53,15 @@ try TraySetIcon(A_ScriptDir "\icon.ico")
 A_IconTip := "영남고등학교"
 A_TrayMenu.Delete()
 A_TrayMenu.Add("열기", (*) => ShowApp())
+A_TrayMenu.Add("바탕화면 위젯", (*) => ToggleWidget())
+A_TrayMenu.Add()
 A_TrayMenu.Add("종료", (*) => ExitApp())
 A_TrayMenu.Default := "열기"
+
+; 지난번 켜둔 상태면 위젯 자동 복원 (앱이 부팅 자동실행이면 위젯도 함께 뜸)
+if FileExist(WIDGET_PREF)
+    StartWidget()
+RefreshWidgetCheck()
 
 ; 두 번째 실행 신호 수신 → 창 띄우기
 OnMessage(MSG_SHOW, (*) => ShowApp())
@@ -108,6 +117,32 @@ OnNewWindow(sender, args) {
         if (u != "")
             Run(u)
     }
+}
+
+; ── 바탕화면 위젯 켜기/끄기 (풀 기능 위젯 = 위젯.exe → ynhs-widget.ahk) ──
+ToggleWidget() {
+    global WIDGET_PREF
+    if ProcessExist("위젯.exe") {
+        try ProcessClose("위젯.exe")
+        try FileDelete(WIDGET_PREF)
+    } else {
+        StartWidget()
+        try DirCreate(A_AppData "\YnhsApp")
+        try FileAppend("", WIDGET_PREF)
+    }
+    Sleep 200
+    RefreshWidgetCheck()
+}
+StartWidget() {
+    global WIDGET_EXE
+    if FileExist(WIDGET_EXE)
+        Run('"' WIDGET_EXE '"', A_ScriptDir)
+}
+RefreshWidgetCheck() {
+    if ProcessExist("위젯.exe")
+        A_TrayMenu.Check("바탕화면 위젯")
+    else
+        A_TrayMenu.Uncheck("바탕화면 위젯")
 }
 
 ; 바탕화면에 '영남고' 바로가기 생성(로고 아이콘). 이미 있으면 건너뜀.

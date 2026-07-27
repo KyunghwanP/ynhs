@@ -10,6 +10,8 @@ on:
       - 'app/ynhs-app-launcher.ahk'
       - 'app/설치.ahk'
       - 'app/제거.ahk'
+      - 'widget/ynhs-widget.ahk'
+      - 'widget/ynhs-launcher.ahk'
       - '.github/workflows/build-app-ahk.yml'
   workflow_dispatch:
 
@@ -100,6 +102,11 @@ jobs:
           # 제거기: 서명된 AutoHotkey를 '제거.exe'로 → 같은 이름의 '제거.ahk' 실행
           Copy-Item $env:AHK_BASE (Join-Path $inner '제거.exe') -Force
           Copy-Item 'app/제거.ahk' (Join-Path $inner '제거.ahk') -Force
+          # 바탕화면 위젯(풀 기능) — 위젯.exe(서명 AHK)가 위젯.ahk(런처)를 실행,
+          #   런처가 실행 때마다 최신 ynhs-widget.ahk를 받아 실행(자동 업데이트). WebView2는 위 폴더 공유.
+          Copy-Item $env:AHK_BASE (Join-Path $inner '위젯.exe') -Force
+          Copy-Item widget/ynhs-launcher.ahk (Join-Path $inner '위젯.ahk') -Force
+          Copy-Item widget/ynhs-widget.ahk   (Join-Path $inner 'ynhs-widget.ahk') -Force
           @"
           이 폴더는 '영남고 통합앱'의 프로그램 파일입니다. 여기 파일은 지우지 마세요.
           설치: 상위 폴더의 '설치.exe' 를 실행하세요.

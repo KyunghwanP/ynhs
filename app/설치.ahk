@@ -34,8 +34,14 @@ exe := dest "\영남고.exe"
 ico := dest "\icon.ico"
 try FileCreateShortcut(exe, A_Desktop "\영남고.lnk", dest, "", "영남고 포털", ico)          ; 바탕화면
 try FileCreateShortcut(exe, A_Programs "\영남고.lnk", dest, "", "영남고 포털", ico)         ; 시작 메뉴 실행
+try FileCreateShortcut(exe, A_Startup "\영남고.lnk", dest, "", "영남고 포털", ico)          ; 부팅 시 자동 실행
 try FileCreateShortcut(dest "\제거.exe", A_Programs "\영남고 제거.lnk", dest, "", "영남고 제거", ico)  ; 시작 메뉴 제거
 
-MsgBox("설치가 완료되었습니다.`n`n바탕화면의 '영남고' 아이콘으로 실행하세요.`n(이 다운로드 폴더는 이제 삭제하셔도 됩니다.)", "영남고 설치", "Iconi")
+MsgBox("설치가 완료되었습니다.`n`n"
+    . "· 바탕화면의 '영남고' 아이콘으로 실행하세요.`n"
+    . "· 부팅 시 자동 실행되도록 등록했습니다.`n"
+    . "· 바탕화면 위젯은 앱 트레이 아이콘 → '바탕화면 위젯'에서 켜세요.`n"
+    . "· 제거는 시작 메뉴의 '영남고 제거'.`n`n"
+    . "(이 다운로드 폴더는 이제 삭제하셔도 됩니다.)", "영남고 설치", "Iconi")
 Run('"' exe '"', dest)
 ExitApp
