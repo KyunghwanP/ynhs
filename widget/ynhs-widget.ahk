@@ -304,9 +304,7 @@ CreateWidget(p) {
     StyleWindow(g.hwnd)   ; 둥근 모서리 + 얇은 파란 테두리(Win11)
 
     ; ── 손잡이 바(별도 최상위 창) — 호버 시 웹 위에 '겹쳐' 나타남 → 내용이 밀리지 않는다
-    ;   -DPIScale: 본체와 동일하게 DPI 스케일 끔. 안 그러면 배율 화면(125%·150%)에서
-    ;   손잡이가 물리 좌표에 배율이 한 번 더 곱해져 엉뚱한 위치에 뜬다.
-    h := Gui("-Caption +AlwaysOnTop +ToolWindow -Resize -DPIScale")
+    h := Gui("-Caption +AlwaysOnTop +ToolWindow -Resize")
     h.BackColor := "FFFFFF"
     h.SetFont("s9 c555555", "맑은 고딕")
     hlbl := h.Add("Text",   Format("x8 y5 w{} h16 +0x200", ww - 190), label)
