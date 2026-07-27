@@ -1,10 +1,6 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 CoordMode "Mouse", "Screen"
-; 멀티모니터(모니터마다 배율이 다를 때) 대응 — 이 프로세스를 Per-Monitor-V2 DPI 인식으로.
-;   Windows가 좌표를 배율만큼 왜곡(가상화)하지 않게 되어, 어느 모니터에서든 물리좌표가 일관됨.
-;   (안 하면 메인 150%/서브 100% 같은 혼합 배율에서 손잡이 바가 엉뚱한 위치로 밀림)
-DllCall("SetThreadDpiAwarenessContext", "ptr", -4)   ; DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 ; WebView2 라이브러리(thqby/ahk2_lib) — 저장소를 통째로 받아 폴더 구조 유지.
 ;   같은 폴더에  ComVar.ahk · Promise.ahk 등 최상위 .ahk  +  WebView2\ 폴더  +  WebView2Loader.dll
 #Include %A_ScriptDir%\WebView2\WebView2.ahk
@@ -308,9 +304,7 @@ CreateWidget(p) {
     StyleWindow(g.hwnd)   ; 둥근 모서리 + 얇은 파란 테두리(Win11)
 
     ; ── 손잡이 바(별도 최상위 창) — 호버 시 웹 위에 '겹쳐' 나타남 → 내용이 밀리지 않는다
-    ;   -DPIScale: AHK 자동 스케일 끔(본체와 동일). 위치·크기는 PositionHandle에서
-    ;   그 위젯이 놓인 모니터 배율로 직접 계산 → 혼합 배율 멀티모니터에서도 정확히 겹침.
-    h := Gui("-Caption +AlwaysOnTop +ToolWindow -Resize -DPIScale")
+    h := Gui("-Caption +AlwaysOnTop +ToolWindow -Resize")
     h.BackColor := "FFFFFF"
     h.SetFont("s9 c555555", "맑은 고딕")
     hlbl := h.Add("Text",   Format("x8 y5 w{} h16 +0x200", ww - 190), label)
@@ -365,24 +359,12 @@ PositionHandle(widgetHwnd) {
         return
     w := WidgetWins[widgetHwnd]
     WidgetVisibleRect(widgetHwnd, &wx, &wy, &wW, &wH)
-    ; 이 위젯이 놓인 모니터의 배율(DPI).
-    ;   · 글꼴(pt)은 배율에 따라 '자동으로' 커지므로 건드리지 않는다(건드리면 두 배가 됨).
-    ;   · 컨트롤 크기·여백(px)은 자동으로 안 커지므로 배율(s)만큼 직접 키운다.
-    ;   · 위치·폭은 물리좌표(wx·wW) 그대로.
-    dpi := DllCall("user32\GetDpiForWindow", "ptr", widgetHwnd, "uint")
-    dpi := dpi ? dpi : 96
-    s := dpi / 96.0
-    hh  := Round(HANDLE_H * s)
-    top := Round(HANDLE_TOP * s)
-    ; 글꼴: AHK는 pt 글꼴을 '주 모니터(A_ScreenDPI)' 기준으로 확대하므로, 그 창이 놓인
-    ;   모니터 배율에 맞게 (dpi/주모니터DPI)로 역보정해야 어느 모니터에서든 크기가 맞다.
-    ref := A_ScreenDPI ? A_ScreenDPI : 96
-    w.handleGui.SetFont("s" Round(9 * dpi / ref))
-    w.hlbl.Move(Round(8*s),        Round(5*s), wW - Round(190*s), Round(16*s))
-    w.hsld.Move(wW - Round(178*s), Round(4*s), Round(78*s),       Round(18*s))
-    w.hApp.Move(wW - Round(94*s),  Round(3*s), Round(58*s),       Round(20*s))
-    w.hX.Move(wW - Round(30*s),    Round(3*s), Round(26*s),       Round(20*s))
-    w.handleGui.Show(Format("x{} y{} w{} h{} NoActivate", wx, wy + top, wW, hh))
+    w.hlbl.Move(8, 5, wW - 190, 16)
+    w.hsld.Move(wW - 178, 4)
+    w.hApp.Move(wW - 94, 3)
+    w.hX.Move(wW - 30, 3)
+    ; 맨 위 HANDLE_TOP 만큼 비워 위쪽 테두리로 크기조절 가능하게(손잡이는 그 아래에 겹침)
+    w.handleGui.Show(Format("x{} y{} w{} h{} NoActivate", wx, wy + HANDLE_TOP, wW, HANDLE_H))
 }
 
 SetWidgetOpacity(hwnd, val) {
@@ -439,10 +421,8 @@ HoverCheck() {
         target := HandleToWidget[root]            ; 손잡이 바 위 → 계속 표시
     else if WidgetWins.Has(root) {
         WinGetPos(&wx, &wy, , , "ahk_id " root)
-        ; 맨 위 HANDLE_TOP(리사이즈용 여백)~손잡이 아래까지가 손잡이 표시 영역 (모니터 배율 반영)
-        dpi := DllCall("user32\GetDpiForWindow", "ptr", root, "uint")
-        s := (dpi ? dpi : 96) / 96.0
-        if (my >= wy + Round(HANDLE_TOP*s) && my <= wy + Round((HANDLE_TOP + HANDLE_H)*s) + 4)
+        ; 맨 위 HANDLE_TOP(리사이즈용 여백)~손잡이 아래까지가 손잡이 표시 영역
+        if (my >= wy + HANDLE_TOP && my <= wy + HANDLE_TOP + HANDLE_H + 4)
             target := root
     }
     if dragHwnd
