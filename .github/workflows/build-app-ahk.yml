@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - 'app/ynhs-app.ahk'
+      - 'app/ynhs-app-launcher.ahk'
       - '.github/workflows/build-app-ahk.yml'
   workflow_dispatch:
 
@@ -66,6 +67,9 @@ jobs:
           $p = Start-Process -FilePath $env:AHK_BASE -Wait -PassThru -NoNewWindow -ArgumentList @(
             '/ErrorStdOut', '/validate', (Resolve-Path app/ynhs-app.ahk).Path)
           if ($p.ExitCode -ne 0) { throw "통합앱 스크립트 문법 오류 (exit $($p.ExitCode))" }
+          $p2 = Start-Process -FilePath $env:AHK_BASE -Wait -PassThru -NoNewWindow -ArgumentList @(
+            '/ErrorStdOut', '/validate', (Resolve-Path app/ynhs-app-launcher.ahk).Path)
+          if ($p2.ExitCode -ne 0) { throw "런처 스크립트 문법 오류 (exit $($p2.ExitCode))" }
 
       - name: 포터블 패키지 조립(서명된 AutoHotkey + 스크립트 + 라이브러리)
         shell: pwsh
@@ -77,9 +81,11 @@ jobs:
           Copy-Item lib/WebView2    (Join-Path $stage 'WebView2') -Recurse -Force
           Copy-Item wv2/runtimes/win-x64/native/WebView2Loader.dll $stage -Force
           Copy-Item app/icon.ico    $stage -Force
-          # 서명된 AutoHotkey64.exe를 '영남고.exe'로 → 같은 이름의 '영남고.ahk'를 자동 실행(서명 유지)
+          # 오프라인 폴백용 앱 스크립트(런처가 실행 때마다 최신본으로 덮어씀)
+          Copy-Item app/ynhs-app.ahk (Join-Path $stage 'ynhs-app.ahk') -Force
+          # 서명된 AutoHotkey64.exe를 '영남고.exe'로 → 같은 이름의 '영남고.ahk'(=런처)를 자동 실행(서명 유지)
           Copy-Item $env:AHK_BASE (Join-Path $stage '영남고.exe') -Force
-          Copy-Item app/ynhs-app.ahk (Join-Path $stage '영남고.ahk') -Force
+          Copy-Item app/ynhs-app-launcher.ahk (Join-Path $stage '영남고.ahk') -Force
           @"
           영남고 통합앱 (무설치 포터블)
 
