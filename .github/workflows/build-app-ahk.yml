@@ -1,0 +1,110 @@
+name: 통합앱 exe 빌드/배포(AHK)
+
+# app/ 의 AHK 통합앱이 바뀌면 Windows 러너에서 포터블 패키지를 만들어
+# 'app-latest' 릴리스에 올린다. (서명된 정품 AutoHotkey로 구동 → 백신 오탐 위험 낮음)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/ynhs-app.ahk'
+      - '.github/workflows/build-app-ahk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-app-ahk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: AutoHotkey v2 준비(서명된 정품 — GitHub 릴리스)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{ 'User-Agent' = 'gh-actions'; 'Authorization' = "Bearer $env:GH_TOKEN" }
+          $ahkRel = Invoke-RestMethod -Headers $headers 'https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest'
+          $ahkZip = ($ahkRel.assets | Where-Object { $_.name -match '^AutoHotkey_.*\.zip$' -and $_.name -notmatch 'src|setup' } | Select-Object -First 1).browser_download_url
+          if (-not $ahkZip) { throw 'AutoHotkey zip 자산을 찾지 못함' }
+          Invoke-WebRequest -Headers $headers -Uri $ahkZip -OutFile ahk.zip
+          Expand-Archive ahk.zip -DestinationPath tools/ahk -Force
+          $base = (Get-ChildItem tools/ahk -Recurse -Filter AutoHotkey64.exe | Select-Object -First 1).FullName
+          if (-not $base) { throw 'AutoHotkey64.exe 없음' }
+          "AHK_BASE=$base" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: WebView2 라이브러리(thqby/ahk2_lib) 준비
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git clone --depth 1 https://github.com/thqby/ahk2_lib.git lib
+
+      - name: WebView2Loader.dll 준비(NuGet, 64bit)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest -Uri 'https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2' -OutFile wv2.zip
+          Expand-Archive wv2.zip -DestinationPath wv2 -Force
+
+      - name: 문법 검증(AutoHotkey /validate)
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # 검증하려면 #Include 대상(WebView2 라이브러리)이 스크립트 옆에 있어야 함
+          Copy-Item lib/*.ahk app/ -Force
+          Copy-Item lib/WebView2 app/WebView2 -Recurse -Force
+          Copy-Item wv2/runtimes/win-x64/native/WebView2Loader.dll app/WebView2Loader.dll -Force
+          $p = Start-Process -FilePath $env:AHK_BASE -Wait -PassThru -NoNewWindow -ArgumentList @(
+            '/ErrorStdOut', '/validate', (Resolve-Path app/ynhs-app.ahk).Path)
+          if ($p.ExitCode -ne 0) { throw "통합앱 스크립트 문법 오류 (exit $($p.ExitCode))" }
+
+      - name: 포터블 패키지 조립(서명된 AutoHotkey + 스크립트 + 라이브러리)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $PWD 'YnhsApp'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item lib/*.ahk       $stage -Force
+          Copy-Item lib/WebView2    (Join-Path $stage 'WebView2') -Recurse -Force
+          Copy-Item wv2/runtimes/win-x64/native/WebView2Loader.dll $stage -Force
+          Copy-Item app/icon.ico    $stage -Force
+          # 서명된 AutoHotkey64.exe를 '영남고.exe'로 → 같은 이름의 '영남고.ahk'를 자동 실행(서명 유지)
+          Copy-Item $env:AHK_BASE (Join-Path $stage '영남고.exe') -Force
+          Copy-Item app/ynhs-app.ahk (Join-Path $stage '영남고.ahk') -Force
+          @"
+          영남고 통합앱 (무설치 포터블)
+
+          1) 이 폴더를 원하는 위치(바탕화면/문서 등)에 통째로 둡니다.
+          2) 영남고.exe 를 더블클릭하면 앱이 뜹니다. (최초 1회 구글 로그인)
+             - 영남고.exe 는 '서명된 정품 AutoHotkey' 이고, 같은 이름의 영남고.ahk 를 실행합니다.
+          3) 부팅 시 자동 실행: Win+R -> shell:startup -> 영남고.exe 의 바로가기를 넣기.
+
+          · 닫기(X)는 종료가 아니라 트레이로 숨김입니다. 트레이 아이콘에서 열기/종료.
+          · 이미 실행 중일 때 다시 실행하면 기존 창이 그대로 떠오릅니다.
+          ※ 폴더 안 파일을 지우지 마세요. 영남고.exe 만 실행하면 됩니다.
+          "@ | Out-File -FilePath (Join-Path $stage '읽어주세요.txt') -Encoding utf8
+
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $PWD 'YnhsApp-portable.zip') -Force
+
+      - name: 릴리스 배포(app-latest 롤링 태그)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-latest
+          name: 영남고 통합앱 (최신)
+          body: |
+            영남고 통합앱 — 포털을 전체 창으로 띄우는 AutoHotkey + WebView2 앱.
+
+            · YnhsApp-portable.zip 받아 압축을 풀고 폴더 안 **영남고.exe** 실행(설치 불필요).
+              - 실제 실행 파일은 '서명된 정품 AutoHotkey'라 백신 평판 경고가 거의 없습니다.
+              - 링크는 기본 브라우저로 열리고, 닫기(X)는 트레이로 숨겨 상주합니다.
+          files: |
+            YnhsApp-portable.zip
