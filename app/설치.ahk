@@ -7,7 +7,7 @@
 ;  · 설치 후 다운로드한 압축 폴더는 지워도 됩니다.
 ; ============================================================
 
-src := A_ScriptDir "\App Files (Do Not Open)"   ; 앱 파일은 안쪽 이 폴더에 들어있음
+src := A_ScriptDir "\App Files"   ; 앱 파일은 안쪽 이 폴더에 들어있음
 dest := EnvGet("LOCALAPPDATA")
 if (dest = "")
     dest := A_AppData

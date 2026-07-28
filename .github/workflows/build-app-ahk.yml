@@ -87,7 +87,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $stage = Join-Path $PWD 'YnhsApp'
           # 안쪽 폴더 이름은 사용자가 '열어볼 필요 없다'고 바로 알 수 있게 영문으로 지음(예전엔 '영남고'라 앱인 줄 오해).
-          $inner = Join-Path $stage 'App Files (Do Not Open)'
+          $inner = Join-Path $stage 'App Files'
           New-Item -ItemType Directory -Force -Path $inner | Out-Null
 
           # ── 안쪽 프로그램 파일 폴더: 실제 앱 파일 일체 ──
@@ -138,7 +138,7 @@ jobs:
             영남고 통합앱 — 포털을 전체 창으로 띄우는 AutoHotkey + WebView2 앱.
 
             · YnhsApp-portable.zip 받아 압축을 풀고 **설치.exe** 를 실행하세요.
-              (안쪽 'App Files (Do Not Open)' 폴더는 열지 않아도 됩니다.)
+              (안쪽 'App Files' 폴더는 열지 않아도 됩니다.)
               - 설치하면 바탕화면·시작메뉴에 '영남고' 바로가기가 생기고 부팅 시 자동 실행됩니다.
               - 실제 실행 파일은 '서명된 정품 AutoHotkey'라 백신 평판 경고가 거의 없습니다.
               - 링크는 기본 브라우저로 열리고, 닫기(X)는 트레이로 숨겨 상주합니다.
