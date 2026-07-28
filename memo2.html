@@ -154,14 +154,14 @@
         /* 글래스(아크릴) 모드: 배경 투명 + 카드/헤더 반투명 유리질감 */
         html.glass, html.glass body { background: transparent !important; }
         html.glass .memo-card, html.glass .site-header {
-          background: rgba(250,251,255,.62) !important;
-          -webkit-backdrop-filter: blur(22px) saturate(1.05); backdrop-filter: blur(22px) saturate(1.05);
+          background: linear-gradient(135deg, rgba(255,255,255,.34), rgba(255,255,255,.16)) !important;
+          -webkit-backdrop-filter: blur(28px) saturate(.95); backdrop-filter: blur(28px) saturate(.95);
           border: 1px solid rgba(255,255,255,.55);
-          box-shadow: 0 8px 30px -12px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.7);
+          box-shadow: 0 14px 44px -16px rgba(0,0,0,.42), inset 0 1.5px 1px rgba(255,255,255,.75), inset 0 -20px 40px -24px rgba(255,255,255,.25);
         }
         html.dark.glass .memo-card, html.dark.glass .site-header {
-          background: rgba(15,23,42,.60) !important; border-color: rgba(255,255,255,.14);
-          box-shadow: 0 8px 30px -12px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12);
+          background: linear-gradient(135deg, rgba(30,41,59,.46), rgba(15,23,42,.30)) !important; border-color: rgba(255,255,255,.22);
+          box-shadow: 0 14px 44px -16px rgba(0,0,0,.6), inset 0 1.5px 1px rgba(255,255,255,.22), inset 0 -20px 40px -24px rgba(255,255,255,.06);
         }
         #editorjs { min-height: 55vh; flex: 1; }
 
