@@ -325,6 +325,13 @@ CreateWidget(p) {
     ;   Win+D 최소화는 위의 최소화-복원 훅이 즉시 되돌린다(사용자 선택).
     wantPin := true
     ApplyPin(g.hwnd, wantPin)
+    ; 입력이 필요없는 위젯은 '비활성 창'(WS_EX_NOACTIVATE)으로 → 클릭해도 활성화/그룹 상승이
+    ;   일어나지 않아, 듀얼모니터에서 한 위젯을 눌러도 다른 모니터 위젯이 앞으로 튀지 않는다.
+    ;   (메모·시간표 등 입력 위젯은 타이핑을 위해 제외)
+    if !INPUT_PANELS.Has(key) {
+        exs := DllCall("GetWindowLongPtr", "ptr", g.hwnd, "int", -20, "ptr")   ; GWL_EXSTYLE
+        DllCall("SetWindowLongPtr", "ptr", g.hwnd, "int", -20, "ptr", exs | 0x08000000, "ptr")  ; WS_EX_NOACTIVATE
+    }
     ; 바탕화면 자식으로 바꾸면 좌표 기준이 부모(바탕화면)로 바뀌므로 위치만 재적용.
     ;   크기는 건드리지 않는다(-DPIScale + 클라이언트 크기 저장 기준을 유지 → 드리프트 없음).
     WinMove(x, y, , , "ahk_id " g.hwnd)
