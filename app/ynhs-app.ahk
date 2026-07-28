@@ -64,6 +64,8 @@ A_TrayMenu.Default := "열기"
 if FileExist(WIDGET_PREF)
     StartWidget()
 RefreshWidgetCheck()
+; 위젯을 (위젯 자체 트레이 '종료' 등) 외부에서 끄더라도 체크 표시가 실제 상태를 따라가도록 주기 반영
+SetTimer(RefreshWidgetCheck, 1500)
 
 ; 두 번째 실행 신호 수신 → 창 띄우기 / 위젯 ↗앱 신호 → 해당 페이지로 이동+표시
 OnMessage(MSG_SHOW, (*) => ShowApp())
@@ -149,15 +151,25 @@ OnNewWindow(sender, args) {
 ToggleWidget() {
     global WIDGET_PREF
     if ProcessExist("위젯.exe") {
-        try ProcessClose("위젯.exe")
+        CloseWidgetProcesses()
         try FileDelete(WIDGET_PREF)
     } else {
         StartWidget()
         try DirCreate(A_AppData "\YnhsApp")
         try FileAppend("", WIDGET_PREF)
     }
-    Sleep 200
+    Sleep 300
     RefreshWidgetCheck()
+}
+; 위젯 프로세스를 모두(런처/본체가 같은 이름이라 여러 개일 수 있음) 확실히 종료
+CloseWidgetProcesses() {
+    loop 20 {
+        pid := ProcessExist("위젯.exe")
+        if !pid
+            break
+        try ProcessClose(pid)
+        Sleep 100
+    }
 }
 StartWidget() {
     global WIDGET_EXE
