@@ -65,7 +65,8 @@
       //   안 먹어 밝게 뜨던 문제 방지. 클래스 변화도 감시해 실시간 반영.
       (function(){
         var applyBarTheme = function(){
-          var d = document.documentElement.classList.contains('dark');
+          var d = document.documentElement.classList.contains('dark')
+                  || new URLSearchParams(location.search).get('dark') === '1';
           bar.style.background = d ? 'rgba(17,26,45,.96)' : 'rgba(248,250,252,.96)';
           bar.style.color = d ? '#9fb0c9' : '#555';
           bar.style.borderBottom = '1px solid ' + (d ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)');
@@ -149,7 +150,7 @@
 
   /* 전체 시간표 위젯(fulltt): 홈 대신 시간표 페이지의 그리드만 창 전체에 표시 */
   html.widget-mode[data-widget="fulltt"] #homePage { display:none !important; }
-  html.widget-mode[data-widget="fulltt"] #timetablePage { display:flex !important; flex-direction:column; height:100vh !important; overflow:auto !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage { display:block !important; height:100vh !important; overflow:auto !important; }
   /* 검색창·교사별/학급별 전환은 남겨 다른 사람/학급 조회 가능(비우면 내 시간표, 이름 넣으면 그 사람).
      사이드바 목록과 장식 요소(학교명·구분선·과목칩)만 숨겨 좁은 위젯에 맞춤. */
   html.widget-mode[data-widget="fulltt"] #timetablePage .sidebar,
@@ -161,15 +162,13 @@
   html.widget-mode[data-widget="fulltt"] #timetablePage .masthead { padding:6px 2px !important; margin:0 !important; }
   html.widget-mode[data-widget="fulltt"] #timetablePage .wrap,
   html.widget-mode[data-widget="fulltt"] #timetablePage .layout,
-  html.widget-mode[data-widget="fulltt"] #timetablePage .main { display:flex !important; flex-direction:column; flex:1 1 auto !important; min-height:0 !important; margin:0 !important; padding:6px 0 !important; height:auto !important; max-width:none !important; }
-  html.widget-mode[data-widget="fulltt"] #timetablePage .table-wrap{ flex:1 1 auto !important; min-height:0 !important; padding-left:0 !important; padding-right:0 !important; }
-  /* 그리드가 남는 높이를 채움: 헤더(첫 행)는 자연 높이, 교시 행들은 남은 높이를 균등 분배 → 아래 여백 제거 */
-  html.widget-mode[data-widget="fulltt"] #timetablePage .grid-table{ height:100% !important; grid-template-rows:auto !important; grid-auto-rows:1fr !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .main { display:block !important; margin:0 !important; padding:6px 0 0 !important; height:auto !important; max-width:none !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .table-wrap{ padding:4px 0 0 !important; }
   /* 위젯에선 시간표를 시원하게: 셀 높이·글자 키우고 여백 확보(위젯 높이 vh 기준 스케일) */
   html.widget-mode[data-widget="fulltt"] #timetablePage{
-    --gt-row-h: clamp(44px, 10.8vh, 150px);   /* 상한을 올려 큰 위젯에서도 그리드가 창을 채움(아래 여백 제거) */
-    --gt-head-h: clamp(38px, 7.5vh, 100px);
-    --gt-lunch-h: clamp(18px, 3.2vh, 48px);
+    --gt-row-h: clamp(44px, 10.8vh, 86px);
+    --gt-head-h: clamp(38px, 7.5vh, 58px);
+    --gt-lunch-h: clamp(16px, 2.6vh, 26px);   /* 점심 행은 작게 */
     --gt-gap: clamp(4px, 1vh, 9px);
     --gt-colnum-w: clamp(30px, 8vw, 54px);
     --gt-font-head: clamp(13px, 2.7vh, 19px);
@@ -1889,7 +1888,7 @@
     display:flex;align-items:center;justify-content:center;
     font-family:'Noto Sans KR';font-style:italic;font-weight:600;font-size:var(--gt-font-lunch);color:var(--ink-soft);
     min-height:var(--gt-lunch-h);
-    border:none;
+    border:none;line-height:1.05;text-align:center;   /* 점심/시간 두 줄 좁게 */
   }
 
   .gt-cell{
@@ -5451,7 +5450,7 @@ function buildWeekGrid(getPeriod, secondLineKey, enableSwap, teacherName, highli
 
   PERIODS.forEach(p=>{
     if(p===5){
-      cells.push(`<div class="gt-lunch-label">점심시간</div>`);
+      cells.push(`<div class="gt-lunch-label">점심<br>시간</div>`);
       DAYS.forEach(day=>{
         const isTodayLunch = !suppressTodayNow && day===todayDay;
         const cls = ['gt-lunch-cell', isTodayLunch?'today':'', (isTodayLunch && currentPeriod==='lunch')?'now':''].filter(Boolean).join(' ');
