@@ -18,6 +18,16 @@
                 try { localStorage.setItem('ynhs-dark', dp); } catch(e) {} } } catch(e) {}
         window.addEventListener('storage', e => { if (e.key === 'ynhs-dark') apply(e.newValue === '1'); });
         try { if (new URLSearchParams(location.search).get('glass') === '1') document.documentElement.classList.add('glass'); } catch(e) {}
+        // 위젯에서 다크가 어떤 이유로든 안 걸리거나 풀리는 경우 대비: dark=1이면 강제로 유지
+        try {
+          if (new URLSearchParams(location.search).get('dark') === '1') {
+            var _fd = () => document.documentElement.classList.add('dark');
+            _fd();
+            document.addEventListener('DOMContentLoaded', _fd);
+            new MutationObserver(() => { if (!document.documentElement.classList.contains('dark')) _fd(); })
+              .observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+          }
+        } catch(e) {}
       })();
     </script>
     <!-- ── 위젯 손잡이 바(웹 내장) — 데스크톱 위젯(WebView 최상위)일 때만 ── -->
