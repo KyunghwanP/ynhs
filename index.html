@@ -103,25 +103,25 @@
   html.glass.widget-mode #timetablePage { background:transparent !important; }
   html.glass.widget-mode .home-section,
   html.glass.widget-mode #timetablePage .grid-table {
-    background: rgba(255,255,255,.22) !important;
-    -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5);
-    border: 1px solid rgba(255,255,255,.40);
-    box-shadow: 0 8px 30px -12px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.55);
+    background: rgba(250,251,255,.62) !important;   /* 더 뿌옇게 → 바탕 색이 과하게 안 올라옴 */
+    -webkit-backdrop-filter: blur(22px) saturate(1.05); backdrop-filter: blur(22px) saturate(1.05);
+    border: 1px solid rgba(255,255,255,.55);
+    box-shadow: 0 8px 30px -12px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.7);
     border-radius: 16px;
   }
   html.glass.widget-mode .gt-cell, html.glass.widget-mode .gt-pnum,
   html.glass.widget-mode .gt-corner, html.glass.widget-mode .gt-lunch-label,
-  html.glass.widget-mode .home-section-header { background: rgba(255,255,255,.14) !important; }
-  /* 다크+글래스: 유리 틴트를 어둡게 */
+  html.glass.widget-mode .home-section-header { background: rgba(255,255,255,.35) !important; }
+  /* 다크+글래스: 유리 틴트를 어둡게(역시 충분히 뿌옇게) */
   html.dark.glass.widget-mode .home-section,
   html.dark.glass.widget-mode #timetablePage .grid-table {
-    background: rgba(17,26,45,.38) !important;
-    border-color: rgba(255,255,255,.16);
-    box-shadow: 0 8px 30px -12px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.12);
+    background: rgba(15,23,42,.60) !important;
+    border-color: rgba(255,255,255,.14);
+    box-shadow: 0 8px 30px -12px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12);
   }
   html.dark.glass.widget-mode .gt-cell, html.dark.glass.widget-mode .gt-pnum,
   html.dark.glass.widget-mode .gt-corner, html.dark.glass.widget-mode .gt-lunch-label,
-  html.dark.glass.widget-mode .home-section-header { background: rgba(255,255,255,.06) !important; }
+  html.dark.glass.widget-mode .home-section-header { background: rgba(255,255,255,.08) !important; }
   /* 앱 크롬(상단바·사이드바·탭바·FAB·메모열) 전부 숨김 */
   html.widget-mode .app-header,
   html.widget-mode .main-nav,
