@@ -31,6 +31,7 @@ global HANDLE_H := 26
 global HANDLE_TOP := 8   ; 손잡이 바를 위젯 맨 위에서 이만큼 내림 → 위쪽 테두리(크기조절)를 잡을 여지
 global DEF_OPACITY := 240
 global gDark := false   ; 위젯 다크모드(모든 위젯 공통) — config [ui] dark 에 저장
+global gGlass := false  ; 위젯 글래스(아크릴) 모드 — config [ui] glass 에 저장 (실험적, 기본 꺼짐)
 global PROGMAN := DllCall("FindWindow", "str", "Progman", "ptr", 0, "ptr")
 
 global ALL_PANELS := [
@@ -147,23 +148,56 @@ try {
     A_IconTip := "영남고 위젯"
 }
 
-; 저장된 다크모드 설정 읽기
+; 저장된 다크모드·글래스 설정 읽기
 try gDark := (IniRead(CONFIG, "ui", "dark", "0") = "1")
+try gGlass := (IniRead(CONFIG, "ui", "glass", "0") = "1")
 
 ; ── 트레이 메뉴 ────────────────────────────────────────────
 try A_TrayMenu.Delete()
 A_TrayMenu.Add("위젯 추가 / 선택", (*) => ShowSelector())
 A_TrayMenu.Add("🌙 다크 모드", (*) => ToggleDark())
+A_TrayMenu.Add("🔷 글래스(실험)", (*) => ToggleGlass())
 A_TrayMenu.Add("현재 위치·크기 저장", (*) => SaveAll())
 A_TrayMenu.Add()
 A_TrayMenu.Add("종료", (*) => ExitApp())
 A_TrayMenu.Default := "위젯 추가 / 선택"
 if gDark
     A_TrayMenu.Check("🌙 다크 모드")
+if gGlass
+    A_TrayMenu.Check("🔷 글래스(실험)")
+
+; 글래스(아크릴) 토글: 설정 저장 + 모든 위젯에 유리 효과 적용/해제 + 새로 로드
+ToggleGlass() {
+    global gGlass, gDark, CONFIG, WidgetWins
+    gGlass := !gGlass
+    try IniWrite(gGlass ? "1" : "0", CONFIG, "ui", "glass")
+    if gGlass
+        A_TrayMenu.Check("🔷 글래스(실험)")
+    else
+        A_TrayMenu.Uncheck("🔷 글래스(실험)")
+    for hwnd, w in WidgetWins {
+        try ApplyGlass(hwnd, w.wvc, gGlass)
+        try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
+    }
+}
+
+; 위젯 창에 Windows 아크릴 배경을 적용/해제한다(실험적).
+;   on: SYSTEMBACKDROP_TYPE=3(acrylic) + 프레임을 클라이언트 전체로 확장 + 웹뷰 배경 투명
+;   off: 배경 없음(1) + 프레임 원복 + 웹뷰 배경 불투명(다크/라이트)
+ApplyGlass(hwnd, wvc, on) {
+    global gDark
+    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 38, "int*", on ? 3 : 1, "int", 4)
+    m := Buffer(16, 0)
+    if on
+        NumPut("int", -1, m, 0), NumPut("int", -1, m, 4), NumPut("int", -1, m, 8), NumPut("int", -1, m, 12)
+    try DllCall("dwmapi\DwmExtendFrameIntoClientArea", "ptr", hwnd, "ptr", m)
+    ; 유리 위에 '내용'만 뜨도록 웹뷰 배경 투명(끄면 원래 배경색으로)
+    try wvc.DefaultBackgroundColor := on ? 0x00FFFFFF : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
+}
 
 ; 다크모드 토글: 설정 저장 + 떠 있는 모든 위젯을 새 테마로 다시 로드
 ToggleDark() {
-    global gDark, CONFIG, WidgetWins, BORDER_COLOR, BORDER_COLOR_DARK
+    global gDark, gGlass, CONFIG, WidgetWins, BORDER_COLOR, BORDER_COLOR_DARK
     gDark := !gDark
     try IniWrite(gDark ? "1" : "0", CONFIG, "ui", "dark")
     if gDark
@@ -175,8 +209,9 @@ ToggleDark() {
         try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 20, "int*", gDark ? 1 : 0, "int", 4)  ; DWM 프레임 다크
         try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 34, "uint*", gDark ? BORDER_COLOR_DARK : BORDER_COLOR, "int", 4)  ; 테두리 색
         try StyleWindow(w.handleGui.hwnd)   ; 손잡이 바 테두리도 함께
-        try w.wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF   ; 웹뷰 기본 배경색도 함께
-        try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&t=" A_Now)
+        ; 웹뷰 배경: 글래스면 투명 유지, 아니면 다크/라이트 배경색
+        try w.wvc.DefaultBackgroundColor := gGlass ? 0x00FFFFFF : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
+        try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
     }
 }
 
@@ -317,7 +352,7 @@ FindWidgetByPanel(panel) {
 
 ; ── 위젯 창 생성 ───────────────────────────────────────────
 CreateWidget(p) {
-    global CONFIG, DEF_OPACITY, WidgetWins, HandleToWidget, APP_BASE, SESSION, DLL_PATH, PROGMAN, INPUT_PANELS, pendingSaveHwnd, gDark
+    global CONFIG, DEF_OPACITY, WidgetWins, HandleToWidget, APP_BASE, SESSION, DLL_PATH, PROGMAN, INPUT_PANELS, pendingSaveHwnd, gDark, gGlass
     key := p[1], label := p[2]
     x  := Integer(IniRead(CONFIG, "pos_" key, "x", p[3]))
     y  := Integer(IniRead(CONFIG, "pos_" key, "y", p[4]))
@@ -356,10 +391,10 @@ CreateWidget(p) {
             return
         }
     }
-    ; WebView2 자체 기본 배경색 — 다크면 어둡게. 페이지가 그리기 전/안 덮는 맨 위 영역에 흰 배경이
-    ;   띠처럼 비치던 문제를 없앤다(웹 CSS로는 못 덮는 웹뷰 기본색).
-    try wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF
-    wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&dark=" (gDark ? "1" : "0") "&t=" A_Now)   ; &t=:최신, &op=:투명도, &dark=:다크모드
+    ; WebView2 자체 기본 배경색 — 다크면 어둡게(글래스면 투명). 페이지가 그리기 전/안 덮는 맨 위 영역에
+    ;   흰 배경이 띠처럼 비치던 문제를 없앤다(웹 CSS로는 못 덮는 웹뷰 기본색).
+    try wvc.DefaultBackgroundColor := gGlass ? 0x00FFFFFF : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
+    wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
     ; 웹 내장 손잡이 바(HTML) → AHK 브릿지: 투명도/닫기/앱/이동. 네이티브 손잡이 대체.
     try wvc.CoreWebView2.add_WebMessageReceived(OnWebMsg.Bind(g.hwnd, key))
     g.OnEvent("Size", OnResize)
@@ -372,6 +407,8 @@ CreateWidget(p) {
     ; DWM 프레임(맨 위 비클라이언트 영역)을 다크로 → 다크모드에서 위쪽에 뜨던 밝은 띠 제거.
     ;   (창 배경·웹뷰 배경으론 못 없앰 — 이 영역은 DWM이 따로 그린다. attr 20 = USE_IMMERSIVE_DARK_MODE)
     try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", g.hwnd, "int", 20, "int*", gDark ? 1 : 0, "int", 4)
+    if gGlass                       ; 글래스 모드면 아크릴 배경 적용(실험적)
+        try ApplyGlass(g.hwnd, wvc, true)
 
     ; ── 손잡이 바(별도 최상위 창) — 호버 시 웹 위에 '겹쳐' 나타남 → 내용이 밀리지 않는다
     h := Gui("-Caption +AlwaysOnTop +ToolWindow -Resize")

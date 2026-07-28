@@ -97,6 +97,31 @@
   /* 다크 위젯: 맨 위에 라이트 배경(#f1f5f9)이 띠처럼 남던 문제 — 루트·본문·홈을 강제로 어둡게 덮음 */
   html.dark.widget-mode, html.dark.widget-mode body, html.dark.widget-mode #homePage,
   html.dark.widget-mode .app-body, html.dark.widget-mode .app-content { background:#0B1220 !important; }
+  /* ── 글래스(아크릴) 모드: 페이지 배경 투명 → 창의 아크릴이 비침. 카드/그리드는 반투명 유리질감 ── */
+  html.glass.widget-mode, html.glass.widget-mode body, html.glass.widget-mode #homePage,
+  html.glass.widget-mode .app-body, html.glass.widget-mode .app-content,
+  html.glass.widget-mode #timetablePage { background:transparent !important; }
+  html.glass.widget-mode .home-section,
+  html.glass.widget-mode #timetablePage .grid-table {
+    background: rgba(255,255,255,.22) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5);
+    border: 1px solid rgba(255,255,255,.40);
+    box-shadow: 0 8px 30px -12px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.55);
+    border-radius: 16px;
+  }
+  html.glass.widget-mode .gt-cell, html.glass.widget-mode .gt-pnum,
+  html.glass.widget-mode .gt-corner, html.glass.widget-mode .gt-lunch-label,
+  html.glass.widget-mode .home-section-header { background: rgba(255,255,255,.14) !important; }
+  /* 다크+글래스: 유리 틴트를 어둡게 */
+  html.dark.glass.widget-mode .home-section,
+  html.dark.glass.widget-mode #timetablePage .grid-table {
+    background: rgba(17,26,45,.38) !important;
+    border-color: rgba(255,255,255,.16);
+    box-shadow: 0 8px 30px -12px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.12);
+  }
+  html.dark.glass.widget-mode .gt-cell, html.dark.glass.widget-mode .gt-pnum,
+  html.dark.glass.widget-mode .gt-corner, html.dark.glass.widget-mode .gt-lunch-label,
+  html.dark.glass.widget-mode .home-section-header { background: rgba(255,255,255,.06) !important; }
   /* 앱 크롬(상단바·사이드바·탭바·FAB·메모열) 전부 숨김 */
   html.widget-mode .app-header,
   html.widget-mode .main-nav,
@@ -202,6 +227,8 @@
        if(_dp==='1'||_dp==='0'){ var _on=_dp==='1';
          document.documentElement.classList.toggle('dark',_on);
          try{ localStorage.setItem('ynhs-dark', _on?'1':'0'); }catch(e){} } }catch(e){}
+  // 위젯 글래스(아크릴) 모드: 창은 아크릴, 페이지는 반투명 유리질감
+  try{ if(new URLSearchParams(location.search).get('glass')==='1') document.documentElement.classList.add('glass'); }catch(e){}
 </script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap');

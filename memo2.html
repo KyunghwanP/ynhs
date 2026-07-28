@@ -17,6 +17,7 @@
               if (dp === '1' || dp === '0') { apply(dp === '1');
                 try { localStorage.setItem('ynhs-dark', dp); } catch(e) {} } } catch(e) {}
         window.addEventListener('storage', e => { if (e.key === 'ynhs-dark') apply(e.newValue === '1'); });
+        try { if (new URLSearchParams(location.search).get('glass') === '1') document.documentElement.classList.add('glass'); } catch(e) {}
       })();
     </script>
     <!-- ── 위젯 손잡이 바(웹 내장) — 데스크톱 위젯(WebView 최상위)일 때만 ── -->
@@ -150,6 +151,18 @@
         /* 카드가 화면(임베드 시 패널) 바닥까지 채우고, 에디터가 남는 공간을 전부 차지 */
         .memo-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; box-shadow: 0 4px 20px rgba(148,163,184,.10); padding: 18px 14px 10px; min-height: 62vh; flex: 1; display: flex; flex-direction: column; }
         html.dark .memo-card { box-shadow: 0 4px 20px rgba(0,0,0,.35); }
+        /* 글래스(아크릴) 모드: 배경 투명 + 카드/헤더 반투명 유리질감 */
+        html.glass, html.glass body { background: transparent !important; }
+        html.glass .memo-card, html.glass .site-header {
+          background: rgba(255,255,255,.22) !important;
+          -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5);
+          border: 1px solid rgba(255,255,255,.40);
+          box-shadow: 0 8px 30px -12px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.55);
+        }
+        html.dark.glass .memo-card, html.dark.glass .site-header {
+          background: rgba(17,26,45,.38) !important; border-color: rgba(255,255,255,.16);
+          box-shadow: 0 8px 30px -12px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.12);
+        }
         #editorjs { min-height: 55vh; flex: 1; }
 
         /* ── 하단 사용법 접이 패널 ── */
