@@ -61,6 +61,18 @@
         +'<button id="wgtApp" title="앱에서 열기">↗ 앱</button>'
         +'<button id="wgtClose" title="닫기">✕</button>';
       document.body.appendChild(bar);
+      // 다크모드면 바에 다크 스타일을 직접(인라인) 적용 — 일부 환경에서 html.dark #wgtBar CSS가
+      //   안 먹어 밝게 뜨던 문제 방지. 클래스 변화도 감시해 실시간 반영.
+      (function(){
+        var applyBarTheme = function(){
+          var d = document.documentElement.classList.contains('dark');
+          bar.style.background = d ? 'rgba(17,26,45,.96)' : 'rgba(248,250,252,.96)';
+          bar.style.color = d ? '#9fb0c9' : '#555';
+          bar.style.borderBottom = '1px solid ' + (d ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)');
+        };
+        applyBarTheme();
+        try{ new MutationObserver(applyBarTheme).observe(document.documentElement,{attributes:true,attributeFilter:['class']}); }catch(e){}
+      })();
       // 마우스가 맨 위에 가면 바 표시(웹 위에 겹침, 내용 안 밀림)
       document.addEventListener('mousemove', function(e){
         if(e.clientY <= 30) bar.classList.add('show');

@@ -50,6 +50,16 @@
             +'<button id="wgtApp" title="앱에서 열기">↗ 앱</button>'
             +'<button id="wgtClose" title="닫기">✕</button>';
           document.body.appendChild(bar);
+          (function(){
+            var applyBarTheme = function(){
+              var d = document.documentElement.classList.contains('dark');
+              bar.style.background = d ? 'rgba(17,26,45,.96)' : 'rgba(248,250,252,.96)';
+              bar.style.color = d ? '#9fb0c9' : '#555';
+              bar.style.borderBottom = '1px solid ' + (d ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)');
+            };
+            applyBarTheme();
+            try{ new MutationObserver(applyBarTheme).observe(document.documentElement,{attributes:true,attributeFilter:['class']}); }catch(e){}
+          })();
           document.addEventListener('mousemove', function(e){
             if(e.clientY <= 30) bar.classList.add('show');
             else if(e.clientY > 40) bar.classList.remove('show');
