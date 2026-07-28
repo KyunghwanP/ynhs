@@ -53,6 +53,7 @@ global HandleToWidget := Map()   ; 손잡이 바 hwnd -> 위젯 hwnd (드래그�
 global dragHwnd := 0, grabOffX := 0, grabOffY := 0, dragW := 0, dragH := 0
 global pendingSaveHwnd := 0   ; 리사이즈 저장 디바운스 대상
 global SNAP := 30       ; 자석 스냅 거리(px) — 이동·크기조절 모두 이 거리 안에서 착 붙음
+global GAP  := 8        ; 자석으로 붙었을 때 위젯 사이 '보이는' 간격(px) — 상하·좌우 모두 동일
 
 ; ── WebView2Loader.dll 경로 ────────────────────────────────
 global DLL_PATH := ""
@@ -467,7 +468,7 @@ OnLButtonDown(wParam, lParam, msg, hwnd) {
 }
 
 DragMove() {
-    global dragHwnd, grabOffX, grabOffY, dragW, dragH, WidgetWins, SNAP, HANDLE_TOP
+    global dragHwnd, grabOffX, grabOffY, dragW, dragH, WidgetWins, SNAP, GAP
     if !dragHwnd || !GetKeyState("LButton", "P") {
         if dragHwnd
             SaveWidget(dragHwnd)
@@ -477,53 +478,70 @@ DragMove() {
     }
     MouseGetPos(&cx, &cy)
     nx := cx - grabOffX, ny := cy - grabOffY
-    ; 다른 위젯 가장자리에 가까우면 자석처럼 붙임(이동)
+    ; +Resize 창은 좌·우·아래에 ~8px 투명 여백이 창 좌표에 포함된다. 스냅을 '창 좌표' 기준으로
+    ;   하면 방향마다 이 여백이 다르게 끼어(세로 8px·가로 16px 등) 간격이 제각각이 된다.
+    ;   → 스냅을 '보이는영역(visible)' 기준으로 계산해, 어느 방향이든 항상 같은 간격(GAP)이 되게 한다.
+    WidgetFrameOffsets(dragHwnd, dragW, dragH, &offL, &offT, &offR, &offB)
+    vW := dragW - offL - offR, vH := dragH - offT - offB   ; 드래그 위젯의 '보이는' 크기
+    vnx := nx + offL, vny := ny + offT                      ; 제안 위치(보이는영역 좌상단)
     for hwnd, w in WidgetWins {
-        if (hwnd = dragHwnd)
+        if (hwnd = dragHwnd) || !WinExist("ahk_id " hwnd)
             continue
-        WinGetPos(&ox, &oy, &oW, &oH, "ahk_id " hwnd)
-        ; 세로로 겹치는 구간이 있을 때만 좌우 스냅
-        if (ny < oy + oH && ny + dragH > oy) {
-            if Abs((nx + dragW) - ox) <= SNAP
-                nx := ox - dragW
-            else if Abs(nx - (ox + oW)) <= SNAP
-                nx := ox + oW
-            else if Abs(nx - ox) <= SNAP
-                nx := ox
-            else if Abs((nx + dragW) - (ox + oW)) <= SNAP
-                nx := ox + oW - dragW
+        WidgetVisibleRect(hwnd, &ox, &oy, &oW, &oH)
+        ; 세로로 겹치는 구간이 있을 때만 좌우 스냅(맞붙음=GAP, 같은쪽=정렬)
+        if (vny < oy + oH && vny + vH > oy) {
+            if Abs((vnx + vW + GAP) - ox) <= SNAP
+                vnx := ox - GAP - vW
+            else if Abs(vnx - (ox + oW + GAP)) <= SNAP
+                vnx := ox + oW + GAP
+            else if Abs(vnx - ox) <= SNAP
+                vnx := ox
+            else if Abs((vnx + vW) - (ox + oW)) <= SNAP
+                vnx := ox + oW - vW
         }
-        ; 가로로 겹치는 구간이 있을 때만 상하 스냅
-        if (nx < ox + oW && nx + dragW > ox) {
-            if Abs((ny + dragH) - oy) <= SNAP
-                ny := oy - dragH
-            else if Abs(ny - (oy + oH)) <= SNAP
-                ny := oy + oH
-            else if Abs(ny - oy) <= SNAP
-                ny := oy
-            else if Abs((ny + dragH) - (oy + oH)) <= SNAP
-                ny := oy + oH - dragH
+        ; 가로로 겹치는 구간이 있을 때만 상하 스냅(맞붙음=GAP, 같은쪽=정렬)
+        if (vnx < ox + oW && vnx + vW > ox) {
+            if Abs((vny + vH + GAP) - oy) <= SNAP
+                vny := oy - GAP - vH
+            else if Abs(vny - (oy + oH + GAP)) <= SNAP
+                vny := oy + oH + GAP
+            else if Abs(vny - oy) <= SNAP
+                vny := oy
+            else if Abs((vny + vH) - (oy + oH)) <= SNAP
+                vny := oy + oH - vH
         }
     }
-    ; 모니터 가장자리(베젤)에도 자석 스냅 — 이 위젯이 놓인 모니터의 작업영역 기준
+    ; 모니터 가장자리(베젤)에도 자석 스냅 — 보이는 가장자리를 작업영역 가장자리에 딱 붙임
     hMon := DllCall("MonitorFromWindow", "ptr", dragHwnd, "uint", 2, "ptr")   ; NEAREST
     if hMon {
         mi := Buffer(40, 0), NumPut("uint", 40, mi, 0)
         if DllCall("GetMonitorInfo", "ptr", hMon, "ptr", mi) {
             mL := NumGet(mi, 20, "int"), mT := NumGet(mi, 24, "int")   ; rcWork
             mR := NumGet(mi, 28, "int"), mB := NumGet(mi, 32, "int")
-            if Abs(nx - mL) <= SNAP
-                nx := mL
-            else if Abs((nx + dragW) - mR) <= SNAP
-                nx := mR - dragW
-            if Abs(ny - mT) <= SNAP
-                ny := mT
-            else if Abs((ny + dragH) - mB) <= SNAP
-                ny := mB - dragH
+            if Abs(vnx - mL) <= SNAP
+                vnx := mL
+            else if Abs((vnx + vW) - mR) <= SNAP
+                vnx := mR - vW
+            if Abs(vny - mT) <= SNAP
+                vny := mT
+            else if Abs((vny + vH) - mB) <= SNAP
+                vny := mB - vH
         }
     }
-    WinMove(nx, ny, , , "ahk_id " dragHwnd)
+    ; 보이는영역 기준 좌표를 다시 창 좌표로 되돌려 이동
+    WinMove(vnx - offL, vny - offT, , , "ahk_id " dragHwnd)
     ; (손잡이 바는 웹 내장이라 창과 함께 자동 이동 → 별도 추종 불필요)
+}
+
+; 창 좌표 ↔ '보이는영역' 좌표 사이의 네 변 여백(투명 리사이즈 테두리 두께)을 구한다.
+;   offL/offT/offR/offB = 각 변에서 창 좌표가 보이는영역보다 바깥으로 나간 픽셀 수.
+WidgetFrameOffsets(hwnd, w, h, &offL, &offT, &offR, &offB) {
+    WinGetPos(&wx, &wy, , , "ahk_id " hwnd)
+    WidgetVisibleRect(hwnd, &vx, &vy, &vw, &vh)
+    offL := vx - wx
+    offT := vy - wy
+    offR := (wx + w) - (vx + vw)
+    offB := (wy + h) - (vy + vh)
 }
 
 ; ── 크기 조절 시 테두리 자석 스냅(WM_SIZING) ───────────────
@@ -531,13 +549,16 @@ DragMove() {
 ;   lParam = 조절 중인 사각형(RECT, 화면좌표) → 수정하면 그대로 반영된다.
 ;   wParam = 어느 변을 끄는지(WMSZ): 1=좌 2=우 3=상 4=좌상 5=우상 6=하 7=좌하 8=우하
 OnSizing(wParam, lParam, msg, hwnd) {
-    global WidgetWins, SNAP
+    global WidgetWins, SNAP, GAP
     if !WidgetWins.Has(hwnd)
         return
     L := NumGet(lParam, 0, "int")
     T := NumGet(lParam, 4, "int")
     R := NumGet(lParam, 8, "int")
     B := NumGet(lParam, 12, "int")
+    ; 리사이즈 사각형(창 좌표)을 '보이는영역' 좌표로 바꿔, 이동 스냅과 똑같이 GAP 간격으로 붙인다.
+    WidgetFrameOffsets(hwnd, R - L, B - T, &offL, &offT, &offR, &offB)
+    vL := L + offL, vT := T + offT, vR := R - offR, vB := B - offB
     dragL := (wParam = 1 || wParam = 4 || wParam = 7)
     dragR := (wParam = 2 || wParam = 5 || wParam = 8)
     dragT := (wParam = 3 || wParam = 4 || wParam = 5)
@@ -545,23 +566,24 @@ OnSizing(wParam, lParam, msg, hwnd) {
     for h2, w in WidgetWins {
         if (h2 = hwnd) || !WinExist("ahk_id " h2)
             continue
-        WinGetPos(&gx, &gy, &gw, &gh, "ahk_id " h2)
+        WidgetVisibleRect(h2, &gx, &gy, &gw, &gh)
         gRight  := gx + gw
         gBottom := gy + gh
-        ; 끌고 있는 변을 이웃의 맞붙는 변 또는 같은 쪽 변에 스냅(헬퍼로 단순화)
+        ; 끌고 있는 변(보이는영역)을 이웃의 맞붙는 변+GAP 또는 같은 쪽 변(정렬)에 스냅
         if (dragL)
-            L := SnapEdge(L, gRight, gx)      ; 내 왼쪽 ↔ 이웃 오른쪽(맞붙음)/왼쪽(정렬)
+            vL := SnapEdge(vL, gRight + GAP, gx)
         if (dragR)
-            R := SnapEdge(R, gx, gRight)      ; 내 오른쪽 ↔ 이웃 왼쪽(맞붙음)/오른쪽(정렬)
+            vR := SnapEdge(vR, gx - GAP, gRight)
         if (dragT)
-            T := SnapEdge(T, gBottom, gy)     ; 내 위 ↔ 이웃 아래(맞붙음)/위(정렬)
+            vT := SnapEdge(vT, gBottom + GAP, gy)
         if (dragB)
-            B := SnapEdge(B, gy, gBottom)     ; 내 아래 ↔ 이웃 위(맞붙음)/아래(정렬)
+            vB := SnapEdge(vB, gy - GAP, gBottom)
     }
-    NumPut("int", L, lParam, 0)
-    NumPut("int", T, lParam, 4)
-    NumPut("int", R, lParam, 8)
-    NumPut("int", B, lParam, 12)
+    ; 보이는영역 좌표 → 창 좌표로 환원
+    NumPut("int", vL - offL, lParam, 0)
+    NumPut("int", vT - offT, lParam, 4)
+    NumPut("int", vR + offR, lParam, 8)
+    NumPut("int", vB + offB, lParam, 12)
     return true
 }
 
