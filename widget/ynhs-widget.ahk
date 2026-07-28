@@ -152,7 +152,9 @@ A_TrayMenu.Add()
 A_TrayMenu.Add("종료", (*) => ExitApp())
 A_TrayMenu.Default := "위젯 추가 / 선택"
 
-ShowSelector()
+; 시작 시: 저장해둔(선택된) 위젯을 '선택창 없이' 바로 복원해서 띄운다.
+;   선택된 게 하나도 없으면(설정 초기화 등) 그때만 선택창을 띄워 고르게 한다.
+RestoreSelected()
 ; 손잡이 바는 이제 웹(HTML)에 내장 → 네이티브 오버레이/호버 타이머 미사용(DPI·겹침 문제 제거)
 ; SetTimer(HoverCheck, 120)
 
@@ -230,6 +232,22 @@ IsAppWindow(hwnd) {
     if DllCall("GetWindow", "ptr", hwnd, "uint", 4, "ptr")   ; GW_OWNER 있으면(대화상자 등) 제외
         return false
     return WinGetTitle("ahk_id " hwnd) != ""
+}
+
+; 저장된 선택 상태(config의 selected=1)대로 위젯을 바로 생성. 하나도 없으면 선택창을 띄운다.
+RestoreSelected() {
+    global ALL_PANELS, CONFIG
+    any := false
+    for p in ALL_PANELS {
+        sel := p[7]
+        try sel := IniRead(CONFIG, "selected", p[1], p[7])
+        if (sel = "1") {
+            CreateWidget(p)
+            any := true
+        }
+    }
+    if !any
+        ShowSelector()
 }
 
 ShowSelector() {
