@@ -64,6 +64,7 @@
             if(e.clientY <= 30) bar.classList.add('show');
             else if(e.clientY > 40) bar.classList.remove('show');
           });
+          document.addEventListener('mouseleave', function(){ bar.classList.remove('show'); });
           document.getElementById('wgtDrag').addEventListener('mousedown', function(e){ e.preventDefault(); post('drag'); });
           document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
           document.getElementById('wgtApp').addEventListener('click', function(){ post('app'); });

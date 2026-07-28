@@ -78,6 +78,8 @@
         if(e.clientY <= 30) bar.classList.add('show');
         else if(e.clientY > 40) bar.classList.remove('show');
       });
+      // 마우스가 위젯 밖으로 나가면(위쪽으로 빼도) 바를 숨김 → 계속 떠 있던 문제 제거
+      document.addEventListener('mouseleave', function(){ bar.classList.remove('show'); });
       // 드래그(제목 영역) → AHK가 창 이동
       document.getElementById('wgtDrag').addEventListener('mousedown', function(e){ e.preventDefault(); post('drag'); });
       document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
