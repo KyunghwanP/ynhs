@@ -498,11 +498,25 @@ DragMove() {
                 ny := oy + oH - dragH
         }
     }
-    WinMove(nx, ny, , , "ahk_id " dragHwnd)
-    if WidgetWins.Has(dragHwnd) {          ; 손잡이 바도 위젯의 '보이는' 위치로 따라 이동
-        WidgetVisibleRect(dragHwnd, &vx, &vy, &vw, &vh)
-        try WidgetWins[dragHwnd].handleGui.Move(vx, vy + HANDLE_TOP)
+    ; 모니터 가장자리(베젤)에도 자석 스냅 — 이 위젯이 놓인 모니터의 작업영역 기준
+    hMon := DllCall("MonitorFromWindow", "ptr", dragHwnd, "uint", 2, "ptr")   ; NEAREST
+    if hMon {
+        mi := Buffer(40, 0), NumPut("uint", 40, mi, 0)
+        if DllCall("GetMonitorInfo", "ptr", hMon, "ptr", mi) {
+            mL := NumGet(mi, 20, "int"), mT := NumGet(mi, 24, "int")   ; rcWork
+            mR := NumGet(mi, 28, "int"), mB := NumGet(mi, 32, "int")
+            if Abs(nx - mL) <= SNAP
+                nx := mL
+            else if Abs((nx + dragW) - mR) <= SNAP
+                nx := mR - dragW
+            if Abs(ny - mT) <= SNAP
+                ny := mT
+            else if Abs((ny + dragH) - mB) <= SNAP
+                ny := mB - dragH
+        }
     }
+    WinMove(nx, ny, , , "ahk_id " dragHwnd)
+    ; (손잡이 바는 웹 내장이라 창과 함께 자동 이동 → 별도 추종 불필요)
 }
 
 ; ── 크기 조절 시 테두리 자석 스냅(WM_SIZING) ───────────────
@@ -603,8 +617,23 @@ OnWebMsg(gh, key, sender, args) {
         LaunchMain(key)
     else if (m = "drag")
         StartDragFromMouse(gh)
+    else if (m = "raise")
+        RaiseWidget(gh)
     else if (SubStr(m, 1, 3) = "op:")
         SetWidgetOpacity(gh, Integer(SubStr(m, 4)))
+}
+; 누른 위젯만 다른 위젯들보다 앞으로 (다른 위젯을 이 위젯 바로 뒤로 내림 →
+;   이 위젯의 z-order 자체는 안 올려서 '앱 창 위로 튀어나오는' 일이 없다)
+RaiseWidget(gh) {
+    global WidgetWins
+    if !WinExist("ahk_id " gh)
+        return
+    for hwnd, w in WidgetWins {
+        if (hwnd = gh) || !WinExist("ahk_id " hwnd)
+            continue
+        ; hwnd를 gh 바로 아래에 배치(SWP_NOMOVE|NOSIZE|NOACTIVATE)
+        DllCall("SetWindowPos", "ptr", hwnd, "ptr", gh, "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)
+    }
 }
 ; 웹에서 드래그 시작 신호 → 현재 마우스 기준으로 창 이동 시작(기존 DragMove 재사용)
 StartDragFromMouse(gh) {

@@ -71,6 +71,7 @@
       document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
       document.getElementById('wgtApp').addEventListener('click', function(){ post('app'); });
       document.getElementById('wgtClose').addEventListener('click', function(){ post('close'); });
+      document.addEventListener('mousedown', function(){ post('raise'); }, true);  // 누른 위젯만 앞으로
     }
     if(document.readyState!=='loading') build(); else document.addEventListener('DOMContentLoaded', build);
   })();
