@@ -130,6 +130,15 @@ CleanupOrphanWebViews() {
     return killed
 }
 
+; ── 트레이 아이콘(위젯 전용: 로고 + 파란 W 배지) ──────────────
+;   같은 번들 폴더의 widget.ico(위젯 전용) 우선, 없으면 앱 아이콘(icon.ico)으로 대체.
+for ic in [A_ScriptDir "\widget.ico", A_ScriptDir "\icon.ico"]
+    if FileExist(ic) {
+        try TraySetIcon(ic)
+        break
+    }
+A_IconTip := "영남고 위젯"
+
 ; ── 트레이 메뉴 ────────────────────────────────────────────
 try A_TrayMenu.Delete()
 A_TrayMenu.Add("위젯 추가 / 선택", (*) => ShowSelector())
