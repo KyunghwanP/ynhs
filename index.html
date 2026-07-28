@@ -93,6 +93,9 @@
 <style>
   html.widget-mode, html.widget-mode body { height:100%; margin:0; background:#f1f5f9; overflow:hidden; }
   html.dark.widget-mode, html.dark.widget-mode body { background:#0B1220; }
+  /* 다크 위젯: 맨 위에 라이트 배경(#f1f5f9)이 띠처럼 남던 문제 — 루트·본문·홈을 강제로 어둡게 덮음 */
+  html.dark.widget-mode, html.dark.widget-mode body, html.dark.widget-mode #homePage,
+  html.dark.widget-mode .app-body, html.dark.widget-mode .app-content { background:#0B1220 !important; }
   /* 앱 크롬(상단바·사이드바·탭바·FAB·메모열) 전부 숨김 */
   html.widget-mode .app-header,
   html.widget-mode .main-nav,
