@@ -132,12 +132,17 @@ CleanupOrphanWebViews() {
 
 ; ── 트레이 아이콘(위젯 전용: 로고 + 파란 W 배지) ──────────────
 ;   같은 번들 폴더의 widget.ico(위젯 전용) 우선, 없으면 앱 아이콘(icon.ico)으로 대체.
-for ic in [A_ScriptDir "\widget.ico", A_ScriptDir "\icon.ico"]
-    if FileExist(ic) {
-        try TraySetIcon(ic)
-        break
-    }
-A_IconTip := "영남고 위젯"
+;   전체를 try로 감싸 어떤 이유로든(파일/아이콘 문제) 시작이 막히지 않게 한다.
+try {
+    ico := ""
+    if FileExist(A_ScriptDir "\widget.ico")
+        ico := A_ScriptDir "\widget.ico"
+    else if FileExist(A_ScriptDir "\icon.ico")
+        ico := A_ScriptDir "\icon.ico"
+    if (ico != "")
+        TraySetIcon(ico)
+    A_IconTip := "영남고 위젯"
+}
 
 ; ── 트레이 메뉴 ────────────────────────────────────────────
 try A_TrayMenu.Delete()
