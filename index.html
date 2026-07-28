@@ -149,7 +149,7 @@
 
   /* 전체 시간표 위젯(fulltt): 홈 대신 시간표 페이지의 그리드만 창 전체에 표시 */
   html.widget-mode[data-widget="fulltt"] #homePage { display:none !important; }
-  html.widget-mode[data-widget="fulltt"] #timetablePage { display:block !important; height:100vh !important; overflow:auto !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage { display:flex !important; flex-direction:column; height:100vh !important; overflow:auto !important; }
   /* 검색창·교사별/학급별 전환은 남겨 다른 사람/학급 조회 가능(비우면 내 시간표, 이름 넣으면 그 사람).
      사이드바 목록과 장식 요소(학교명·구분선·과목칩)만 숨겨 좁은 위젯에 맞춤. */
   html.widget-mode[data-widget="fulltt"] #timetablePage .sidebar,
@@ -161,8 +161,10 @@
   html.widget-mode[data-widget="fulltt"] #timetablePage .masthead { padding:6px 2px !important; margin:0 !important; }
   html.widget-mode[data-widget="fulltt"] #timetablePage .wrap,
   html.widget-mode[data-widget="fulltt"] #timetablePage .layout,
-  html.widget-mode[data-widget="fulltt"] #timetablePage .main { display:block !important; margin:0 !important; padding:6px 0 !important; height:auto !important; max-width:none !important; }
-  html.widget-mode[data-widget="fulltt"] #timetablePage .table-wrap{ padding-left:0 !important; padding-right:0 !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .main { display:flex !important; flex-direction:column; flex:1 1 auto !important; min-height:0 !important; margin:0 !important; padding:6px 0 !important; height:auto !important; max-width:none !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .table-wrap{ flex:1 1 auto !important; min-height:0 !important; padding-left:0 !important; padding-right:0 !important; }
+  /* 그리드가 남는 높이를 채움: 헤더(첫 행)는 자연 높이, 교시 행들은 남은 높이를 균등 분배 → 아래 여백 제거 */
+  html.widget-mode[data-widget="fulltt"] #timetablePage .grid-table{ height:100% !important; grid-template-rows:auto !important; grid-auto-rows:1fr !important; }
   /* 위젯에선 시간표를 시원하게: 셀 높이·글자 키우고 여백 확보(위젯 높이 vh 기준 스케일) */
   html.widget-mode[data-widget="fulltt"] #timetablePage{
     --gt-row-h: clamp(44px, 10.8vh, 150px);   /* 상한을 올려 큰 위젯에서도 그리드가 창을 채움(아래 여백 제거) */
