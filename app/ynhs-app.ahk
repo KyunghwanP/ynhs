@@ -18,6 +18,7 @@ wvc := 0
 WIDGET_EXE := A_ScriptDir "\위젯.exe"          ; 바탕화면 위젯(별도 서명 AutoHotkey)
 WIDGET_PREF := A_AppData "\YnhsApp\widget.on"  ; 위젯 켜짐 상태 기억(파일 존재=켜짐)
 GOTO_FILE := A_AppData "\YnhsApp\goto.txt"     ; 위젯 ↗앱이 적어두는 이동할 페이지
+gWidgetOn := false                             ; 위젯 '사용자 의도' 상태(체크 표시의 기준)
 
 ; 두 번째 인스턴스 → 기존 창 띄우기 신호 / 위젯 ↗앱 → 특정 페이지로 이동 신호 (시스템 전역 고유 메시지)
 MSG_SHOW := DllCall("RegisterWindowMessage", "str", "YNHS_APP_SHOW_v1", "uint")
@@ -61,10 +62,12 @@ A_TrayMenu.Add("종료", (*) => ExitApp())
 A_TrayMenu.Default := "열기"
 
 ; 지난번 켜둔 상태면 위젯 자동 복원 (앱이 부팅 자동실행이면 위젯도 함께 뜸)
-if FileExist(WIDGET_PREF)
+if FileExist(WIDGET_PREF) {
+    gWidgetOn := true
+    A_TrayMenu.Check("바탕화면 위젯")
     StartWidget()
-RefreshWidgetCheck()
-; 위젯을 (위젯 자체 트레이 '종료' 등) 외부에서 끄더라도 체크 표시가 실제 상태를 따라가도록 주기 반영
+}
+; 위젯을 (위젯 자체 트레이 '종료' 등) 외부에서 끄면 체크 표시가 따라 꺼지도록 주기 반영
 SetTimer(RefreshWidgetCheck, 1500)
 
 ; 두 번째 실행 신호 수신 → 창 띄우기 / 위젯 ↗앱 신호 → 해당 페이지로 이동+표시
@@ -149,20 +152,22 @@ OnNewWindow(sender, args) {
 
 ; ── 바탕화면 위젯 켜기/끄기 (풀 기능 위젯 = 위젯.exe → ynhs-widget.ahk) ──
 ToggleWidget() {
-    global WIDGET_PREF
-    if ProcessExist("위젯.exe") {
-        ; 끄기: 체크를 '즉시' 해제해 멈춘 것처럼 보이지 않게 하고, 프로세스를 정리한다.
+    global WIDGET_PREF, gWidgetOn
+    gWidgetOn := !gWidgetOn        ; 프로세스 존재가 아니라 '사용자 의도'로 토글 방향 결정
+    if gWidgetOn {
+        ; 켜기: 체크 즉시 표시 → 남은(멈춘) 프로세스가 있으면 먼저 정리 → 새로 확실히 실행
+        A_TrayMenu.Check("바탕화면 위젯")
+        try DirCreate(A_AppData "\YnhsApp")
+        try FileAppend("", WIDGET_PREF)
+        CloseWidgetProcesses()     ; 잔류 프로세스 정리 후
+        StartWidget()              ; 항상 새로 띄운다(= 눌렀는데 안 뜨는 일 없음)
+    } else {
+        ; 끄기: 체크 즉시 해제 + 프로세스 정리
         A_TrayMenu.Uncheck("바탕화면 위젯")
         try FileDelete(WIDGET_PREF)
         CloseWidgetProcesses()
-    } else {
-        ; 켜기: 체크를 즉시 표시하고 실행
-        A_TrayMenu.Check("바탕화면 위젯")
-        StartWidget()
-        try DirCreate(A_AppData "\YnhsApp")
-        try FileAppend("", WIDGET_PREF)
     }
-    ; 실제 상태는 주기 타이머(RefreshWidgetCheck, 1.5초)가 곧 확인·보정한다. 여기서 길게 막지 않는다.
+    ; 위젯을 밖에서 껐을 때의 보정은 주기 타이머(RefreshWidgetCheck)가 담당한다.
 }
 ; 위젯 프로세스를 모두(런처/본체가 같은 이름이라 여러 개일 수 있음) 확실히 종료.
 ;   ProcessClose(=TerminateProcess)는 종료까지 동기 대기하므로 긴 Sleep 없이 연속 종료(트레이 안 멈춤).
@@ -179,11 +184,15 @@ StartWidget() {
     if FileExist(WIDGET_EXE)
         Run('"' WIDGET_EXE '"', A_ScriptDir)
 }
+; 체크 표시는 '사용자 의도(gWidgetOn)'를 따른다. 다만 위젯을 (위젯 자체 트레이 종료 등)
+;   밖에서 껐을 때는 프로세스가 사라진 걸 감지해 자동으로 꺼짐 처리한다.
+;   (멈춘 프로세스가 남아도 체크를 강제로 켜지 않음 → 토글이 '끄기'로만 갇히는 문제 방지)
 RefreshWidgetCheck() {
-    if ProcessExist("위젯.exe")
-        A_TrayMenu.Check("바탕화면 위젯")
-    else
+    global gWidgetOn
+    if (gWidgetOn && !ProcessExist("위젯.exe")) {
+        gWidgetOn := false
         A_TrayMenu.Uncheck("바탕화면 위젯")
+    }
 }
 
 ; 바탕화면에 '영남고' 바로가기 생성(로고 아이콘). 이미 있으면 건너뜀.
