@@ -636,6 +636,7 @@ DestroyWidget(hwnd, fromButton := false) {
     g := w.gui, h := w.handleGui
     HandleToWidget.Delete(h.hwnd)
     WidgetWins.Delete(hwnd)     ; 먼저 목록에서 제거 → 타이머가 파괴 중 컨트롤을 안 만짐
+    try w.wvc.Close()           ; WebView2 컨트롤러 명시적 종료 → msedgewebview2.exe 즉시 정리(잔류·잠김 방지)
     try h.Destroy()
     try g.Destroy()
 }
@@ -788,8 +789,13 @@ FlushSave() {
 
 OnExit(OnExitFn)
 OnExitFn(*) {
-    global DLL_PATH
+    global DLL_PATH, WidgetWins
     SaveAll()
+    ; 각 위젯의 WebView2 컨트롤러를 명시적으로 닫아 msedgewebview2.exe가 즉시 정리되게 한다.
+    ;   (안 닫으면 종료가 느리고, 세션 폴더가 한동안 잠겨 바로 재실행하면 안 뜬다)
+    for hwnd, w in WidgetWins {
+        try w.wvc.Close()
+    }
     if A_IsCompiled
         try FileDelete(DLL_PATH)
 }
