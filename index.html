@@ -179,6 +179,11 @@
 <script>
   // 다크모드: 저장된 설정을 스타일 로드 전에 적용 (깜빡임 방지)
   try{ if(localStorage.getItem('ynhs-dark')==='1') document.documentElement.classList.add('dark'); }catch(e){}
+  // 위젯(별도 WebView2, localStorage 미공유)은 URL 파라미터 dark=1/0 로 다크모드 지정 → 적용+기억
+  try{ var _dp=new URLSearchParams(location.search).get('dark');
+       if(_dp==='1'||_dp==='0'){ var _on=_dp==='1';
+         document.documentElement.classList.toggle('dark',_on);
+         try{ localStorage.setItem('ynhs-dark', _on?'1':'0'); }catch(e){} } }catch(e){}
 </script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap');

@@ -12,6 +12,10 @@
       (function(){
         const apply = on => document.documentElement.classList.toggle('dark', on);
         try { apply(localStorage.getItem('ynhs-dark') === '1'); } catch(e) {}
+        // 위젯(별도 WebView2)은 URL 파라미터 dark=1/0 로 지정 → 적용+기억
+        try { const dp = new URLSearchParams(location.search).get('dark');
+              if (dp === '1' || dp === '0') { apply(dp === '1');
+                try { localStorage.setItem('ynhs-dark', dp); } catch(e) {} } } catch(e) {}
         window.addEventListener('storage', e => { if (e.key === 'ynhs-dark') apply(e.newValue === '1'); });
       })();
     </script>

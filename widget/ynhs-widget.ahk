@@ -30,6 +30,7 @@ global APP_URL  := "https://kyunghwanp.github.io/ynhs/"
 global HANDLE_H := 26
 global HANDLE_TOP := 8   ; 손잡이 바를 위젯 맨 위에서 이만큼 내림 → 위쪽 테두리(크기조절)를 잡을 여지
 global DEF_OPACITY := 240
+global gDark := false   ; 위젯 다크모드(모든 위젯 공통) — config [ui] dark 에 저장
 global PROGMAN := DllCall("FindWindow", "str", "Progman", "ptr", 0, "ptr")
 
 global ALL_PANELS := [
@@ -146,13 +147,33 @@ try {
     A_IconTip := "영남고 위젯"
 }
 
+; 저장된 다크모드 설정 읽기
+try gDark := (IniRead(CONFIG, "ui", "dark", "0") = "1")
+
 ; ── 트레이 메뉴 ────────────────────────────────────────────
 try A_TrayMenu.Delete()
 A_TrayMenu.Add("위젯 추가 / 선택", (*) => ShowSelector())
+A_TrayMenu.Add("🌙 다크 모드", (*) => ToggleDark())
 A_TrayMenu.Add("현재 위치·크기 저장", (*) => SaveAll())
 A_TrayMenu.Add()
 A_TrayMenu.Add("종료", (*) => ExitApp())
 A_TrayMenu.Default := "위젯 추가 / 선택"
+if gDark
+    A_TrayMenu.Check("🌙 다크 모드")
+
+; 다크모드 토글: 설정 저장 + 떠 있는 모든 위젯을 새 테마로 다시 로드
+ToggleDark() {
+    global gDark, CONFIG, WidgetWins
+    gDark := !gDark
+    try IniWrite(gDark ? "1" : "0", CONFIG, "ui", "dark")
+    if gDark
+        A_TrayMenu.Check("🌙 다크 모드")
+    else
+        A_TrayMenu.Uncheck("🌙 다크 모드")
+    for hwnd, w in WidgetWins {
+        try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&t=" A_Now)
+    }
+}
 
 ; 시작 시: 저장해둔(선택된) 위젯을 '선택창 없이' 바로 복원해서 띄운다.
 ;   선택된 게 하나도 없으면(설정 초기화 등) 그때만 선택창을 띄워 고르게 한다.
@@ -291,7 +312,7 @@ FindWidgetByPanel(panel) {
 
 ; ── 위젯 창 생성 ───────────────────────────────────────────
 CreateWidget(p) {
-    global CONFIG, DEF_OPACITY, WidgetWins, HandleToWidget, APP_BASE, SESSION, DLL_PATH, PROGMAN, INPUT_PANELS, pendingSaveHwnd
+    global CONFIG, DEF_OPACITY, WidgetWins, HandleToWidget, APP_BASE, SESSION, DLL_PATH, PROGMAN, INPUT_PANELS, pendingSaveHwnd, gDark
     key := p[1], label := p[2]
     x  := Integer(IniRead(CONFIG, "pos_" key, "x", p[3]))
     y  := Integer(IniRead(CONFIG, "pos_" key, "y", p[4]))
@@ -330,7 +351,7 @@ CreateWidget(p) {
             return
         }
     }
-    wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&t=" A_Now)   ; &t= : 최신 로드, &op= : 초기 투명도
+    wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&dark=" (gDark ? "1" : "0") "&t=" A_Now)   ; &t=:최신, &op=:투명도, &dark=:다크모드
     ; 웹 내장 손잡이 바(HTML) → AHK 브릿지: 투명도/닫기/앱/이동. 네이티브 손잡이 대체.
     try wvc.CoreWebView2.add_WebMessageReceived(OnWebMsg.Bind(g.hwnd, key))
     g.OnEvent("Size", OnResize)
