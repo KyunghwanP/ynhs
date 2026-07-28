@@ -171,6 +171,7 @@ ToggleDark() {
     else
         A_TrayMenu.Uncheck("🌙 다크 모드")
     for hwnd, w in WidgetWins {
+        try w.gui.BackColor := gDark ? "111A2D" : "FFFFFF"   ; 창 배경도 함께(상단 흰 띠 방지)
         try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&t=" A_Now)
     }
 }
@@ -330,7 +331,7 @@ CreateWidget(p) {
     ; -DPIScale: AHK의 GUI 자동 DPI 스케일을 끈다. 켜져 있으면 Show(w/h)는 배율만큼 확대되는데
     ;   WinGetPos는 물리 픽셀을 돌려줘 저장→복원마다 창이 배율만큼 커진다(런어웨이).
     g := Gui("-Caption +Resize +ToolWindow -DPIScale")   ; 테두리없음·크기조절·작업표시줄제외
-    g.BackColor := "FFFFFF"
+    g.BackColor := gDark ? "111A2D" : "FFFFFF"   ; 다크모드면 창 배경도 어둡게 → 상단 흰 띠 제거
     g.Show(Format("x{} y{} w{} h{} NoActivate", x, y, ww, hh))
 
     ; WebView2 컨트롤러 생성 — 모든 위젯이 '하나의 환경(Environment)'을 공유한다.
