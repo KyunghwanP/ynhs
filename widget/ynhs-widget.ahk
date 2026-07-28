@@ -172,6 +172,7 @@ ToggleDark() {
         A_TrayMenu.Uncheck("🌙 다크 모드")
     for hwnd, w in WidgetWins {
         try w.gui.BackColor := gDark ? "111A2D" : "FFFFFF"   ; 창 배경도 함께(상단 흰 띠 방지)
+        try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 20, "int*", gDark ? 1 : 0, "int", 4)  ; DWM 프레임 다크
         try w.wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF   ; 웹뷰 기본 배경색도 함께
         try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&t=" A_Now)
     }
@@ -366,6 +367,9 @@ CreateWidget(p) {
     ;   둥근 모서리·테두리 색까지 무효화(회색 사각 프레임 잔존)했기에 제거함. → 둥근 모서리+파란
     ;   테두리를 살리고, 대신 은은한 그림자는 유지(둥근 창엔 자연스러움).
     StyleWindow(g.hwnd)   ; 둥근 모서리 + 얇은 파란 테두리(Win11)
+    ; DWM 프레임(맨 위 비클라이언트 영역)을 다크로 → 다크모드에서 위쪽에 뜨던 밝은 띠 제거.
+    ;   (창 배경·웹뷰 배경으론 못 없앰 — 이 영역은 DWM이 따로 그린다. attr 20 = USE_IMMERSIVE_DARK_MODE)
+    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", g.hwnd, "int", 20, "int*", gDark ? 1 : 0, "int", 4)
 
     ; ── 손잡이 바(별도 최상위 창) — 호버 시 웹 위에 '겹쳐' 나타남 → 내용이 밀리지 않는다
     h := Gui("-Caption +AlwaysOnTop +ToolWindow -Resize")
