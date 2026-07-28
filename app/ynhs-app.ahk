@@ -151,24 +151,27 @@ OnNewWindow(sender, args) {
 ToggleWidget() {
     global WIDGET_PREF
     if ProcessExist("위젯.exe") {
-        CloseWidgetProcesses()
+        ; 끄기: 체크를 '즉시' 해제해 멈춘 것처럼 보이지 않게 하고, 프로세스를 정리한다.
+        A_TrayMenu.Uncheck("바탕화면 위젯")
         try FileDelete(WIDGET_PREF)
+        CloseWidgetProcesses()
     } else {
+        ; 켜기: 체크를 즉시 표시하고 실행
+        A_TrayMenu.Check("바탕화면 위젯")
         StartWidget()
         try DirCreate(A_AppData "\YnhsApp")
         try FileAppend("", WIDGET_PREF)
     }
-    Sleep 300
-    RefreshWidgetCheck()
+    ; 실제 상태는 주기 타이머(RefreshWidgetCheck, 1.5초)가 곧 확인·보정한다. 여기서 길게 막지 않는다.
 }
-; 위젯 프로세스를 모두(런처/본체가 같은 이름이라 여러 개일 수 있음) 확실히 종료
+; 위젯 프로세스를 모두(런처/본체가 같은 이름이라 여러 개일 수 있음) 확실히 종료.
+;   ProcessClose(=TerminateProcess)는 종료까지 동기 대기하므로 긴 Sleep 없이 연속 종료(트레이 안 멈춤).
 CloseWidgetProcesses() {
-    loop 20 {
+    loop 10 {
         pid := ProcessExist("위젯.exe")
         if !pid
             break
         try ProcessClose(pid)
-        Sleep 100
     }
 }
 StartWidget() {
