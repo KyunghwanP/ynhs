@@ -181,18 +181,15 @@ ToggleGlass() {
     }
 }
 
-; 위젯 창에 Windows 아크릴 배경을 적용/해제한다(실험적).
-;   on: SYSTEMBACKDROP_TYPE=3(acrylic) + 프레임을 클라이언트 전체로 확장 + 웹뷰 배경 투명
-;   off: 배경 없음(1) + 프레임 원복 + 웹뷰 배경 불투명(다크/라이트)
+; 글래스 모드 창 처리.
+;   ※ Windows 아크릴(SYSTEMBACKDROP)은 위젯의 반투명(레이어드 창)과 충돌해 노란 얼룩이 생겨서 사용 안 함.
+;     글래스는 웹(CSS) 젖빛 효과로만 표현하고, 웹뷰 배경은 다크/라이트 그대로 불투명 유지한다.
 ApplyGlass(hwnd, wvc, on) {
     global gDark
-    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 38, "int*", on ? 3 : 1, "int", 4)
-    m := Buffer(16, 0)
-    if on
-        NumPut("int", -1, m, 0), NumPut("int", -1, m, 4), NumPut("int", -1, m, 8), NumPut("int", -1, m, 12)
+    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 38, "int*", 1, "int", 4)  ; 백드롭 없음(아크릴 미사용)
+    m := Buffer(16, 0)   ; 프레임 확장 원복(0,0,0,0)
     try DllCall("dwmapi\DwmExtendFrameIntoClientArea", "ptr", hwnd, "ptr", m)
-    ; 유리 위에 '내용'만 뜨도록 웹뷰 배경 투명(끄면 원래 배경색으로)
-    try wvc.DefaultBackgroundColor := on ? 0x00FFFFFF : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
+    try wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF   ; 웹뷰 배경 불투명 유지(노랑 방지)
 }
 
 ; 다크모드 토글: 설정 저장 + 떠 있는 모든 위젯을 새 테마로 다시 로드
@@ -209,8 +206,8 @@ ToggleDark() {
         try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 20, "int*", gDark ? 1 : 0, "int", 4)  ; DWM 프레임 다크
         try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 34, "uint*", gDark ? BORDER_COLOR_DARK : BORDER_COLOR, "int", 4)  ; 테두리 색
         try StyleWindow(w.handleGui.hwnd)   ; 손잡이 바 테두리도 함께
-        ; 웹뷰 배경: 글래스면 투명 유지, 아니면 다크/라이트 배경색
-        try w.wvc.DefaultBackgroundColor := gGlass ? 0x00FFFFFF : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
+        ; 웹뷰 배경은 항상 불투명(다크/라이트) — 글래스는 CSS로만(아크릴 미사용, 노랑 방지)
+        try w.wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF
         try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
     }
 }
@@ -393,7 +390,7 @@ CreateWidget(p) {
     }
     ; WebView2 자체 기본 배경색 — 다크면 어둡게(글래스면 투명). 페이지가 그리기 전/안 덮는 맨 위 영역에
     ;   흰 배경이 띠처럼 비치던 문제를 없앤다(웹 CSS로는 못 덮는 웹뷰 기본색).
-    try wvc.DefaultBackgroundColor := gGlass ? 0x00FFFFFF : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
+    try wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF   ; 글래스여도 웹뷰 배경은 불투명(노랑 방지)
     wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
     ; 웹 내장 손잡이 바(HTML) → AHK 브릿지: 투명도/닫기/앱/이동. 네이티브 손잡이 대체.
     try wvc.CoreWebView2.add_WebMessageReceived(OnWebMsg.Bind(g.hwnd, key))
