@@ -510,7 +510,7 @@ DragMove() {
     ; +Resize 창은 좌·우·아래에 ~8px 투명 여백이 창 좌표에 포함된다. 스냅을 '창 좌표' 기준으로
     ;   하면 방향마다 이 여백이 다르게 끼어(세로 8px·가로 16px 등) 간격이 제각각이 된다.
     ;   → 스냅을 '보이는영역(visible)' 기준으로 계산해, 어느 방향이든 항상 같은 간격(GAP)이 되게 한다.
-    WidgetFrameOffsets(dragHwnd, dragW, dragH, &offL, &offT, &offR, &offB)
+    WidgetFrameOffsets(dragHwnd, &offL, &offT, &offR, &offB)
     vW := dragW - offL - offR, vH := dragH - offT - offB   ; 드래그 위젯의 '보이는' 크기
     vnx := nx + offL, vny := ny + offT                      ; 제안 위치(보이는영역 좌상단)
     for hwnd, w in WidgetWins {
@@ -564,13 +564,15 @@ DragMove() {
 
 ; 창 좌표 ↔ '보이는영역' 좌표 사이의 네 변 여백(투명 리사이즈 테두리 두께)을 구한다.
 ;   offL/offT/offR/offB = 각 변에서 창 좌표가 보이는영역보다 바깥으로 나간 픽셀 수.
-WidgetFrameOffsets(hwnd, w, h, &offL, &offT, &offR, &offB) {
-    WinGetPos(&wx, &wy, , , "ahk_id " hwnd)
+;   여백은 창 크기와 무관한 '상수'이므로, 반드시 '현재' 창의 실제 크기(WinGetPos)로 계산한다.
+;   (크기 조절 중 '새 크기'를 넣으면 offR/offB가 변화량만큼 어긋나 스냅이 깨진다)
+WidgetFrameOffsets(hwnd, &offL, &offT, &offR, &offB) {
+    WinGetPos(&wx, &wy, &ww, &wh, "ahk_id " hwnd)
     WidgetVisibleRect(hwnd, &vx, &vy, &vw, &vh)
     offL := vx - wx
     offT := vy - wy
-    offR := (wx + w) - (vx + vw)
-    offB := (wy + h) - (vy + vh)
+    offR := (wx + ww) - (vx + vw)
+    offB := (wy + wh) - (vy + vh)
 }
 
 ; ── 크기 조절 시 테두리 자석 스냅(WM_SIZING) ───────────────
@@ -586,7 +588,7 @@ OnSizing(wParam, lParam, msg, hwnd) {
     R := NumGet(lParam, 8, "int")
     B := NumGet(lParam, 12, "int")
     ; 리사이즈 사각형(창 좌표)을 '보이는영역' 좌표로 바꿔, 이동 스냅과 똑같이 GAP 간격으로 붙인다.
-    WidgetFrameOffsets(hwnd, R - L, B - T, &offL, &offT, &offR, &offB)
+    WidgetFrameOffsets(hwnd, &offL, &offT, &offR, &offB)
     vL := L + offL, vT := T + offT, vR := R - offR, vB := B - offB
     dragL := (wParam = 1 || wParam = 4 || wParam = 7)
     dragR := (wParam = 2 || wParam = 5 || wParam = 8)
