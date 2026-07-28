@@ -163,7 +163,7 @@ if gDark
 
 ; 다크모드 토글: 설정 저장 + 떠 있는 모든 위젯을 새 테마로 다시 로드
 ToggleDark() {
-    global gDark, CONFIG, WidgetWins
+    global gDark, CONFIG, WidgetWins, BORDER_COLOR, BORDER_COLOR_DARK
     gDark := !gDark
     try IniWrite(gDark ? "1" : "0", CONFIG, "ui", "dark")
     if gDark
@@ -173,6 +173,8 @@ ToggleDark() {
     for hwnd, w in WidgetWins {
         try w.gui.BackColor := gDark ? "111A2D" : "FFFFFF"   ; 창 배경도 함께(상단 흰 띠 방지)
         try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 20, "int*", gDark ? 1 : 0, "int", 4)  ; DWM 프레임 다크
+        try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 34, "uint*", gDark ? BORDER_COLOR_DARK : BORDER_COLOR, "int", 4)  ; 테두리 색
+        try StyleWindow(w.handleGui.hwnd)   ; 손잡이 바 테두리도 함께
         try w.wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF   ; 웹뷰 기본 배경색도 함께
         try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&t=" A_Now)
     }
@@ -448,11 +450,12 @@ SetWidgetOpacity(hwnd, val) {
 ;   · DWMWA_WINDOW_CORNER_PREFERENCE(33)=2(ROUND)
 ;   · DWMWA_BORDER_COLOR(34)=COLORREF(0x00BBGGRR) → 얇은 테두리를 조화로운 파란색으로
 ;   (Win10 등 미지원 환경에선 조용히 무시되어 각진 창으로 표시됨)
-global BORDER_COLOR := 0x00C8825A   ; RGB(90,130,200) 소프트 블루 (COLORREF는 BGR 순서)
+global BORDER_COLOR      := 0x00C8825A   ; 라이트: RGB(90,130,200) 소프트 블루 (COLORREF는 BGR 순서)
+global BORDER_COLOR_DARK := 0x0020120B   ; 다크: 다크모드 배경 남색 #0B1220 (BGR)
 StyleWindow(hwnd) {
-    global BORDER_COLOR
+    global BORDER_COLOR, BORDER_COLOR_DARK, gDark
     try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 33, "int*", 2, "int", 4)
-    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 34, "uint*", BORDER_COLOR, "int", 4)
+    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 34, "uint*", gDark ? BORDER_COLOR_DARK : BORDER_COLOR, "int", 4)
 }
 
 ; ── 바탕화면 층에 놓기(상호작용 유지) ─────────────────────
