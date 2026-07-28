@@ -172,6 +172,7 @@ ToggleDark() {
         A_TrayMenu.Uncheck("🌙 다크 모드")
     for hwnd, w in WidgetWins {
         try w.gui.BackColor := gDark ? "111A2D" : "FFFFFF"   ; 창 배경도 함께(상단 흰 띠 방지)
+        try w.wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF   ; 웹뷰 기본 배경색도 함께
         try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&t=" A_Now)
     }
 }
@@ -352,6 +353,9 @@ CreateWidget(p) {
             return
         }
     }
+    ; WebView2 자체 기본 배경색 — 다크면 어둡게. 페이지가 그리기 전/안 덮는 맨 위 영역에 흰 배경이
+    ;   띠처럼 비치던 문제를 없앤다(웹 CSS로는 못 덮는 웹뷰 기본색).
+    try wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF
     wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&dark=" (gDark ? "1" : "0") "&t=" A_Now)   ; &t=:최신, &op=:투명도, &dark=:다크모드
     ; 웹 내장 손잡이 바(HTML) → AHK 브릿지: 투명도/닫기/앱/이동. 네이티브 손잡이 대체.
     try wvc.CoreWebView2.add_WebMessageReceived(OnWebMsg.Bind(g.hwnd, key))
