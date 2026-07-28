@@ -21,7 +21,9 @@ CoordMode "Mouse", "Screen"
 ; ============================================================
 
 global APP_BASE := "https://kyunghwanp.github.io/ynhs/?widget="
-global SESSION  := A_AppData "\YnhsWidget\Session"
+; 디스크 꽉 참 사고로 손상된 옛 WebView2 프로필(Session)을 우회 — 새 폴더로 깨끗하게 시작.
+;   (손상된 프로필은 브라우저·앱은 멀쩡한데 위젯 WebView2만 인터넷 시간초과가 나던 원인)
+global SESSION  := A_AppData "\YnhsWidget\Session2"
 global CONFIG   := A_AppData "\YnhsWidget\config.ini"
 global NEU_EXE  := A_ScriptDir "\ynhs-app.exe"
 global APP_URL  := "https://kyunghwanp.github.io/ynhs/"
