@@ -250,7 +250,7 @@ ShowSelector() {
     Apply(*) {
         for p in ALL_PANELS {
             picked := checks[p[1]].Value
-            IniWrite(picked ? "1" : "0", CONFIG, "selected", p[1])
+            try IniWrite(picked ? "1" : "0", CONFIG, "selected", p[1])
             ex := FindWidgetByPanel(p[1])
             if (picked && !ex)
                 CreateWidget(p)
@@ -611,7 +611,7 @@ DestroyWidget(hwnd, fromButton := false) {
     if !WidgetWins.Has(hwnd)
         return
     SaveWidget(hwnd)
-    IniWrite("0", CONFIG, "selected", WidgetWins[hwnd].panel)
+    try IniWrite("0", CONFIG, "selected", WidgetWins[hwnd].panel)
     w := WidgetWins[hwnd]
     g := w.gui, h := w.handleGui
     HandleToWidget.Delete(h.hwnd)
@@ -709,9 +709,12 @@ SaveWidget(hwnd) {
     ;    실행할 때마다 테두리 두께(~8px)만큼 창이 커지고 위치가 밀린다.)
     WinGetPos(&wx, &wy, , , "ahk_id " hwnd)
     WinGetClientPos( , , &cw, &ch, "ahk_id " hwnd)
-    IniWrite(wx, CONFIG, "pos_" w.panel, "x"), IniWrite(wy, CONFIG, "pos_" w.panel, "y")
-    IniWrite(cw, CONFIG, "pos_" w.panel, "w"), IniWrite(ch, CONFIG, "pos_" w.panel, "h")
-    IniWrite(w.opacity, CONFIG, "pos_" w.panel, "opacity")
+    ; 저장 실패(디스크 꽉 참 등)에도 위젯이 죽지 않게 방어 — 다음 저장 때 다시 시도된다.
+    try {
+        IniWrite(wx, CONFIG, "pos_" w.panel, "x"), IniWrite(wy, CONFIG, "pos_" w.panel, "y")
+        IniWrite(cw, CONFIG, "pos_" w.panel, "w"), IniWrite(ch, CONFIG, "pos_" w.panel, "h")
+        IniWrite(w.opacity, CONFIG, "pos_" w.panel, "opacity")
+    }
 }
 
 SaveAll() {
