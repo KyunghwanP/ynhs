@@ -286,20 +286,37 @@ global gMinList := []
         }
         gDesktopShown := true
     } else {
-        ; 최소화의 '역순'으로 복원해야 원래 앞뒤 순서(Z-order)가 유지된다.
-        ;   (기억한 순서 그대로 복원하면 맨 뒤 창이 마지막에 올라와 앞뒤가 뒤집힌다)
-        i := gMinList.Length
+        ; 먼저 async로 전부 복원(빠름). async는 처리 순서가 보장되지 않아 이 단계만으론
+        ;   앞뒤 순서가 섞인다 → 잠시 뒤 Z-order를 한 번에 다시 맞춘다(RestoreZOrder).
+        saved := gMinList
+        i := saved.Length
         while (i >= 1) {
-            item := gMinList[i]
+            item := saved[i]
             try DllCall("ShowWindowAsync", "ptr", item.hwnd, "int", item.max ? SW_MAX : SW_RESTORE)
             i--
         }
         gMinList := []
         gDesktopShown := false
+        SetTimer(() => RestoreZOrder(saved), -250)   ; 복원이 처리된 뒤 순서 재정렬
     }
     ; 애니메이션은 창들이 async 명령을 처리한 뒤에 되돌린다(즉시 되돌리면 처리 전이라 다시 슬라이드됨).
     if prevAnim
         SetTimer(() => SetMinAnimation(true), -400)
+}
+
+; async 복원 뒤 원래 앞뒤 순서(Z-order)를 다시 맞춘다.
+;   list는 [맨앞 … 맨뒤] 순. '맨 뒤 → 맨 앞' 순으로 각 창을 최상단에 올리면
+;   원래 맨 앞 창이 마지막에 올라와 앞뒤가 그대로 복원된다.
+;   SetWindowPos(HWND_TOP=0, SWP_NOSIZE|NOMOVE|NOACTIVATE=0x13) → 이동·크기·포커스는 안 건드리고 순서만.
+RestoreZOrder(list) {
+    i := list.Length
+    while (i >= 1) {
+        try DllCall("SetWindowPos", "ptr", list[i].hwnd, "ptr", 0
+                    , "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x13)
+        i--
+    }
+    if (list.Length >= 1)
+        try WinActivate("ahk_id " list[1].hwnd)   ; 원래 맨 앞 창에 포커스 복귀
 }
 
 ; ── 최소화/복원 애니메이션 on/off (ANIMATIONINFO{ UINT cbSize; int iMinAnimate }) ──
