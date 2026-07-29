@@ -156,15 +156,15 @@ try gGlass := (IniRead(CONFIG, "ui", "glass", "0") = "1")
 try A_TrayMenu.Delete()
 A_TrayMenu.Add("위젯 추가 / 선택", (*) => ShowSelector())
 A_TrayMenu.Add("🌙 다크 모드", (*) => ToggleDark())
-A_TrayMenu.Add("🔷 글래스(실험)", (*) => ToggleGlass())
+; 글래스(실험) 토글은 잠시 숨김 — 기능/코드는 남겨둠(ToggleGlass/ApplyGlass). 다시 쓰려면 아래 줄 주석 해제.
+; A_TrayMenu.Add("🔷 글래스(실험)", (*) => ToggleGlass())
 A_TrayMenu.Add("현재 위치·크기 저장", (*) => SaveAll())
 A_TrayMenu.Add()
 A_TrayMenu.Add("종료", (*) => ExitApp())
 A_TrayMenu.Default := "위젯 추가 / 선택"
 if gDark
     A_TrayMenu.Check("🌙 다크 모드")
-if gGlass
-    A_TrayMenu.Check("🔷 글래스(실험)")
+gGlass := false   ; 글래스 모드 잠시 보류(토글 숨김) — 항상 꺼짐으로 시작
 
 ; 글래스(아크릴) 토글: 설정 저장 + 모든 위젯에 유리 효과 적용/해제 + 새로 로드
 ToggleGlass() {
@@ -221,9 +221,11 @@ ToggleDark() {
         try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 20, "int*", gDark ? 1 : 0, "int", 4)  ; DWM 프레임 다크
         try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 34, "uint*", gDark ? BORDER_COLOR_DARK : BORDER_COLOR, "int", 4)  ; 테두리 색
         try StyleWindow(w.handleGui.hwnd)   ; 손잡이 바 테두리도 함께
-        ; 웹뷰 배경: 글래스면 투명(아크릴 비침), 아니면 다크/라이트
-        try w.wvc.DefaultBackgroundColor := gGlass ? 0x00000000 : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
+        ; 웹뷰 배경: 글래스면 투명(아크릴 비침), 아니면 투명(배경 틴트가 비침 — 배경만 반투명 모드)
+        try w.wvc.DefaultBackgroundColor := 0x00000000
         try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
+        if (!gGlass)
+            try ApplyWidgetBg(hwnd, w.opacity)   ; 새 테마에 맞춰 배경 틴트(다크/라이트) 다시 적용
     }
 }
 
@@ -405,7 +407,7 @@ CreateWidget(p) {
     }
     ; WebView2 자체 기본 배경색 — 다크면 어둡게(글래스면 투명). 페이지가 그리기 전/안 덮는 맨 위 영역에
     ;   흰 배경이 띠처럼 비치던 문제를 없앤다(웹 CSS로는 못 덮는 웹뷰 기본색).
-    try wvc.DefaultBackgroundColor := gGlass ? 0x00000000 : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)   ; 글래스면 투명(아크릴 비침)
+    try wvc.DefaultBackgroundColor := 0x00000000   ; 웹뷰 투명 → 창의 배경 틴트(반투명)가 비침(배경만 반투명, 글자 불투명)
     wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
     ; 웹 내장 손잡이 바(HTML) → AHK 브릿지: 투명도/닫기/앱/이동. 네이티브 손잡이 대체.
     try wvc.CoreWebView2.add_WebMessageReceived(OnWebMsg.Bind(g.hwnd, key))
@@ -491,14 +493,36 @@ PositionHandle(widgetHwnd) {
 SetWidgetOpacity(hwnd, val) {
     global WidgetWins, gGlass
     if WidgetWins.Has(hwnd)
-        WidgetWins[hwnd].opacity := val         ; 값 먼저 저장(ApplyGlass가 이 값으로 틴트 농도 계산)
+        WidgetWins[hwnd].opacity := val
     if (gGlass) {
-        WinSetTransparent(255, "ahk_id " hwnd)  ; 창 자체는 불투명(글자 선명), 투명감은 아크릴+카드가 담당
+        WinSetTransparent(255, "ahk_id " hwnd)
         if WidgetWins.Has(hwnd)
-            try ApplyGlass(hwnd, WidgetWins[hwnd].wvc, true)   ; 슬라이더로 아크릴 틴트(뿌연 정도) 재적용
+            try ApplyGlass(hwnd, WidgetWins[hwnd].wvc, true)
     } else {
-        WinSetTransparent(val, "ahk_id " hwnd)  ; 일반: 창 전체 투명도
+        ; 예전엔 WinSetTransparent(val)로 '창 전체'를 반투명하게 했는데, 이는 LWA_ALPHA라
+        ;   글자까지 같이 흐려졌다. 이제 픽셀 단위 투명(ACCENT TRANSPARENTGRADIENT)을 써서
+        ;   '배경만' 반투명하게 하고 글자(불투명 픽셀)는 100% 선명하게 유지한다.
+        ApplyWidgetBg(hwnd, val)
     }
+}
+
+; 배경만 반투명(글자 불투명) — 창을 픽셀단위 투명 처리. val(70~255)이 배경 불투명도.
+;   낮을수록 배경이 더 비침(바탕화면 보임), 글자는 늘 선명. 웹뷰 배경은 투명이라 CSS 카드/글자만 그려짐.
+ApplyWidgetBg(hwnd, val) {
+    global gDark, WidgetWins
+    a := val                                             ; 배경 틴트 알파(=슬라이더 값)
+    tint := (a << 24) | (gDark ? 0x20120B : 0xF9F5F1)    ; ABGR: 다크=#0B1220 / 라이트=#F1F5F9
+    accent := Buffer(16, 0)
+    NumPut("uint", 2, accent, 0)                  ; ACCENT_ENABLE_TRANSPARENTGRADIENT (블러 없음)
+    NumPut("uint", tint, accent, 8)               ; GradientColor(ABGR) — 배경 틴트+알파
+    data := Buffer(24, 0)
+    NumPut("uint", 19, data, 0)                   ; WCA_ACCENT_POLICY=19
+    NumPut("ptr", accent.Ptr, data, 8)
+    NumPut("uptr", accent.Size, data, 16)
+    try DllCall("user32\SetWindowCompositionAttribute", "ptr", hwnd, "ptr", data)
+    try WinSetTransparent(255, "ahk_id " hwnd)    ; 창 자체는 불투명(=LWA_ALPHA 안 씀) → 글자 안 흐려짐
+    if WidgetWins.Has(hwnd)
+        try WidgetWins[hwnd].wvc.DefaultBackgroundColor := 0x00000000   ; 웹뷰 투명 → 배경 틴트가 비침
 }
 
 ; 창 모양 다듬기(Win11 DWM) — 둥근 모서리 + 얇은 파란 테두리(회색 두꺼운 포커스 테두리 대체)

@@ -36,8 +36,8 @@
       if(!document.body || document.getElementById('wgtBar')) return;
       var qs = new URLSearchParams(location.search);
       var op = parseInt(qs.get('op')||'240',10);
-      // 글래스 카드 서리 농도(--gop): 슬라이더 70~255 → 0.08~0.50 (PPT '제일 예쁜' 50% 부근)
-      function opToGop(v){ var f=(v-70)/185; f=Math.max(0,Math.min(1,f)); return (0.08+f*0.42).toFixed(3); }
+      // 카드 배경 불투명도(--gop): 슬라이더 70~255 → 0.30~0.98 (기본 거의 불투명, 내리면 바탕 비침). 글자는 불투명 고정.
+      function opToGop(v){ var f=(v-70)/185; f=Math.max(0,Math.min(1,f)); return (0.30+f*0.68).toFixed(3); }
       try{ document.documentElement.style.setProperty('--gop', opToGop(op)); }catch(e){}
       var names = {meal:'🍱 급식',weather:'🌤 날씨',schedule:'📆 학사일정',cal:'🗓 달력',
         task:'📌 진행중 업무',consult:'🗓️ 상담 일정',timetable:'📅 오늘 시간표',fulltt:'📅 내 시간표',
@@ -105,6 +105,18 @@
   /* 다크 위젯: 맨 위에 라이트 배경(#f1f5f9)이 띠처럼 남던 문제 — 루트·본문·홈을 강제로 어둡게 덮음 */
   html.dark.widget-mode, html.dark.widget-mode body, html.dark.widget-mode #homePage,
   html.dark.widget-mode .app-body, html.dark.widget-mode .app-content { background:#0B1220 !important; }
+  /* ── 위젯 투명도: 배경만 반투명, 글자는 늘 불투명 ──
+     창(AHK ApplyWidgetBg)이 픽셀단위로 '배경 틴트'만 반투명 처리(글자=불투명 픽셀은 100% 선명).
+     그래서 페이지는 투명(창 틴트/바탕화면이 비침), 카드는 슬라이더(--gop)로 배경 농도만 조절. */
+  html.widget-mode { --gop: .92; }   /* 기본은 거의 불투명(솔리드 카드처럼) */
+  html.widget-mode, html.widget-mode body, html.widget-mode #homePage,
+  html.widget-mode .app-body, html.widget-mode .app-content, html.widget-mode #timetablePage,
+  html.dark.widget-mode, html.dark.widget-mode body, html.dark.widget-mode #homePage,
+  html.dark.widget-mode .app-body, html.dark.widget-mode .app-content, html.dark.widget-mode #timetablePage { background: transparent !important; }
+  html.widget-mode .home-section,
+  html.widget-mode #timetablePage .grid-table { background: rgba(255,255,255, var(--gop)) !important; }
+  html.dark.widget-mode .home-section,
+  html.dark.widget-mode #timetablePage .grid-table { background: rgba(16,24,44, var(--gop)) !important; }
   /* ══ 리퀴드 글래스 모드 ══
      창(AHK)의 아크릴이 '진짜 바탕화면을 블러'해서 은은하게 비추고,
      여기(CSS)선 그 위에 반투명 유리 카드 질감(서리·밝은 테두리·안쪽 흰 글로우·라운드)만 얹는다.
