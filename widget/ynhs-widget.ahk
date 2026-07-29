@@ -527,25 +527,26 @@ SetWidgetOpacity(hwnd, val) {
     }
 }
 
-; 창 배경을 반투명 유리로(글자 등 불투명 픽셀은 그대로 선명, 나머지는 바탕 비침).
-;   ★ state 2(TRANSPARENTGRADIENT)는 이 환경에서 알파를 무시하고 틴트를 꽉 채워 그림(다크 파랗게/라이트 먹통).
-;      예전에 검증된 state 4(ACRYLICBLURBEHIND)는 알파를 제대로 반영하므로 그걸 쓴다(바탕 블러 비침).
-;      틴트 알파는 옅게 '고정'(활성/비활성 모두 항상 비침), 색은 파랗지 않게 중립 회색. 농도 조절은 CSS 카드(--gop).
+; 배경만 '흐림 없이' 또렷하게 투명(글자·선은 100% 선명) — 컬러키(LWA_COLORKEY) 방식.
+;   · 아크릴(블러) 대신 순수 투명: 웹이 '테마 배경색'으로 칠한 영역만 완전 투명 처리 → 그 자리로
+;     바탕화면이 또렷이(흐림 없이) 비친다. 글자·테두리는 다른 색이라 그대로 불투명하게 남는다.
+;   · 키 색을 '테마 배경색'으로 두는 이유: (1) 혹시 컬러키가 안 먹어도 평소 위젯처럼 보임(사고 방지)
+;     (2) 글자 안티에일리어싱 색번짐이 테마색이라 눈에 안 띔.
+;   · LWA라 포커스와 무관 → 밖 클릭해도 안 변함(아크릴의 비활성 파래짐/라이트 먹통 없음).
 ApplyWidgetBg(hwnd, val) {
     global gDark, WidgetWins
-    a := gDark ? 0x7E : 0x3A                             ; 유리 틴트 알파 고정(라이트는 더 옅게 → 먹통 방지)
-    tint := (a << 24) | (gDark ? 0x181818 : 0xF6F6F6)   ; ABGR: 중립 회색(파란 기 없음)
+    key := gDark ? "0x0B1220" : "0xF1F5F9"        ; 투명 키 = 테마 배경색
+    ; 아크릴/ACCENT 끄기(컬러키만 사용)
     accent := Buffer(16, 0)
-    NumPut("uint", 4, accent, 0)                  ; ACCENT_ENABLE_ACRYLICBLURBEHIND (알파 반영 + 바탕 블러)
-    NumPut("uint", tint, accent, 8)               ; GradientColor(ABGR) — 배경 틴트+알파
+    NumPut("uint", 0, accent, 0)
     data := Buffer(24, 0)
-    NumPut("uint", 19, data, 0)                   ; WCA_ACCENT_POLICY=19
+    NumPut("uint", 19, data, 0)
     NumPut("ptr", accent.Ptr, data, 8)
     NumPut("uptr", accent.Size, data, 16)
     try DllCall("user32\SetWindowCompositionAttribute", "ptr", hwnd, "ptr", data)
-    try WinSetTransparent(255, "ahk_id " hwnd)    ; 창 자체는 불투명(=LWA_ALPHA 안 씀) → 글자 안 흐려짐
     if WidgetWins.Has(hwnd)
-        try WidgetWins[hwnd].wvc.DefaultBackgroundColor := 0x00000000   ; 웹뷰 투명 → 배경 틴트가 비침
+        try WidgetWins[hwnd].wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFF1F5F9  ; 웹뷰 기본배경=키색(불투명)
+    try WinSetTransColor(key, "ahk_id " hwnd)     ; 키색=완전 투명, 나머지=불투명(글자 선명)
 }
 
 ; 창 모양 다듬기(Win11 DWM) — 둥근 모서리 + 얇은 파란 테두리(회색 두꺼운 포커스 테두리 대체)

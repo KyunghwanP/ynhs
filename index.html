@@ -115,10 +115,13 @@
   html.dark.widget-mode, html.dark.widget-mode body, html.dark.widget-mode #homePage,
   html.dark.widget-mode .app-body, html.dark.widget-mode .app-content, html.dark.widget-mode #timetablePage,
   html.dark.widget-mode #timetablePage .card, html.dark.widget-mode #timetablePage .table-wrap { background: transparent !important; box-shadow: none !important; }
+  /* 컬러키 투명: 카드 배경도 '키색(테마 배경)'으로 → 완전 투명 처리되어 바탕이 또렷이 비침.
+     (반투명 rgba로 하면 키색과 섞여 안 비침. 그래서 카드는 배경 없이 투명) */
   html.widget-mode .home-section,
-  html.widget-mode #timetablePage .grid-table { background: rgba(255,255,255, var(--gop)) !important; }
-  html.dark.widget-mode .home-section,
-  html.dark.widget-mode #timetablePage .grid-table { background: rgba(16,24,44, var(--gop)) !important; }
+  html.widget-mode #timetablePage .grid-table { background: transparent !important; }
+  /* 글자·아이콘이 바탕 위에 떠도 읽히도록 은은한 그림자(라이트=옅게, 다크=진하게) */
+  html.widget-mode #homePage, html.widget-mode #timetablePage { text-shadow: 0 1px 2px rgba(255,255,255,.55); }
+  html.dark.widget-mode #homePage, html.dark.widget-mode #timetablePage { text-shadow: 0 1px 3px rgba(0,0,0,.75); }
   /* 카드 내부 요소(시간표 셀·머리글·홈 섹션 헤더 등)는 투명 → 카드 한 장으로 비침(글자는 불투명 유지).
      안 그러면 셀 배경이 불투명해서 '시간표 영역만 안 투명'해 보임. */
   html.widget-mode .gt-cell, html.widget-mode .gt-pnum, html.widget-mode .gt-corner,
