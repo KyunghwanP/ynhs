@@ -78,7 +78,12 @@
           });
           document.addEventListener('mouseleave', function(){ bar.classList.remove('show'); });
           document.getElementById('wgtDrag').addEventListener('mousedown', function(e){ e.preventDefault(); post('drag'); });
-          document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
+          var setGop = v => document.documentElement.style.setProperty('--gop', (0.06 + (v-70)/185*0.44).toFixed(3));
+          if (document.documentElement.classList.contains('glass')) setGop(op);
+          document.getElementById('wgtOp').addEventListener('input', function(){
+            if (document.documentElement.classList.contains('glass')) setGop(this.value);
+            else post('op:'+this.value);
+          });
           document.getElementById('wgtApp').addEventListener('click', function(){ post('app'); });
           document.getElementById('wgtClose').addEventListener('click', function(){ post('close'); });
           document.addEventListener('mousedown', function(){ post('raise'); }, true);  // 누른 위젯만 앞으로
@@ -163,14 +168,15 @@
         html.dark .memo-card { box-shadow: 0 4px 20px rgba(0,0,0,.35); }
         /* 글래스(아크릴) 모드: 배경 투명 + 카드/헤더 반투명 유리질감 */
         html.glass, html.glass body { background: transparent !important; }
+        html.glass { --gop: .16; }
         html.glass .memo-card, html.glass .site-header {
-          background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.08)) !important;
-          border: 1px solid rgba(255,255,255,.45);
-          box-shadow: 0 16px 46px -18px rgba(0,0,0,.4), inset 0 3px 8px rgba(255,255,255,.65), inset 3px 0 8px rgba(255,255,255,.28), inset -3px 0 8px rgba(255,255,255,.18), inset 0 -6px 14px rgba(255,255,255,.14);
+          background: linear-gradient(135deg, rgba(255,255,255, calc(var(--gop) + .05)), rgba(255,255,255, var(--gop))) !important;
+          border: 1px solid rgba(255,255,255,.5);
+          box-shadow: 0 16px 46px -18px rgba(0,0,0,.4), inset 0 3px 9px rgba(255,255,255,.75), inset 3px 0 9px rgba(255,255,255,.32), inset -3px 0 9px rgba(255,255,255,.22), inset 0 -7px 16px rgba(255,255,255,.16);
         }
         html.dark.glass .memo-card, html.dark.glass .site-header {
-          background: linear-gradient(135deg, rgba(30,41,59,.28), rgba(15,23,42,.16)) !important; border-color: rgba(255,255,255,.20);
-          box-shadow: 0 16px 46px -18px rgba(0,0,0,.6), inset 0 3px 8px rgba(255,255,255,.22), inset 3px 0 8px rgba(255,255,255,.10), inset -3px 0 8px rgba(255,255,255,.07), inset 0 -6px 14px rgba(255,255,255,.05);
+          background: linear-gradient(135deg, rgba(24,33,52, calc(var(--gop) + .12)), rgba(15,23,42, calc(var(--gop) + .04))) !important; border-color: rgba(255,255,255,.18);
+          box-shadow: 0 16px 46px -18px rgba(0,0,0,.6), inset 0 3px 9px rgba(255,255,255,.22), inset 3px 0 9px rgba(255,255,255,.10), inset -3px 0 9px rgba(255,255,255,.07), inset 0 -7px 16px rgba(255,255,255,.05);
         }
         #editorjs { min-height: 55vh; flex: 1; }
 

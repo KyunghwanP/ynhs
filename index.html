@@ -83,7 +83,13 @@
       document.addEventListener('mouseleave', function(){ bar.classList.remove('show'); });
       // 드래그(제목 영역) → AHK가 창 이동
       document.getElementById('wgtDrag').addEventListener('mousedown', function(e){ e.preventDefault(); post('drag'); });
-      document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
+      // op(70~255) → 유리 농도(0.06~0.5). 글래스일 땐 슬라이더가 '유리 불투명도'를 실시간 조절(글자·창은 불변)
+      var setGop = v => document.documentElement.style.setProperty('--gop', (0.06 + (v-70)/185*0.44).toFixed(3));
+      if (document.documentElement.classList.contains('glass')) setGop(op);
+      document.getElementById('wgtOp').addEventListener('input', function(){
+        if (document.documentElement.classList.contains('glass')) setGop(this.value);   // 유리 농도만
+        else post('op:'+this.value);                                                    // 일반: 창 투명도
+      });
       document.getElementById('wgtApp').addEventListener('click', function(){ post('app'); });
       document.getElementById('wgtClose').addEventListener('click', function(){ post('close'); });
       document.addEventListener('mousedown', function(){ post('raise'); }, true);  // 누른 위젯만 앞으로
@@ -101,35 +107,37 @@
   html.glass.widget-mode, html.glass.widget-mode body, html.glass.widget-mode #homePage,
   html.glass.widget-mode .app-body, html.glass.widget-mode .app-content,
   html.glass.widget-mode #timetablePage { background:transparent !important; }
+  /* 유리 농도는 슬라이더가 조절하는 --gop(0.06~0.5). 카드 안 셀들은 유리 위에 얹혀야 하니 살짝만 틴트 */
+  html.glass.widget-mode { --gop: .16; }
   html.glass.widget-mode .home-section,
   html.glass.widget-mode #timetablePage .grid-table {
-    /* 유리: 살짝만 틴트(뒤 아크릴 블러가 비치도록 투명) + 부드럽고 둥근 절삭면(가장자리 베벨) */
-    background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.08)) !important;
-    border: 1px solid rgba(255,255,255,.45);
+    background: linear-gradient(135deg, rgba(255,255,255, calc(var(--gop) + .05)), rgba(255,255,255, var(--gop))) !important;
+    border: 1px solid rgba(255,255,255,.5);
     box-shadow: 0 16px 46px -18px rgba(0,0,0,.4),
-                inset 0 3px 8px rgba(255,255,255,.65),     /* 위쪽 둥근 절삭 광택 */
-                inset 3px 0 8px rgba(255,255,255,.28),     /* 왼쪽 베벨 */
-                inset -3px 0 8px rgba(255,255,255,.18),    /* 오른쪽 베벨 */
-                inset 0 -6px 14px rgba(255,255,255,.14);   /* 아래 은은한 두께감 */
+                inset 0 3px 9px rgba(255,255,255,.75),     /* 위쪽 둥근 절삭 광택 */
+                inset 3px 0 9px rgba(255,255,255,.32),     /* 왼쪽 베벨 */
+                inset -3px 0 9px rgba(255,255,255,.22),    /* 오른쪽 베벨 */
+                inset 0 -7px 16px rgba(255,255,255,.16);   /* 아래 두께감 */
     border-radius: 22px;
   }
+  /* 시간표 셀·헤더 등 카드 내부 요소는 거의 투명(유리 통일감) */
   html.glass.widget-mode .gt-cell, html.glass.widget-mode .gt-pnum,
   html.glass.widget-mode .gt-corner, html.glass.widget-mode .gt-lunch-label,
-  html.glass.widget-mode .home-section-header { background: rgba(255,255,255,.10) !important; }
-  /* 다크+글래스: 어두운 유리 틴트 + 부드러운 둥근 절삭면 */
+  html.glass.widget-mode .home-section-header { background: rgba(255,255,255,.06) !important; border-color: rgba(255,255,255,.18) !important; }
+  /* 다크+글래스: 어두운 유리 틴트(같은 --gop) + 부드러운 둥근 절삭면 */
   html.dark.glass.widget-mode .home-section,
   html.dark.glass.widget-mode #timetablePage .grid-table {
-    background: linear-gradient(135deg, rgba(30,41,59,.28), rgba(15,23,42,.16)) !important;
-    border-color: rgba(255,255,255,.20);
+    background: linear-gradient(135deg, rgba(24,33,52, calc(var(--gop) + .12)), rgba(15,23,42, calc(var(--gop) + .04))) !important;
+    border-color: rgba(255,255,255,.18);
     box-shadow: 0 16px 46px -18px rgba(0,0,0,.6),
-                inset 0 3px 8px rgba(255,255,255,.22),
-                inset 3px 0 8px rgba(255,255,255,.10),
-                inset -3px 0 8px rgba(255,255,255,.07),
-                inset 0 -6px 14px rgba(255,255,255,.05);
+                inset 0 3px 9px rgba(255,255,255,.22),
+                inset 3px 0 9px rgba(255,255,255,.10),
+                inset -3px 0 9px rgba(255,255,255,.07),
+                inset 0 -7px 16px rgba(255,255,255,.05);
   }
   html.dark.glass.widget-mode .gt-cell, html.dark.glass.widget-mode .gt-pnum,
   html.dark.glass.widget-mode .gt-corner, html.dark.glass.widget-mode .gt-lunch-label,
-  html.dark.glass.widget-mode .home-section-header { background: rgba(255,255,255,.05) !important; }
+  html.dark.glass.widget-mode .home-section-header { background: rgba(255,255,255,.04) !important; border-color: rgba(255,255,255,.10) !important; }
   /* 앱 크롬(상단바·사이드바·탭바·FAB·메모열) 전부 숨김 */
   html.widget-mode .app-header,
   html.widget-mode .main-nav,

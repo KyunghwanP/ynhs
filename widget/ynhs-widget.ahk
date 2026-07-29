@@ -188,7 +188,7 @@ ToggleGlass() {
 ;   · GradientColor는 0xAABBGGRR(알파=틴트 농도). on일 때만 켜고, 웹뷰 배경은 투명(아크릴이 비치도록).
 ApplyGlass(hwnd, wvc, on) {
     global gDark
-    tint := gDark ? 0xC02D1C14 : 0x94FAF7F5      ; 다크 남색 틴트 / 라이트 흰 틴트
+    tint := gDark ? 0xB02D1C14 : 0x66FAF7F5      ; 다크 남색 틴트 / 라이트 흰 틴트(옅게 → 라이트에서도 블러가 확실히 보임)
     accent := Buffer(16, 0)
     NumPut("uint", on ? 4 : 0, accent, 0)         ; AccentState: 4=ACRYLICBLURBEHIND, 0=off
     NumPut("uint", on ? tint : 0, accent, 8)      ; GradientColor(ABGR)
