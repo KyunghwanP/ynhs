@@ -181,15 +181,22 @@ ToggleGlass() {
     }
 }
 
-; 글래스 모드 창 처리.
-;   ※ Windows 아크릴(SYSTEMBACKDROP)은 위젯의 반투명(레이어드 창)과 충돌해 노란 얼룩이 생겨서 사용 안 함.
-;     글래스는 웹(CSS) 젖빛 효과로만 표현하고, 웹뷰 배경은 다크/라이트 그대로 불투명 유지한다.
+; 글래스 모드 창 처리 — 레이어드 창과 호환되는 ACCENT 아크릴(블러비하인드) 사용.
+;   · 새 SYSTEMBACKDROP은 레이어드 창과 충돌(노랑)했지만, 이 ACCENT API는 틴트 색을 직접 지정할 수 있어
+;     노랑을 막고 진짜 젖빛 블러를 낸다. 글자는 그 위에 선명하게 남는다.
+;   · GradientColor는 0xAABBGGRR(알파=틴트 농도). on일 때만 켜고, 웹뷰 배경은 투명(아크릴이 비치도록).
 ApplyGlass(hwnd, wvc, on) {
     global gDark
-    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 38, "int*", 1, "int", 4)  ; 백드롭 없음(아크릴 미사용)
-    m := Buffer(16, 0)   ; 프레임 확장 원복(0,0,0,0)
-    try DllCall("dwmapi\DwmExtendFrameIntoClientArea", "ptr", hwnd, "ptr", m)
-    try wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF   ; 웹뷰 배경 불투명 유지(노랑 방지)
+    tint := gDark ? 0xC02D1C14 : 0x94FAF7F5      ; 다크 남색 틴트 / 라이트 흰 틴트
+    accent := Buffer(16, 0)
+    NumPut("uint", on ? 4 : 0, accent, 0)         ; AccentState: 4=ACRYLICBLURBEHIND, 0=off
+    NumPut("uint", on ? tint : 0, accent, 8)      ; GradientColor(ABGR)
+    data := Buffer(24, 0)
+    NumPut("uint", 19, data, 0)                   ; WCA_ACCENT_POLICY=19
+    NumPut("ptr", accent.Ptr, data, 8)
+    NumPut("uptr", accent.Size, data, 16)
+    try DllCall("user32\SetWindowCompositionAttribute", "ptr", hwnd, "ptr", data)
+    try wvc.DefaultBackgroundColor := on ? 0x00000000 : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
 }
 
 ; 다크모드 토글: 설정 저장 + 떠 있는 모든 위젯을 새 테마로 다시 로드
@@ -206,8 +213,8 @@ ToggleDark() {
         try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 20, "int*", gDark ? 1 : 0, "int", 4)  ; DWM 프레임 다크
         try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 34, "uint*", gDark ? BORDER_COLOR_DARK : BORDER_COLOR, "int", 4)  ; 테두리 색
         try StyleWindow(w.handleGui.hwnd)   ; 손잡이 바 테두리도 함께
-        ; 웹뷰 배경은 항상 불투명(다크/라이트) — 글래스는 CSS로만(아크릴 미사용, 노랑 방지)
-        try w.wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF
+        ; 웹뷰 배경: 글래스면 투명(아크릴 비침), 아니면 다크/라이트
+        try w.wvc.DefaultBackgroundColor := gGlass ? 0x00000000 : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
         try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
     }
 }
@@ -390,7 +397,7 @@ CreateWidget(p) {
     }
     ; WebView2 자체 기본 배경색 — 다크면 어둡게(글래스면 투명). 페이지가 그리기 전/안 덮는 맨 위 영역에
     ;   흰 배경이 띠처럼 비치던 문제를 없앤다(웹 CSS로는 못 덮는 웹뷰 기본색).
-    try wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFFFFFFF   ; 글래스여도 웹뷰 배경은 불투명(노랑 방지)
+    try wvc.DefaultBackgroundColor := gGlass ? 0x00000000 : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)   ; 글래스면 투명(아크릴 비침)
     wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
     ; 웹 내장 손잡이 바(HTML) → AHK 브릿지: 투명도/닫기/앱/이동. 네이티브 손잡이 대체.
     try wvc.CoreWebView2.add_WebMessageReceived(OnWebMsg.Bind(g.hwnd, key))
