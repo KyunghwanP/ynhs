@@ -579,6 +579,123 @@ StyleWindow(hwnd) {
     try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 34, "uint*", gDark ? BORDER_COLOR_DARK : BORDER_COLOR, "int", 4)
 }
 
+; ══════════════════════════════════════════════════════════════
+;  카톡풍 토스트 알림 (ShowToast)
+;   · 우측 하단에서 페이드로 떠서 dur(ms) 후 자동으로 사라진다.
+;   · 클릭하면 onClick 실행 후 닫힘(예: 앱 열기). 여러 개면 위로 쌓인다(최신이 맨 아래).
+;   · 포커스를 뺏지 않음(WS_EX_NOACTIVATE) → 작업 중 방해 최소. 둥근모서리·테두리는 위젯과 동일한 DWM.
+;   · 알림 '기능'(언제 무슨 내용을 띄울지)과는 분리된 순수 UI 함수 → 트리거는 나중에 연결.
+;   사용 예:  ShowToast("영남고 통합앱", "새 공지가 등록됐어요", { emoji:"📢", dur:6000, onClick:(*)=>Run(APP_URL) })
+; ══════════════════════════════════════════════════════════════
+global gToasts := []          ; 활성 토스트 [{g,hwnd,h,onClick,timer}] — 오래된→최신 순
+global gToastHooked := false
+global TOAST_W := 330, TOAST_H := 84, TOAST_GAP := 10, TOAST_MARGIN := 16
+
+ShowToast(title, body, opts := unset) {
+    global gDark, gToasts, gToastHooked, TOAST_W, TOAST_H, APP_URL
+    o := IsSet(opts) ? opts : {}
+    dur   := (o is Object && o.HasOwnProp("dur"))     ? o.dur     : 5000
+    emoji := (o is Object && o.HasOwnProp("emoji"))   ? o.emoji   : "🔔"
+    onClk := (o is Object && o.HasOwnProp("onClick")) ? o.onClick : ""
+    if !gToastHooked {
+        OnMessage(0x201, OnToastClick)      ; WM_LBUTTONDOWN → 카드 클릭 감지
+        gToastHooked := true
+    }
+    bg  := gDark ? "1B2436" : "FFFFFF"      ; 카드 배경
+    fg  := gDark ? "F1F5F9" : "1A2540"      ; 제목
+    sub := gDark ? "9FB0C8" : "5B6B84"      ; 본문
+    g := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x08000000")   ; NOACTIVATE: 포커스 안 뺏음
+    g.BackColor := bg
+    g.MarginX := 0, g.MarginY := 0
+    g.SetFont("s20", "Segoe UI Emoji")
+    g.Add("Text", "x14 y0 w40 h" TOAST_H " Center +0x200", emoji)          ; 세로중앙 이모지
+    g.SetFont("s10 Bold", "Malgun Gothic")
+    g.Add("Text", Format("x64 y16 w{} h20 c{}", TOAST_W-64-16, fg), title)
+    g.SetFont("s9 Norm", "Malgun Gothic")
+    g.Add("Text", Format("x64 y38 w{} h34 c{}", TOAST_W-64-16, sub), body)
+    g.Show("Hide w" TOAST_W " h" TOAST_H)
+    hwnd := g.Hwnd
+    ApplyToastStyle(hwnd)
+    try WinSetTransparent(0, "ahk_id " hwnd)   ; 완전 투명으로 시작(깜빡임 방지)
+    g.Show("NoActivate")
+    gToasts.Push({g: g, hwnd: hwnd, h: TOAST_H, onClick: onClk, timer: 0})
+    ReflowToasts()                             ; 새 토스트 포함 전체 위치 재배치(투명 상태에서)
+    FadeToast(hwnd, 0, 255)                     ; 페이드 인
+    tmr := DismissToast.Bind(hwnd)
+    gToasts[gToasts.Length].timer := tmr
+    SetTimer(tmr, -dur)                         ; dur 후 자동 닫힘
+    return hwnd
+}
+
+ApplyToastStyle(hwnd) {
+    global gDark
+    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 20, "int*", gDark ? 1 : 0, "int", 4)                        ; 다크 프레임
+    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 33, "int*", 2, "int", 4)                                    ; 둥근 모서리
+    try DllCall("dwmapi\DwmSetWindowAttribute", "ptr", hwnd, "int", 34, "uint*", gDark ? 0x00403428 : 0x00E2E2E2, "int", 4)     ; 얇은 테두리(BGR)
+}
+
+; 우측 하단 기준으로 전체 토스트를 다시 쌓는다(최신=맨 아래, 위로 누적).
+ReflowToasts() {
+    global gToasts, TOAST_W, TOAST_GAP, TOAST_MARGIN
+    MonitorGetWorkArea(MonitorGetPrimary(), &wl, &wt, &wr, &wb)
+    x := wr - TOAST_W - TOAST_MARGIN
+    y := wb - TOAST_MARGIN
+    i := gToasts.Length
+    while (i >= 1) {
+        t := gToasts[i]
+        y -= t.h
+        try WinMove(x, y, , , "ahk_id " t.hwnd)
+        y -= TOAST_GAP
+        i--
+    }
+}
+
+; 부드러운 투명도 전환(약 0.14초). from·to: 0~255
+FadeToast(hwnd, from, to) {
+    Loop 12 {
+        a := from + (to - from) * (A_Index / 12)
+        try WinSetTransparent(Round(a), "ahk_id " hwnd)
+        Sleep 12
+    }
+}
+
+DismissToast(hwnd, *) {
+    global gToasts
+    idx := 0
+    for i, t in gToasts
+        if (t.hwnd = hwnd) {
+            idx := i
+            break
+        }
+    if !idx
+        return
+    t := gToasts[idx]
+    try SetTimer(t.timer, 0)          ; 자동닫힘 타이머 취소(수동 클릭 시 중복 방지)
+    FadeToast(hwnd, 255, 0)
+    try t.g.Destroy()
+    gToasts.RemoveAt(idx)
+    ReflowToasts()                     ; 남은 토스트 아래로 당겨 재정렬
+}
+
+OnToastClick(wParam, lParam, msg, hwnd) {
+    global gToasts
+    for t in gToasts
+        if (t.hwnd = hwnd) {
+            cb := t.onClick
+            if cb
+                try cb.Call()
+            DismissToast(hwnd)
+            return 0
+        }
+}
+
+; 테스트 미리보기: Win+Shift+T → 카톡풍 토스트 2개(스택 확인). 클릭 시 앱 열림.
+#+t:: {
+    global APP_URL
+    ShowToast("영남고 통합앱", "새 공지가 등록되었습니다. 클릭하면 앱이 열려요.", { emoji: "📢", onClick: (*) => Run(APP_URL) })
+    SetTimer(() => ShowToast("시간표 알림", "3교시는 물리 · 2-11 이동수업입니다.", { emoji: "📅" }), -700)
+}
+
 ; ── 바탕화면 층에 놓기(상호작용 유지) ─────────────────────
 ;  위젯을 '최상위 창'으로 두되 소유자만 바탕화면(Progman)으로 지정한다.
 ;  · 최상위 창이라 클릭·타이핑·로그인이 모두 된다(바탕화면 자식이면 입력 불가라 못 씀).
