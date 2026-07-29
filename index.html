@@ -222,6 +222,30 @@
   html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="수"]{ background:#e3efe7 !important; color:#517c5f !important; }
   html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="목"]{ background:#f5ecd9 !important; color:#8a6d3d !important; }
   html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="금"]{ background:#f2e4e4 !important; color:#8a5252 !important; }
+  /* ── 글래스 모드 시간표: 머리글·검색창·머리판·오늘칸까지 유리에 녹여 통일(안 그러면 시간표만 튀고,
+       불투명 요소가 아크릴을 가려 슬라이더가 안 먹는 것처럼 보임) ── */
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .masthead{ background:transparent !important; box-shadow:none !important; }
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .masthead::before,
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .masthead::after{ display:none !important; }
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .search-box input{
+    background:rgba(255,255,255,.14) !important; border-color:rgba(255,255,255,.45) !important; }
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="월"]{ background:rgba(242,231,233,.30) !important; }
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="화"]{ background:rgba(235,230,241,.30) !important; }
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="수"]{ background:rgba(227,239,231,.30) !important; }
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="목"]{ background:rgba(245,236,217,.30) !important; }
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="금"]{ background:rgba(242,228,228,.30) !important; }
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-cell.today,
+  html.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-lunch-cell.today{ background:rgba(255,255,255,.12) !important; }
+  /* 다크+글래스: 배경은 더 투명하게, 머리글 글자는 밝은 파스텔로(어두운 유리 위 가독) */
+  html.dark.glass.widget-mode[data-widget="fulltt"] #timetablePage .search-box input{
+    background:rgba(255,255,255,.06) !important; border-color:rgba(255,255,255,.16) !important; color:#e5eaf3 !important; }
+  html.dark.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="월"]{ background:rgba(226,141,152,.16) !important; color:#e6a9b1 !important; }
+  html.dark.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="화"]{ background:rgba(150,134,196,.16) !important; color:#bcb0dc !important; }
+  html.dark.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="수"]{ background:rgba(110,190,140,.16) !important; color:#96d6ac !important; }
+  html.dark.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="목"]{ background:rgba(210,170,90,.16) !important; color:#e4c684 !important; }
+  html.dark.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="금"]{ background:rgba(210,120,120,.16) !important; color:#e89e9e !important; }
+  html.dark.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-cell.today,
+  html.dark.glass.widget-mode[data-widget="fulltt"] #timetablePage .gt-lunch-cell.today{ background:rgba(255,255,255,.06) !important; }
 </style>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="favicon-32.png" sizes="32x32">
