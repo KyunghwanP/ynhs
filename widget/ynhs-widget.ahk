@@ -601,18 +601,31 @@ ShowToast(title, body, opts := unset) {
         OnMessage(0x201, OnToastClick)      ; WM_LBUTTONDOWN → 카드 클릭 감지
         gToastHooked := true
     }
-    bg  := gDark ? "1B2436" : "FFFFFF"      ; 카드 배경
-    fg  := gDark ? "F1F5F9" : "1A2540"      ; 제목
-    sub := gDark ? "9FB0C8" : "5B6B84"      ; 본문
+    ; 카드는 다크모드에서도 '항상 흰색'(요청) → 글자는 진한 남색/회색으로 고정.
+    fg  := "1A2540"                          ; 제목(진한 남색)
+    sub := "5B6B84"                          ; 본문(회색)
+    ; 기본(학교/앱) 아이콘 — 위젯 전용 widget.ico가 아니라 '앱 기본 아이콘'을 쓴다(요청).
+    ;   1순위: icon.ico(기본 아이콘 파일)  2·3순위: 앱 실행파일에 박힌 아이콘(Icon1)  → 없으면 이모지
+    icoFile := "", icoOpt := ""
+    if FileExist(A_ScriptDir "\icon.ico")
+        icoFile := A_ScriptDir "\icon.ico"
+    else if FileExist(A_ScriptDir "\영남고.exe")
+        icoFile := A_ScriptDir "\영남고.exe", icoOpt := "Icon1 "
+    else if FileExist(A_ScriptDir "\ynhs-app.exe")
+        icoFile := A_ScriptDir "\ynhs-app.exe", icoOpt := "Icon1 "
     g := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x08000000")   ; NOACTIVATE: 포커스 안 뺏음
-    g.BackColor := bg
+    g.BackColor := "FFFFFF"
     g.MarginX := 0, g.MarginY := 0
-    g.SetFont("s20", "Segoe UI Emoji")
-    g.Add("Text", "x14 y0 w40 h" TOAST_H " Center +0x200", emoji)          ; 세로중앙 이모지
+    if (icoFile != "")
+        g.Add("Picture", "x16 y22 w44 h44 " icoOpt, icoFile)                ; 기본 아이콘(세로중앙)
+    else {                                                                   ; 아이콘 없으면 이모지로 폴백
+        g.SetFont("s20", "Segoe UI Emoji")
+        g.Add("Text", "x16 y0 w44 h" TOAST_H " Center +0x200", emoji)
+    }
     g.SetFont("s10 Bold", "Malgun Gothic")
-    g.Add("Text", Format("x64 y16 w{} h20 c{}", TOAST_W-64-16, fg), title)
+    g.Add("Text", Format("x72 y18 w{} h20 c{}", TOAST_W-72-16, fg), title)
     g.SetFont("s9 Norm", "Malgun Gothic")
-    g.Add("Text", Format("x64 y38 w{} h34 c{}", TOAST_W-64-16, sub), body)
+    g.Add("Text", Format("x72 y40 w{} h34 c{}", TOAST_W-72-16, sub), body)
     g.Show("Hide w" TOAST_W " h" TOAST_H)
     hwnd := g.Hwnd
     ApplyToastStyle(hwnd)
