@@ -78,12 +78,7 @@
           });
           document.addEventListener('mouseleave', function(){ bar.classList.remove('show'); });
           document.getElementById('wgtDrag').addEventListener('mousedown', function(e){ e.preventDefault(); post('drag'); });
-          var setGop = v => document.documentElement.style.setProperty('--gop', (0.06 + (v-70)/185*0.44).toFixed(3));
-          if (document.documentElement.classList.contains('glass')) setGop(op);
-          document.getElementById('wgtOp').addEventListener('input', function(){
-            if (document.documentElement.classList.contains('glass')) setGop(this.value);
-            else post('op:'+this.value);
-          });
+          document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
           document.getElementById('wgtApp').addEventListener('click', function(){ post('app'); });
           document.getElementById('wgtClose').addEventListener('click', function(){ post('close'); });
           document.addEventListener('mousedown', function(){ post('raise'); }, true);  // 누른 위젯만 앞으로

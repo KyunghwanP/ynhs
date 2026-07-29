@@ -83,13 +83,9 @@
       document.addEventListener('mouseleave', function(){ bar.classList.remove('show'); });
       // 드래그(제목 영역) → AHK가 창 이동
       document.getElementById('wgtDrag').addEventListener('mousedown', function(e){ e.preventDefault(); post('drag'); });
-      // op(70~255) → 유리 농도(0.06~0.5). 글래스일 땐 슬라이더가 '유리 불투명도'를 실시간 조절(글자·창은 불변)
-      var setGop = v => document.documentElement.style.setProperty('--gop', (0.06 + (v-70)/185*0.44).toFixed(3));
-      if (document.documentElement.classList.contains('glass')) setGop(op);
-      document.getElementById('wgtOp').addEventListener('input', function(){
-        if (document.documentElement.classList.contains('glass')) setGop(this.value);   // 유리 농도만
-        else post('op:'+this.value);                                                    // 일반: 창 투명도
-      });
+      // 슬라이더 → 항상 AHK로 전송. 글래스면 AHK가 '아크릴 뿌연 정도'를 조절(창·글자 불변),
+      //   일반 모드면 창 전체 투명도. (유리 농도 제어는 아크릴이 담당)
+      document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
       document.getElementById('wgtApp').addEventListener('click', function(){ post('app'); });
       document.getElementById('wgtClose').addEventListener('click', function(){ post('close'); });
       document.addEventListener('mousedown', function(){ post('raise'); }, true);  // 누른 위젯만 앞으로

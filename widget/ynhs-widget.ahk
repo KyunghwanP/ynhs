@@ -187,8 +187,14 @@ ToggleGlass() {
 ;     노랑을 막고 진짜 젖빛 블러를 낸다. 글자는 그 위에 선명하게 남는다.
 ;   · GradientColor는 0xAABBGGRR(알파=틴트 농도). on일 때만 켜고, 웹뷰 배경은 투명(아크릴이 비치도록).
 ApplyGlass(hwnd, wvc, on) {
-    global gDark
-    tint := gDark ? 0xB02D1C14 : 0x66FAF7F5      ; 다크 남색 틴트 / 라이트 흰 틴트(옅게 → 라이트에서도 블러가 확실히 보임)
+    global gDark, WidgetWins
+    ; 틴트 농도(알파)를 슬라이더 값(70~255)에 연동. 단 범위를 다크/라이트 따로 둔다.
+    ;   · 다크: 항상 충분히 어둡게(0x9A~0xE6) → 뒤 밝은 배경이 올라와도 글자가 늘 읽힘.
+    ;   · 라이트: 옅게(0x2E~0x9E) → 블러가 잘 보여 유리 티가 남.
+    op := (WidgetWins.Has(hwnd) ? WidgetWins[hwnd].opacity : 200)
+    f  := (op - 70) / 185                                ; 0~1
+    a  := gDark ? Round(0x9A + f * (0xE6 - 0x9A)) : Round(0x2E + f * (0x9E - 0x2E))
+    tint := (a << 24) | (gDark ? 0x2D1C14 : 0xFAF7F5)   ; ABGR: 다크 남색 / 라이트 흰
     accent := Buffer(16, 0)
     NumPut("uint", on ? 4 : 0, accent, 0)         ; AccentState: 4=ACRYLICBLURBEHIND, 0=off
     NumPut("uint", on ? tint : 0, accent, 8)      ; GradientColor(ABGR)
@@ -483,11 +489,15 @@ PositionHandle(widgetHwnd) {
 
 SetWidgetOpacity(hwnd, val) {
     global WidgetWins, gGlass
-    ; 글래스 모드에선 창을 불투명(255)으로 → 글자가 흐려지지 않음(반투명은 아크릴이 담당).
-    ;   슬라이더 값은 그대로 기억했다가 글래스 끄면 다시 적용.
-    WinSetTransparent(gGlass ? 255 : val, "ahk_id " hwnd)
     if WidgetWins.Has(hwnd)
-        WidgetWins[hwnd].opacity := val
+        WidgetWins[hwnd].opacity := val         ; 값 먼저 저장(ApplyGlass가 이 값으로 틴트 농도 계산)
+    if (gGlass) {
+        WinSetTransparent(255, "ahk_id " hwnd)  ; 창 불투명(글자 선명)
+        if WidgetWins.Has(hwnd)
+            try ApplyGlass(hwnd, WidgetWins[hwnd].wvc, true)   ; 슬라이더로 아크릴 뿌연 정도 재적용
+    } else {
+        WinSetTransparent(val, "ahk_id " hwnd)  ; 일반: 창 전체 투명도
+    }
 }
 
 ; 창 모양 다듬기(Win11 DWM) — 둥근 모서리 + 얇은 파란 테두리(회색 두꺼운 포커스 테두리 대체)
