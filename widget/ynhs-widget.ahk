@@ -177,6 +177,7 @@ ToggleGlass() {
         A_TrayMenu.Uncheck("🔷 글래스(실험)")
     for hwnd, w in WidgetWins {
         try ApplyGlass(hwnd, w.wvc, gGlass)
+        try SetWidgetOpacity(hwnd, w.opacity)   ; 글래스면 창 불투명(글자 선명), 끄면 슬라이더 값 복원
         try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
     }
 }
@@ -481,8 +482,10 @@ PositionHandle(widgetHwnd) {
 }
 
 SetWidgetOpacity(hwnd, val) {
-    global WidgetWins
-    WinSetTransparent(val, "ahk_id " hwnd)   ; 창 전체 반투명(70~255) — 어느 윈도우에서나 확실히 동작
+    global WidgetWins, gGlass
+    ; 글래스 모드에선 창을 불투명(255)으로 → 글자가 흐려지지 않음(반투명은 아크릴이 담당).
+    ;   슬라이더 값은 그대로 기억했다가 글래스 끄면 다시 적용.
+    WinSetTransparent(gGlass ? 255 : val, "ahk_id " hwnd)
     if WidgetWins.Has(hwnd)
         WidgetWins[hwnd].opacity := val
 }
