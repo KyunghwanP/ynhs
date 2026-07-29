@@ -533,7 +533,7 @@ SetWidgetOpacity(hwnd, val) {
 ;      틴트 알파는 옅게 '고정'(활성/비활성 모두 항상 비침), 색은 파랗지 않게 중립 회색. 농도 조절은 CSS 카드(--gop).
 ApplyWidgetBg(hwnd, val) {
     global gDark, WidgetWins
-    a := gDark ? 0x7E : 0x5E                             ; 유리 틴트 알파 고정(다크 조금 진하게)
+    a := gDark ? 0x7E : 0x3A                             ; 유리 틴트 알파 고정(라이트는 더 옅게 → 먹통 방지)
     tint := (a << 24) | (gDark ? 0x181818 : 0xF6F6F6)   ; ABGR: 중립 회색(파란 기 없음)
     accent := Buffer(16, 0)
     NumPut("uint", 4, accent, 0)                  ; ACCENT_ENABLE_ACRYLICBLURBEHIND (알파 반영 + 바탕 블러)
