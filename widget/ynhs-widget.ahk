@@ -249,10 +249,11 @@ ReapplyWidgetBg(hwnd) {
     global WidgetWins, gGlass
     if !WidgetWins.Has(hwnd)
         return
-    if (gGlass)
+    if (gGlass) {
         try ApplyGlass(hwnd, WidgetWins[hwnd].wvc, true)
-    else
+    } else {
         try ApplyWidgetBg(hwnd, WidgetWins[hwnd].opacity)
+    }
 }
 
 ; Win+D를 우리가 직접 처리 → 위젯은 남기고 '다른 앱 창'만 최소화/복원(정상 토글 유지)
