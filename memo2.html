@@ -39,6 +39,8 @@
         function build(){
           if(!document.body || document.getElementById('wgtBar')) return;
           var op = parseInt(new URLSearchParams(location.search).get('op')||'240',10);
+          function opToGop(v){ var f=(v-70)/185; f=Math.max(0,Math.min(1,f)); return (0.08+f*0.42).toFixed(3); }
+          try{ document.documentElement.style.setProperty('--gop', opToGop(op)); }catch(e){}
           var css = document.createElement('style');
           css.textContent =
             '#wgtBar{position:fixed;top:0;left:0;right:0;height:28px;z-index:2147483647;display:flex;'
@@ -78,7 +80,10 @@
           });
           document.addEventListener('mouseleave', function(){ bar.classList.remove('show'); });
           document.getElementById('wgtDrag').addEventListener('mousedown', function(e){ e.preventDefault(); post('drag'); });
-          document.getElementById('wgtOp').addEventListener('input', function(){ post('op:'+this.value); });
+          document.getElementById('wgtOp').addEventListener('input', function(){
+            try{ document.documentElement.style.setProperty('--gop', opToGop(this.value)); }catch(e){}
+            post('op:'+this.value);
+          });
           document.getElementById('wgtApp').addEventListener('click', function(){ post('app'); });
           document.getElementById('wgtClose').addEventListener('click', function(){ post('close'); });
           document.addEventListener('mousedown', function(){ post('raise'); }, true);  // 누른 위젯만 앞으로
@@ -161,17 +166,36 @@
         /* 카드가 화면(임베드 시 패널) 바닥까지 채우고, 에디터가 남는 공간을 전부 차지 */
         .memo-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; box-shadow: 0 4px 20px rgba(148,163,184,.10); padding: 18px 14px 10px; min-height: 62vh; flex: 1; display: flex; flex-direction: column; }
         html.dark .memo-card { box-shadow: 0 4px 20px rgba(0,0,0,.35); }
-        /* 글래스(아크릴) 모드: 배경 투명 + 카드/헤더 반투명 유리질감 */
-        html.glass, html.glass body { background: transparent !important; }
-        html.glass { --gop: .16; }
+        /* ══ 리퀴드 글래스: 위젯이 스스로 컬러 배경을 깔고 그 위에 진짜 서리 유리 카드 ══ */
+        html.glass { --gop: .22; }
+        html.glass, html.glass body {
+          background:
+            radial-gradient(58% 55% at 16% 12%, rgba(96,165,250,.60), transparent 60%),
+            radial-gradient(55% 52% at 86% 18%, rgba(129,140,248,.55), transparent 60%),
+            radial-gradient(62% 60% at 78% 90%, rgba(56,189,248,.50), transparent 62%),
+            radial-gradient(58% 55% at 14% 92%, rgba(59,130,246,.48), transparent 62%),
+            linear-gradient(135deg, #e8f0ff, #d7e6fb) !important;
+          background-attachment: fixed !important;
+        }
+        html.dark.glass, html.dark.glass body {
+          background:
+            radial-gradient(58% 55% at 16% 12%, rgba(37,99,235,.60), transparent 60%),
+            radial-gradient(55% 52% at 86% 18%, rgba(99,102,241,.55), transparent 60%),
+            radial-gradient(62% 60% at 78% 90%, rgba(14,165,233,.45), transparent 62%),
+            radial-gradient(58% 55% at 14% 92%, rgba(30,64,175,.60), transparent 62%),
+            linear-gradient(135deg, #0a1428, #0c1c38) !important;
+        }
         html.glass .memo-card, html.glass .site-header {
-          background: linear-gradient(135deg, rgba(255,255,255, calc(var(--gop) + .05)), rgba(255,255,255, var(--gop))) !important;
-          border: 1px solid rgba(255,255,255,.5);
-          box-shadow: 0 16px 46px -18px rgba(0,0,0,.4), inset 0 3px 9px rgba(255,255,255,.75), inset 3px 0 9px rgba(255,255,255,.32), inset -3px 0 9px rgba(255,255,255,.22), inset 0 -7px 16px rgba(255,255,255,.16);
+          background: rgba(255,255,255, var(--gop)) !important;
+          -webkit-backdrop-filter: blur(22px) saturate(1.7);
+          backdrop-filter: blur(22px) saturate(1.7);
+          border: 1px solid rgba(255,255,255,.55) !important;
+          border-radius: 24px !important;
+          box-shadow: 0 22px 50px -18px rgba(12,24,60,.55), inset 0 0 42px rgba(255,255,255,.28), inset 0 2px 5px rgba(255,255,255,.85);
         }
         html.dark.glass .memo-card, html.dark.glass .site-header {
-          background: linear-gradient(135deg, rgba(24,33,52, calc(var(--gop) + .12)), rgba(15,23,42, calc(var(--gop) + .04))) !important; border-color: rgba(255,255,255,.18);
-          box-shadow: 0 16px 46px -18px rgba(0,0,0,.6), inset 0 3px 9px rgba(255,255,255,.22), inset 3px 0 9px rgba(255,255,255,.10), inset -3px 0 9px rgba(255,255,255,.07), inset 0 -7px 16px rgba(255,255,255,.05);
+          background: rgba(255,255,255, calc(var(--gop) * .55)) !important; border-color: rgba(255,255,255,.30) !important;
+          box-shadow: 0 22px 50px -18px rgba(0,0,0,.7), inset 0 0 42px rgba(255,255,255,.10), inset 0 2px 5px rgba(255,255,255,.35);
         }
         #editorjs { min-height: 55vh; flex: 1; }
 
