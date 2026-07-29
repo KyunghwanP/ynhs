@@ -235,6 +235,26 @@ RestoreSelected()
 ; 손잡이 바는 이제 웹(HTML)에 내장 → 네이티브 오버레이/호버 타이머 미사용(DPI·겹침 문제 제거)
 ; SetTimer(HoverCheck, 120)
 
+; ── 비활성될 때 배경 투명이 풀려 창 바탕색이 드러나던 문제 ──
+;   위젯 밖을 클릭하면 Windows가 ACCENT(투명)를 되돌려서 다크=파랗게, 라이트=흰색 불투명으로 보였다.
+;   활성/비활성 전환(WM_NCACTIVATE) 직후 투명 효과를 다시 적용해 항상 유지한다.
+OnMessage(0x0086, WidgetNCActivate)   ; WM_NCACTIVATE
+WidgetNCActivate(wParam, lParam, msg, hwnd) {
+    global WidgetWins
+    if WidgetWins.Has(hwnd)
+        SetTimer(ReapplyWidgetBg.Bind(hwnd), -20)   ; 전환 직후(Windows가 되돌린 뒤) 다시 적용
+    ; return 안 함 → 기본 비클라이언트 처리 유지
+}
+ReapplyWidgetBg(hwnd) {
+    global WidgetWins, gGlass
+    if !WidgetWins.Has(hwnd)
+        return
+    if (gGlass)
+        try ApplyGlass(hwnd, WidgetWins[hwnd].wvc, true)
+    else
+        try ApplyWidgetBg(hwnd, WidgetWins[hwnd].opacity)
+}
+
 ; Win+D를 우리가 직접 처리 → 위젯은 남기고 '다른 앱 창'만 최소화/복원(정상 토글 유지)
 global gDesktopShown := false
 global gMinList := []

@@ -117,6 +117,18 @@
   html.widget-mode #timetablePage .grid-table { background: rgba(255,255,255, var(--gop)) !important; }
   html.dark.widget-mode .home-section,
   html.dark.widget-mode #timetablePage .grid-table { background: rgba(16,24,44, var(--gop)) !important; }
+  /* 카드 내부 요소(시간표 셀·머리글·홈 섹션 헤더 등)는 투명 → 카드 한 장으로 비침(글자는 불투명 유지).
+     안 그러면 셀 배경이 불투명해서 '시간표 영역만 안 투명'해 보임. */
+  html.widget-mode .gt-cell, html.widget-mode .gt-pnum, html.widget-mode .gt-corner,
+  html.widget-mode .gt-lunch-cell, html.widget-mode .gt-lunch-label,
+  html.widget-mode .home-section-header { background: transparent !important; }
+  /* 시간표 위젯: 머리판(흰 배경·그림자·장식점) 제거 + 검색창 반투명 + 요일 머리글 은은한 반투명 파스텔 */
+  html.widget-mode[data-widget="fulltt"] #timetablePage .masthead { background: transparent !important; box-shadow: none !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .masthead::before,
+  html.widget-mode[data-widget="fulltt"] #timetablePage .masthead::after { display: none !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .search-box input { background: rgba(255,255,255,.16) !important; border-color: rgba(0,0,0,.10) !important; }
+  html.dark.widget-mode[data-widget="fulltt"] #timetablePage .search-box input { background: rgba(255,255,255,.06) !important; border-color: rgba(255,255,255,.14) !important; color:#e5eaf3 !important; }
+  /* (요일 머리글·오늘칸 반투명 처리는 아래 '위젯 요일 헤더' 블록에서 함께 정의 — 뒤 규칙이 이기므로) */
   /* ══ 리퀴드 글래스 모드 ══
      창(AHK)의 아크릴이 '진짜 바탕화면을 블러'해서 은은하게 비추고,
      여기(CSS)선 그 위에 반투명 유리 카드 질감(서리·밝은 테두리·안쪽 흰 글로우·라운드)만 얹는다.
@@ -238,12 +250,21 @@
     --gt-font-empty: clamp(12px, 2.6vh, 16px);
   }
   html.widget-mode[data-widget="fulltt"] #timetablePage .table-wrap{ padding:4px 0 0 !important; }
-  /* 위젯에선 요일 헤더의 원색을 차분한 파스텔로 죽임(구분은 유지) */
-  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="월"]{ background:#f2e7e9 !important; color:#8a5a62 !important; }
-  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="화"]{ background:#ebe6f1 !important; color:#6d6188 !important; }
-  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="수"]{ background:#e3efe7 !important; color:#517c5f !important; }
-  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="목"]{ background:#f5ecd9 !important; color:#8a6d3d !important; }
-  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="금"]{ background:#f2e4e4 !important; color:#8a5252 !important; }
+  /* 위젯에선 요일 헤더의 원색을 차분한 '반투명' 파스텔로(구분은 유지, 바탕은 비침) */
+  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="월"]{ background:rgba(242,231,233,.34) !important; color:#8a5a62 !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="화"]{ background:rgba(235,230,241,.34) !important; color:#6d6188 !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="수"]{ background:rgba(227,239,231,.34) !important; color:#517c5f !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="목"]{ background:rgba(245,236,217,.34) !important; color:#8a6d3d !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="금"]{ background:rgba(242,228,228,.34) !important; color:#8a5252 !important; }
+  html.dark.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="월"]{ background:rgba(226,141,152,.18) !important; color:#e6a9b1 !important; }
+  html.dark.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="화"]{ background:rgba(150,134,196,.18) !important; color:#bcb0dc !important; }
+  html.dark.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="수"]{ background:rgba(110,190,140,.18) !important; color:#96d6ac !important; }
+  html.dark.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="목"]{ background:rgba(210,170,90,.18) !important; color:#e4c684 !important; }
+  html.dark.widget-mode[data-widget="fulltt"] #timetablePage .gt-head[data-day="금"]{ background:rgba(210,120,120,.18) !important; color:#e89e9e !important; }
+  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-cell.today,
+  html.widget-mode[data-widget="fulltt"] #timetablePage .gt-lunch-cell.today{ background:rgba(255,255,255,.10) !important; }
+  html.dark.widget-mode[data-widget="fulltt"] #timetablePage .gt-cell.today,
+  html.dark.widget-mode[data-widget="fulltt"] #timetablePage .gt-lunch-cell.today{ background:rgba(255,255,255,.05) !important; }
   /* ── 글래스 모드 시간표: 머리글·검색창·머리판·오늘칸까지 유리에 녹여 통일(안 그러면 시간표만 튀고,
        불투명 요소가 아크릴을 가려 슬라이더가 안 먹는 것처럼 보임) ── */
   html.glass.widget-mode[data-widget="fulltt"] #timetablePage .masthead{ background:transparent !important; box-shadow:none !important; }
