@@ -166,35 +166,17 @@
         /* 카드가 화면(임베드 시 패널) 바닥까지 채우고, 에디터가 남는 공간을 전부 차지 */
         .memo-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; box-shadow: 0 4px 20px rgba(148,163,184,.10); padding: 18px 14px 10px; min-height: 62vh; flex: 1; display: flex; flex-direction: column; }
         html.dark .memo-card { box-shadow: 0 4px 20px rgba(0,0,0,.35); }
-        /* ══ 리퀴드 글래스: 위젯이 스스로 컬러 배경을 깔고 그 위에 진짜 서리 유리 카드 ══ */
+        /* ══ 리퀴드 글래스: 창 아크릴이 진짜 바탕화면을 블러해 은은히 비추고, 그 위에 반투명 유리 카드 ══ */
         html.glass { --gop: .22; }
-        html.glass, html.glass body {
-          background:
-            radial-gradient(58% 55% at 16% 12%, rgba(96,165,250,.60), transparent 60%),
-            radial-gradient(55% 52% at 86% 18%, rgba(129,140,248,.55), transparent 60%),
-            radial-gradient(62% 60% at 78% 90%, rgba(56,189,248,.50), transparent 62%),
-            radial-gradient(58% 55% at 14% 92%, rgba(59,130,246,.48), transparent 62%),
-            linear-gradient(135deg, #e8f0ff, #d7e6fb) !important;
-          background-attachment: fixed !important;
-        }
-        html.dark.glass, html.dark.glass body {
-          background:
-            radial-gradient(58% 55% at 16% 12%, rgba(37,99,235,.60), transparent 60%),
-            radial-gradient(55% 52% at 86% 18%, rgba(99,102,241,.55), transparent 60%),
-            radial-gradient(62% 60% at 78% 90%, rgba(14,165,233,.45), transparent 62%),
-            radial-gradient(58% 55% at 14% 92%, rgba(30,64,175,.60), transparent 62%),
-            linear-gradient(135deg, #0a1428, #0c1c38) !important;
-        }
+        html.glass, html.glass body { background: transparent !important; }  /* 아크릴(블러된 바탕화면)이 비침 */
         html.glass .memo-card, html.glass .site-header {
           background: rgba(255,255,255, var(--gop)) !important;
-          -webkit-backdrop-filter: blur(22px) saturate(1.7);
-          backdrop-filter: blur(22px) saturate(1.7);
           border: 1px solid rgba(255,255,255,.55) !important;
           border-radius: 24px !important;
-          box-shadow: 0 22px 50px -18px rgba(12,24,60,.55), inset 0 0 42px rgba(255,255,255,.28), inset 0 2px 5px rgba(255,255,255,.85);
+          box-shadow: 0 22px 50px -18px rgba(12,24,60,.5), inset 0 0 42px rgba(255,255,255,.28), inset 0 2px 5px rgba(255,255,255,.85);
         }
         html.dark.glass .memo-card, html.dark.glass .site-header {
-          background: rgba(255,255,255, calc(var(--gop) * .55)) !important; border-color: rgba(255,255,255,.30) !important;
+          background: rgba(16,24,44, calc(var(--gop) + .16)) !important; border-color: rgba(255,255,255,.28) !important;
           box-shadow: 0 22px 50px -18px rgba(0,0,0,.7), inset 0 0 42px rgba(255,255,255,.10), inset 0 2px 5px rgba(255,255,255,.35);
         }
         #editorjs { min-height: 55vh; flex: 1; }

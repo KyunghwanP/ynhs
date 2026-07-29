@@ -106,43 +106,23 @@
   html.dark.widget-mode, html.dark.widget-mode body, html.dark.widget-mode #homePage,
   html.dark.widget-mode .app-body, html.dark.widget-mode .app-content { background:#0B1220 !important; }
   /* ══ 리퀴드 글래스 모드 ══
-     핵심: 유리는 '뒤가 컬러풀'해야 예쁘다. 바탕화면(어두울 수도)에 기대지 않고
-     위젯이 스스로 은은한 컬러 배경을 깔고, 그 위에 진짜 서리 유리 카드(backdrop-filter)를 띄운다.
-     → 어떤 데스크톱에서도 레퍼런스 같은 유리가 나오고, 글자 가독성도 항상 확보. */
-  /* --gop = 카드 서리(흰) 농도. 슬라이더로 조절. PPT '제일 예쁜 값(불투명 50%)' 근처를 기본으로 */
+     창(AHK)의 아크릴이 '진짜 바탕화면을 블러'해서 은은하게 비추고,
+     여기(CSS)선 그 위에 반투명 유리 카드 질감(서리·밝은 테두리·안쪽 흰 글로우·라운드)만 얹는다.
+     → 카드도 반투명이라 바탕화면이 카드 너머로도 은은히 비침(투명감 유지). */
+  /* --gop = 카드 서리(불투명) 농도. 슬라이더로 조절. 낮을수록 바탕이 더 비침 */
   html.glass.widget-mode { --gop: .22; }
-  /* 유리 배경(컬러 블롭) — 라이트: 밝은 하늘/보라, 다크: 깊은 남색/파랑 */
-  html.glass.widget-mode, html.glass.widget-mode body {
-    background:
-      radial-gradient(58% 55% at 16% 12%, rgba(96,165,250,.60), transparent 60%),
-      radial-gradient(55% 52% at 86% 18%, rgba(129,140,248,.55), transparent 60%),
-      radial-gradient(62% 60% at 78% 90%, rgba(56,189,248,.50), transparent 62%),
-      radial-gradient(58% 55% at 14% 92%, rgba(59,130,246,.48), transparent 62%),
-      linear-gradient(135deg, #e8f0ff, #d7e6fb) !important;
-    background-attachment: fixed !important;
-  }
-  html.dark.glass.widget-mode, html.dark.glass.widget-mode body {
-    background:
-      radial-gradient(58% 55% at 16% 12%, rgba(37,99,235,.60), transparent 60%),
-      radial-gradient(55% 52% at 86% 18%, rgba(99,102,241,.55), transparent 60%),
-      radial-gradient(62% 60% at 78% 90%, rgba(14,165,233,.45), transparent 62%),
-      radial-gradient(58% 55% at 14% 92%, rgba(30,64,175,.60), transparent 62%),
-      linear-gradient(135deg, #0a1428, #0c1c38) !important;
-  }
-  /* 컨테이너는 투명 → 유리 배경이 비침 */
+  /* 페이지·컨테이너 전부 투명 → 창 아크릴(블러된 바탕화면)이 그대로 비침 */
+  html.glass.widget-mode, html.glass.widget-mode body,
   html.glass.widget-mode #homePage, html.glass.widget-mode .app-body,
   html.glass.widget-mode .app-content, html.glass.widget-mode #timetablePage { background:transparent !important; }
 
-  /* 서리 유리 카드 — 진짜 backdrop-filter 블러(흐리게 ~44) + 흰 서리 + 얇은 밝은 테두리
-     + 안쪽 가운데 하얀 글로우(PPT '안쪽 가운데 하얀색 그림자')  */
+  /* 유리 카드 — 반투명 서리(바탕 비침) + 얇은 밝은 테두리 + 안쪽 가운데 흰 글로우 + 라운드 */
   html.glass.widget-mode .home-section,
   html.glass.widget-mode #timetablePage .grid-table {
     background: rgba(255,255,255, var(--gop)) !important;
-    -webkit-backdrop-filter: blur(22px) saturate(1.7);
-    backdrop-filter: blur(22px) saturate(1.7);
     border: 1px solid rgba(255,255,255,.55) !important;
     border-radius: 24px !important;
-    box-shadow: 0 22px 50px -18px rgba(12,24,60,.55),        /* 바깥 그림자(떠 있는 느낌) */
+    box-shadow: 0 22px 50px -18px rgba(12,24,60,.5),         /* 바깥 그림자(떠 있는 느낌) */
                 inset 0 0 42px rgba(255,255,255,.28),        /* 안쪽 가운데 흰 글로우 */
                 inset 0 2px 5px rgba(255,255,255,.85);       /* 위쪽 절삭 광택 */
   }
@@ -151,11 +131,12 @@
   html.glass.widget-mode .gt-corner, html.glass.widget-mode .gt-lunch-label,
   html.glass.widget-mode .home-section-header { background: rgba(255,255,255,.05) !important; border-color: rgba(255,255,255,.16) !important; }
 
-  /* 다크+글래스: 컬러 배경이 이미 어두우므로 카드는 옅은 흰 서리만(글자 흰색 → 잘 보임) */
+  /* 다크+글래스: 카드를 '어두운 반투명'으로 → 흰 글자가 읽히면서도 바탕화면이 은은히 비침
+     (흰 서리로 하면 밝아져 글자가 안 보였음) */
   html.dark.glass.widget-mode .home-section,
   html.dark.glass.widget-mode #timetablePage .grid-table {
-    background: rgba(255,255,255, calc(var(--gop) * .55)) !important;
-    border-color: rgba(255,255,255,.30) !important;
+    background: rgba(16,24,44, calc(var(--gop) + .16)) !important;
+    border-color: rgba(255,255,255,.28) !important;
     box-shadow: 0 22px 50px -18px rgba(0,0,0,.7),
                 inset 0 0 42px rgba(255,255,255,.10),
                 inset 0 2px 5px rgba(255,255,255,.35);

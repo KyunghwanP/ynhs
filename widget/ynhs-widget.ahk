@@ -187,22 +187,24 @@ ToggleGlass() {
 ;     노랑을 막고 진짜 젖빛 블러를 낸다. 글자는 그 위에 선명하게 남는다.
 ;   · GradientColor는 0xAABBGGRR(알파=틴트 농도). on일 때만 켜고, 웹뷰 배경은 투명(아크릴이 비치도록).
 ApplyGlass(hwnd, wvc, on) {
-    global gDark
-    ; ── 리퀴드 글래스: 이제 '창 안'에서 웹(CSS backdrop-filter)이 직접 그린다. ──
-    ;   바탕화면 밝기에 좌우되던 아크릴 방식을 버리고, 위젯이 스스로 은은한 컬러 배경을
-    ;   깔고 그 위에 서리 유리 카드를 띄운다 → 어떤 배경에서도 레퍼런스 같은 유리가 나옴.
-    ;   창은 늘 불투명(글자 선명), 아크릴은 끈다.
+    global gDark, WidgetWins
+    ; ── 리퀴드 글래스: 진짜 바탕화면을 블러해서 은은하게 비친다(Windows 아크릴). ──
+    ;   창 아크릴이 '뒤 바탕화면 블러'를 담당하고, 웹(CSS)이 그 위에 유리 카드 질감(테두리·글로우)을 얹는다.
+    ;   틴트는 옅게 → 바탕화면이 은은하게 보임. 슬라이더로 틴트 농도(뿌연 정도) 조절.
+    ;   · 라이트: 흰 틴트 옅게(0x28~0x70)  · 다크: 깊은 남색 옅게(0x48~0x8C)
+    op := (WidgetWins.Has(hwnd) ? WidgetWins[hwnd].opacity : 200)
+    f  := (op - 70) / 185                                ; 0~1
+    a  := gDark ? Round(0x48 + f * (0x8C - 0x48)) : Round(0x28 + f * (0x70 - 0x28))
+    tint := (a << 24) | (gDark ? 0x241810 : 0xFAF7F5)   ; ABGR: 다크=깊은 남색 / 라이트=흰
     accent := Buffer(16, 0)
-    NumPut("uint", 0, accent, 0)                  ; AccentState 0 = 아크릴 OFF(웹이 전담)
+    NumPut("uint", on ? 4 : 0, accent, 0)         ; AccentState: 4=ACRYLICBLURBEHIND, 0=off
+    NumPut("uint", on ? tint : 0, accent, 8)      ; GradientColor(ABGR)
     data := Buffer(24, 0)
     NumPut("uint", 19, data, 0)                   ; WCA_ACCENT_POLICY=19
     NumPut("ptr", accent.Ptr, data, 8)
     NumPut("uptr", accent.Size, data, 16)
     try DllCall("user32\SetWindowCompositionAttribute", "ptr", hwnd, "ptr", data)
-    ; 웹뷰 배경 베이스색(웹의 그라데이션이 덮지만, 로딩 순간·여백을 유리 배경색으로)
-    try wvc.DefaultBackgroundColor := on ? (gDark ? 0xFF0A1428 : 0xFFEAF2FF)
-                                         : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)
-    try WinSetTransparent(255, "ahk_id " hwnd)    ; 항상 불투명 → 배경 밝기 영향 없음
+    try wvc.DefaultBackgroundColor := on ? 0x00000000 : (gDark ? 0xFF0B1220 : 0xFFFFFFFF)  ; 웹뷰 투명 → 아크릴 비침
 }
 
 ; 다크모드 토글: 설정 저장 + 떠 있는 모든 위젯을 새 테마로 다시 로드
@@ -491,7 +493,9 @@ SetWidgetOpacity(hwnd, val) {
     if WidgetWins.Has(hwnd)
         WidgetWins[hwnd].opacity := val         ; 값 먼저 저장(ApplyGlass가 이 값으로 틴트 농도 계산)
     if (gGlass) {
-        WinSetTransparent(255, "ahk_id " hwnd)  ; 창 불투명(글자 선명) — 유리 농도는 웹(--gop)이 담당
+        WinSetTransparent(255, "ahk_id " hwnd)  ; 창 자체는 불투명(글자 선명), 투명감은 아크릴+카드가 담당
+        if WidgetWins.Has(hwnd)
+            try ApplyGlass(hwnd, WidgetWins[hwnd].wvc, true)   ; 슬라이더로 아크릴 틴트(뿌연 정도) 재적용
     } else {
         WinSetTransparent(val, "ahk_id " hwnd)  ; 일반: 창 전체 투명도
     }
