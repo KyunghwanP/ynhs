@@ -546,7 +546,10 @@ ApplyWidgetBg(hwnd, val) {
     try DllCall("user32\SetWindowCompositionAttribute", "ptr", hwnd, "ptr", data)
     if WidgetWins.Has(hwnd)
         try WidgetWins[hwnd].wvc.DefaultBackgroundColor := gDark ? 0xFF0B1220 : 0xFFF1F5F9  ; 웹뷰 기본배경=키색(불투명)
-    try WinSetTransColor(key, "ahk_id " hwnd)     ; 키색=완전 투명, 나머지=불투명(글자 선명)
+    ; 키색=완전 투명(바탕 뚫림 항상 유지). 색 뒤 알파(val 70~255)=글자·패널 불투명도(슬라이더).
+    ;   · 255=지금처럼 글자 쨍  · 내리면 글자·패널이 은은해짐(바탕 뚫림은 그대로)
+    a := (val < 70 ? 70 : (val > 255 ? 255 : val))
+    try WinSetTransColor(key " " a, "ahk_id " hwnd)
 }
 
 ; 창 모양 다듬기(Win11 DWM) — 둥근 모서리 + 얇은 파란 테두리(회색 두꺼운 포커스 테두리 대체)
