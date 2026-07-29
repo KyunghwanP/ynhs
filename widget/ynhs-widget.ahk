@@ -642,6 +642,8 @@ ShowToast(title, body, opts := unset) {
         onClk := OpenAppPage.Bind(goPage)                                ; 커스텀 onClick 없으면 goto로 앱 열기
     if !gToastHooked {
         OnMessage(0x201, OnToastClick)      ; WM_LBUTTONDOWN → 카드 클릭 감지
+        OnMessage(0x200, OnToastMove)       ; WM_MOUSEMOVE  → 호버 시작(자동닫힘 멈춤)
+        OnMessage(0x2A3, OnToastLeave)      ; WM_MOUSELEAVE → 호버 끝(카운트다운 재개)
         gToastHooked := true
     }
     ; 카드는 다크모드에서도 '항상 흰색'(요청) → 글자는 진한 남색/회색으로 고정.
@@ -681,7 +683,7 @@ ShowToast(title, body, opts := unset) {
     ApplyToastStyle(hwnd)
     try WinSetTransparent(0, "ahk_id " hwnd)   ; 완전 투명으로 시작(깜빡임 방지)
     g.Show("NoActivate")
-    t := {g: g, hwnd: hwnd, h: TOAST_H, onClick: onClk, timer: 0}
+    t := {g: g, hwnd: hwnd, h: TOAST_H, onClick: onClk, dur: dur, hover: false, timer: 0}
     gToasts.Push(t)
     t.timer := DismissToast.Bind(hwnd)
     SetTimer(t.timer, -dur)                     ; ★ 자동 닫힘을 '먼저' 확실히 예약(페이드/인덱스와 무관)
@@ -753,6 +755,37 @@ OnToastClick(wParam, lParam, msg, hwnd) {
                 try cb.Call()
             DismissToast(hwnd)
             return 0
+        }
+}
+
+; 마우스가 토스트 위로 올라오면 자동닫힘을 멈춘다(카톡/윈도우 알림과 동일).
+OnToastMove(wParam, lParam, msg, hwnd) {
+    global gToasts
+    for t in gToasts
+        if (t.hwnd = hwnd) {
+            if !t.hover {
+                t.hover := true
+                try SetTimer(t.timer, 0)                 ; 호버 중엔 카운트다운 정지
+                tme := Buffer(A_PtrSize = 8 ? 24 : 16, 0)   ; TRACKMOUSEEVENT
+                NumPut("uint", tme.Size, tme, 0)         ; cbSize
+                NumPut("uint", 0x2, tme, 4)              ; dwFlags = TME_LEAVE
+                NumPut("ptr", hwnd, tme, 8)              ; hwndTrack
+                try DllCall("TrackMouseEvent", "ptr", tme)   ; 벗어날 때 WM_MOUSELEAVE 받기
+            }
+            return
+        }
+}
+
+; 마우스가 토스트를 벗어나면 다시 카운트다운(남은 시간 대신 dur만큼 새로 준다 → 여유있게).
+OnToastLeave(wParam, lParam, msg, hwnd) {
+    global gToasts
+    for t in gToasts
+        if (t.hwnd = hwnd) {
+            if t.hover {
+                t.hover := false
+                try SetTimer(t.timer, -t.dur)
+            }
+            return
         }
 }
 
