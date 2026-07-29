@@ -36,8 +36,8 @@
       if(!document.body || document.getElementById('wgtBar')) return;
       var qs = new URLSearchParams(location.search);
       var op = parseInt(qs.get('op')||'240',10);
-      // 카드 배경 불투명도(--gop): 슬라이더 70~255 → 0.30~0.98 (기본 거의 불투명, 내리면 바탕 비침). 글자는 불투명 고정.
-      function opToGop(v){ var f=(v-70)/185; f=Math.max(0,Math.min(1,f)); return (0.30+f*0.68).toFixed(3); }
+      // 카드 배경 불투명도(--gop): 슬라이더 70~255 → 0.18~0.60 (바탕(아크릴)이 카드 너머로 비치도록). 글자는 불투명 고정.
+      function opToGop(v){ var f=(v-70)/185; f=Math.max(0,Math.min(1,f)); return (0.18+f*0.42).toFixed(3); }
       try{ document.documentElement.style.setProperty('--gop', opToGop(op)); }catch(e){}
       var names = {meal:'🍱 급식',weather:'🌤 날씨',schedule:'📆 학사일정',cal:'🗓 달력',
         task:'📌 진행중 업무',consult:'🗓️ 상담 일정',timetable:'📅 오늘 시간표',fulltt:'📅 내 시간표',
@@ -108,7 +108,7 @@
   /* ── 위젯 투명도: 배경만 반투명, 글자는 늘 불투명 ──
      창(AHK ApplyWidgetBg)이 픽셀단위로 '배경 틴트'만 반투명 처리(글자=불투명 픽셀은 100% 선명).
      그래서 페이지는 투명(창 틴트/바탕화면이 비침), 카드는 슬라이더(--gop)로 배경 농도만 조절. */
-  html.widget-mode { --gop: .92; }   /* 기본은 거의 불투명(솔리드 카드처럼) */
+  html.widget-mode { --gop: .55; }   /* 기본 카드 농도(바탕이 카드 너머로 비침, 슬라이더로 조절) */
   html.widget-mode, html.widget-mode body, html.widget-mode #homePage,
   html.widget-mode .app-body, html.widget-mode .app-content, html.widget-mode #timetablePage,
   html.dark.widget-mode, html.dark.widget-mode body, html.dark.widget-mode #homePage,

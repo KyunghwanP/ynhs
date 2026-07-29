@@ -527,16 +527,16 @@ SetWidgetOpacity(hwnd, val) {
     }
 }
 
-; 창을 픽셀단위로 '투명 가능' 상태로 만든다(글자 등 불투명 픽셀은 그대로, 나머지는 바탕 비침).
-;   ★ 창 틴트 알파는 아주 옅게 '고정'한다. 예전엔 슬라이더 값(최대 240)을 그대로 알파로 줘서
-;      활성 시 틴트가 거의 불투명 → 다크는 파랗게, 라이트는 흰색 먹통이 됐다.
-;      실제 농도 조절(슬라이더)은 CSS 카드(--gop)가 담당하고, 창은 늘 옅게 비치기만 한다.
+; 창 배경을 반투명 유리로(글자 등 불투명 픽셀은 그대로 선명, 나머지는 바탕 비침).
+;   ★ state 2(TRANSPARENTGRADIENT)는 이 환경에서 알파를 무시하고 틴트를 꽉 채워 그림(다크 파랗게/라이트 먹통).
+;      예전에 검증된 state 4(ACRYLICBLURBEHIND)는 알파를 제대로 반영하므로 그걸 쓴다(바탕 블러 비침).
+;      틴트 알파는 옅게 '고정'(활성/비활성 모두 항상 비침), 색은 파랗지 않게 중립 회색. 농도 조절은 CSS 카드(--gop).
 ApplyWidgetBg(hwnd, val) {
     global gDark, WidgetWins
-    a := 0x1E                                            ; 창 틴트 알파 고정(옅게) — 활성/비활성 모두 항상 비침
-    tint := (a << 24) | (gDark ? 0x20120B : 0xF9F5F1)    ; ABGR: 다크=#0B1220 / 라이트=#F1F5F9
+    a := gDark ? 0x7E : 0x5E                             ; 유리 틴트 알파 고정(다크 조금 진하게)
+    tint := (a << 24) | (gDark ? 0x181818 : 0xF6F6F6)   ; ABGR: 중립 회색(파란 기 없음)
     accent := Buffer(16, 0)
-    NumPut("uint", 2, accent, 0)                  ; ACCENT_ENABLE_TRANSPARENTGRADIENT (블러 없음)
+    NumPut("uint", 4, accent, 0)                  ; ACCENT_ENABLE_ACRYLICBLURBEHIND (알파 반영 + 바탕 블러)
     NumPut("uint", tint, accent, 8)               ; GradientColor(ABGR) — 배경 틴트+알파
     data := Buffer(24, 0)
     NumPut("uint", 19, data, 0)                   ; WCA_ACCENT_POLICY=19

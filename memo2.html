@@ -40,8 +40,8 @@
           if(!document.body || document.getElementById('wgtBar')) return;
           document.documentElement.classList.add('wgt');   // 데스크톱 위젯 컨텍스트 → 투명 배경 적용
           var op = parseInt(new URLSearchParams(location.search).get('op')||'240',10);
-          // 카드 배경 불투명도(--gop): 기본 거의 불투명, 내리면 바탕 비침. 글자는 불투명 고정.
-          function opToGop(v){ var f=(v-70)/185; f=Math.max(0,Math.min(1,f)); return (0.30+f*0.68).toFixed(3); }
+          // 카드 배경 불투명도(--gop): 바탕(아크릴)이 카드 너머로 비치도록. 글자는 불투명 고정.
+          function opToGop(v){ var f=(v-70)/185; f=Math.max(0,Math.min(1,f)); return (0.18+f*0.42).toFixed(3); }
           try{ document.documentElement.style.setProperty('--gop', opToGop(op)); }catch(e){}
           var css = document.createElement('style');
           css.textContent =
@@ -169,7 +169,7 @@
         .memo-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 18px; box-shadow: 0 4px 20px rgba(148,163,184,.10); padding: 18px 14px 10px; min-height: 62vh; flex: 1; display: flex; flex-direction: column; }
         html.dark .memo-card { box-shadow: 0 4px 20px rgba(0,0,0,.35); }
         /* ── 위젯 투명도: 배경만 반투명, 글자는 늘 불투명(창이 픽셀단위 배경 투명 처리) ── */
-        html.wgt { --gop: .92; }
+        html.wgt { --gop: .55; }
         html.wgt, html.wgt body { background: transparent !important; }
         html.wgt .memo-card, html.wgt .site-header { background: rgba(255,255,255, var(--gop)) !important; }
         html.dark.wgt .memo-card, html.dark.wgt .site-header { background: rgba(21,31,51, var(--gop)) !important; }
