@@ -120,10 +120,11 @@
   html.glass.widget-mode .gt-cell, html.glass.widget-mode .gt-pnum,
   html.glass.widget-mode .gt-corner, html.glass.widget-mode .gt-lunch-label,
   html.glass.widget-mode .home-section-header { background: rgba(255,255,255,.06) !important; border-color: rgba(255,255,255,.18) !important; }
-  /* 다크+글래스: 어두운 유리 틴트(같은 --gop) + 부드러운 둥근 절삭면 */
+  /* 다크+글래스: 카드는 '어두운 틴트를 덧칠'하지 말고 '옅은 흰 서리(frost)'만 얹는다.
+     어두움은 창의 아크릴이 이미 담당 → 카드가 아크릴을 가려 검게 굳던 문제 해결(유리가 비침) */
   html.dark.glass.widget-mode .home-section,
   html.dark.glass.widget-mode #timetablePage .grid-table {
-    background: linear-gradient(135deg, rgba(24,33,52, calc(var(--gop) + .12)), rgba(15,23,42, calc(var(--gop) + .04))) !important;
+    background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.03)) !important;
     border-color: rgba(255,255,255,.18);
     box-shadow: 0 16px 46px -18px rgba(0,0,0,.6),
                 inset 0 3px 9px rgba(255,255,255,.22),
