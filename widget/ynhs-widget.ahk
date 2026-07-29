@@ -700,15 +700,21 @@ ApplyToastStyle(hwnd) {
 }
 
 ; 우측 하단 기준으로 전체 토스트를 다시 쌓는다(최신=맨 아래, 위로 누적).
+;   ★ DPI 배율(125/150%) 대응: 상수 TOAST_W/H(논리값)로 위치를 잡으면 실제 창은 배율만큼
+;      커져 화면 밖으로 잘린다. 그래서 각 창의 '실제 픽셀 크기'(WinGetPos)로 위치를 계산한다.
 ReflowToasts() {
-    global gToasts, TOAST_W, TOAST_GAP, TOAST_MARGIN
+    global gToasts, TOAST_W, TOAST_H, TOAST_GAP, TOAST_MARGIN
     MonitorGetWorkArea(MonitorGetPrimary(), &wl, &wt, &wr, &wb)
-    x := wr - TOAST_W - TOAST_MARGIN
     y := wb - TOAST_MARGIN
     i := gToasts.Length
     while (i >= 1) {
         t := gToasts[i]
-        y -= t.h
+        ww := 0, wh := 0
+        try WinGetPos(, , &ww, &wh, "ahk_id " t.hwnd)   ; 실제(물리) 크기
+        if (ww = 0)                                       ; 못 읽으면 논리값으로 폴백
+            ww := TOAST_W, wh := TOAST_H
+        x := wr - ww - TOAST_MARGIN
+        y -= wh
         try WinMove(x, y, , , "ahk_id " t.hwnd)
         y -= TOAST_GAP
         i--
