@@ -61,6 +61,11 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const PROXY = "https://adiga-pdf-proxy.pkh910518.workers.dev/?url=";
 const ANCHOR = /(수능\s*최저|최저\s*학력\s*기준|수능최저학력)/;
+// 실제 '기준 표'인지(단순 언급과 구분): 반영영역 + 등급·합·이내 패턴
+function hasCriteriaTable(t){ return /(반영\s*영역)/.test(t) && /(등급|합\s*\d|이내|평균)/.test(t); }
+// 전형 귀속 힌트(페이지 내 전형 키워드)
+const FORM_WORDS = ['논술','학생부교과','교과','학생부종합','종합','실기','정시','지역균형','지역인재','농어촌','기회균형','특성화'];
+function detectForms(t){ return FORM_WORDS.filter(w => t.includes(w)); }
 
 const $ = id => document.getElementById(id);
 const logBox = $('log');
@@ -95,17 +100,32 @@ async function processOne(u, anchorOnly){
   if(!res.ok) throw new Error('HTTP '+res.status);
   const buf = await res.arrayBuffer();
   const doc = await pdfjsLib.getDocument({data:buf}).promise;
-  let totalLen = 0; const hits = [];
-  for(let p=1; p<=doc.numPages; p++){
+  const N = doc.numPages;
+  // 1) 모든 페이지 텍스트 추출
+  const pageText = {}; let totalLen = 0;
+  for(let p=1; p<=N; p++){
     const page = await doc.getPage(p);
     const tc = await page.getTextContent();
     const text = tc.items.map(it=>it.str).join(' ').replace(/\s+/g,' ').trim();
-    totalLen += text.length;
-    if(!anchorOnly || ANCHOR.test(text)) hits.push({page:p, text});
+    pageText[p] = text; totalLen += text.length;
   }
   try{ await doc.destroy(); }catch(e){}
   const scanned = totalLen < 200;
-  return { scanned, pages: doc.numPages, hits };
+  // 2) 최저 언급 페이지 + '표가 다음 장으로 넘어가는' 경우 대비해 다음 페이지까지 포함
+  const keep = new Set();
+  for(let p=1; p<=N; p++){
+    if(ANCHOR.test(pageText[p])){ keep.add(p); if(p+1<=N) keep.add(p+1); }
+  }
+  // 3) anchorOnly=false면 전체 페이지 저장(디버그용)
+  const pages = anchorOnly ? [...keep].sort((a,b)=>a-b) : Array.from({length:N},(_,i)=>i+1);
+  const hits = pages.map(p => ({
+    page: p,
+    text: pageText[p],
+    isAnchor: ANCHOR.test(pageText[p]),      // 이 페이지에 최저 문구가 직접 있나
+    hasTable: hasCriteriaTable(pageText[p]), // 실제 기준 표로 보이나(단순 언급과 구분)
+    forms: detectForms(pageText[p])          // 전형 귀속 힌트
+  }));
+  return { scanned, pages: N, hits };
 }
 
 async function run(limit){
@@ -125,7 +145,8 @@ async function run(limit){
       const entry = { code:u.code, name:u.name, year:u.year, pages:r.pages, scanned:r.scanned, hits:r.hits };
       results.push(entry);
       if(r.scanned){ counts.scan++; log(`<b class="scan">[스캔본]</b> ${u.name} — 텍스트 거의 없음(OCR 필요)`); }
-      else { counts.ok++; log(`<b class="ok">[OK]</b> ${u.name} — 최저 언급 ${r.hits.length}p`); }
+      else { counts.ok++; const tbl=r.hits.filter(h=>h.hasTable).length;
+        log(`<b class="ok">[OK]</b> ${u.name} — 기준표 ${tbl}p / 관련 ${r.hits.length}p`); }
     }catch(e){
       counts.fail++; results.push({ code:u.code, name:u.name, error:String(e) });
       log(`<b class="fail">[실패]</b> ${u.name} — ${e}`);
