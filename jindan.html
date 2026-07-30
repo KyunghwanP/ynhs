@@ -195,6 +195,20 @@
         .gap-up   { color: #e11d48; }
         .gap-down { color: #2563eb; }
         .gap-even { color: var(--slate-400); }
+        /* 입시 진단 라벨 배지 (안정/적정/소신/위험) */
+        .diag-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 11px; border-radius: 8px; font-size: 12px; font-weight: 900; letter-spacing: .02em; }
+        .diag-badge.uncertain { border: 1px dashed currentColor; }
+        .diag-badge .diag-edge { font-size: 10px; font-weight: 800; opacity: .7; }
+        .lab-safe  { background: #dbeafe; color: #1d4ed8; }   /* 안정 — 파랑 */
+        .lab-fit   { background: #dcfce7; color: #15803d; }   /* 적정 — 초록 */
+        .lab-reach { background: #fef9c3; color: #a16207; }   /* 소신 — 노랑 */
+        .lab-risk  { background: #fee2e2; color: #b91c1c; }   /* 위험 — 빨강 */
+        /* 상세모달 진단 배너 (라벨 색을 배경으로) */
+        .diag-tile { border: none; }
+        .diag-tile .k { color: currentColor; opacity: .65; }
+        .diag-tile .diag-lg { font-size: 22px; font-weight: 900; letter-spacing: -.02em; margin-top: 2px; }
+        .diag-tile .diag-edge { font-size: 12px; font-weight: 800; opacity: .7; }
+        .diag-tile .diag-why { font-size: 12.5px; font-weight: 700; line-height: 1.55; margin-top: 6px; opacity: .95; }
         .uni-card h3 { font-size: 20px; line-height: 1.2; color: var(--slate-900); }
         .uni-card:hover h3 { color: var(--indigo); }
         .campus-txt { display: inline-block; font-size: 12.5px; font-weight: 900; color: var(--slate-800); background: var(--slate-200); padding: 2px 10px; border-radius: 999px; letter-spacing: 0; margin-top: 7px; }
@@ -679,6 +693,10 @@
                 if (!vals.length) continue;    // 3년 모두 미제출·입결없음 → 제외
                 rec.averageGrade = vals.reduce((a, b) => a + b, 0) / vals.length;
                 rec.yearCount = vals.length;
+                // 진단 라벨용: 3개년 70%컷 변동폭(완충 산정) + 50%컷 평균(합격자 중위선)
+                rec.vol70 = vals.length >= 2 ? (Math.max(...vals) - Math.min(...vals)) : 0;
+                const vals50 = SURVEY_YEARS.map(y => rec.years[y] && parseFloat(rec.years[y].grade50)).filter(v => v != null && !isNaN(v));
+                rec.avg50 = vals50.length ? vals50.reduce((a, b) => a + b, 0) / vals50.length : null;
                 records.push(rec);
             }
             return records;
@@ -718,6 +736,38 @@
             if (mag < 0.005) return { arrow: '−', cls: 'gap-even', text: '0.00' };
             if (d < 0)       return { arrow: '▲', cls: 'gap-up',   text: mag.toFixed(2) };
             return             { arrow: '▼', cls: 'gap-down', text: mag.toFixed(2) };
+        }
+
+        // ─── 입시 진단 라벨 ───
+        // 임의의 ±밴드 대신 각 학과의 '합격자 성적 구간 [50%컷 ~ 70%컷]'으로 판정한다.
+        //  - 완충(margin) = 3개년 70%컷 변동폭의 절반을 [0.15, 0.4]로 제한
+        //    → 매년 컷이 출렁이는 학과일수록 완충이 커져 경계 판정이 자동으로 보수적이 된다.
+        //  - 50%컷 미제출(약 23%)이면 70%컷 하나로 축소 판정.
+        //  내 등급(myG)은 숫자가 작을수록 우수.
+        function classify(myG, rec) {
+            const a70 = rec.averageGrade;
+            const no50 = (rec.avg50 == null);
+            const a50 = no50 ? a70 : rec.avg50;
+            const m = Math.min(0.4, Math.max(0.15, (rec.vol70 || 0) / 2));
+            let label, cls;
+            if (myG <= a50 - m)      { label = '안정'; cls = 'lab-safe';  }
+            else if (myG <= a70)     { label = '적정'; cls = 'lab-fit';   }
+            else if (myG <= a70 + m) { label = '소신'; cls = 'lab-reach'; }
+            else                     { label = '위험'; cls = 'lab-risk';  }
+            // 경계/불확실: 데이터 부족·변동 과다·판정선 바로 옆(환산 오차 감안)이면 단정하지 않는다.
+            const near = Math.min(Math.abs(myG - (a50 - m)), Math.abs(myG - a70), Math.abs(myG - (a70 + m)));
+            const uncertain = (rec.yearCount < 2) || ((rec.vol70 || 0) >= 0.8) || (near < 0.1);
+            return { label, cls, uncertain, a50, a70, m, no50 };
+        }
+        // 상세모달용: 왜 이 라벨인지 한 문장으로 설명 (학부모 앞 방어용)
+        function diagReason(myG, d) {
+            const me = myG.toFixed(2), a50 = d.a50.toFixed(2), a70 = d.a70.toFixed(2);
+            if (d.label === '안정') return `내 등급 ${me}이(가) 합격자 중위(50%컷 ${a50})보다 위 — 무난 지원권입니다.`;
+            if (d.label === '적정') return (d.no50 || a50 === a70)
+                ? `내 등급 ${me}이(가) 합격선(70%컷 ${a70}) 부근 — 적정 지원권입니다.${d.no50 ? ' (50%컷 미제출)' : ''}`
+                : `내 등급 ${me}이(가) 합격자 분포(50%컷 ${a50} ~ 70%컷 ${a70}) 안 — 소신껏 지원권입니다.`;
+            if (d.label === '소신') return `내 등급 ${me}이(가) 70%컷(${a70}) 하한 부근 — 도전(소신) 지원권입니다.`;
+            return `내 등급 ${me}이(가) 70%컷(${a70})보다 아래 — 합격 가능성이 낮습니다.`;
         }
 
         // 카드 하단 3개년 스트립 — 학년도별 70%컷(큰 숫자) + 내 등급 대비 편차(빨강▲/파랑▼), 미제출은 –
@@ -891,10 +941,12 @@
             emptyState.style.display = currentFiltered.length ? 'none' : 'block';
             list.insertAdjacentHTML('afterbegin', currentFiltered.slice(0, visibleCount).map((r, idx) => {
                 const gap = gradeGap(r.averageGrade, target);
+                const d = classify(target, r);
                 return `<div class="uni-card" style="animation-delay:${Math.min((idx % PAGE_SIZE) * 0.03, 0.3)}s" onclick="openDetail(${idx})">
                     <div class="uni-card-top">
                         <div style="min-width:0;">
                             <div class="badge-row">
+                                <span class="diag-badge ${d.cls}${d.uncertain ? ' uncertain' : ''}">${d.label}${d.uncertain ? ' <span class="diag-edge">경계</span>' : ''}</span>
                                 <span class="cat-badge">${r.category}</span>
                             </div>
                             <h3 class="serif">${r.university}</h3>
@@ -955,7 +1007,9 @@
             const body = rows.map(([label, fn, hl]) =>
                 `<tr${hl ? ' class="hl"' : ''}><th class="rl">${label}</th>${SURVEY_YEARS.map(y => (hl ? cell70 : cell(fn))(r.years[y])).join('')}</tr>`
             ).join('');
+            const d = classify(myG, r);
             document.getElementById('dm-grid').innerHTML = `
+                <div class="d-tile wide diag-tile ${d.cls}"><p class="k">입시 진단</p><p class="diag-lg">${d.label}${d.uncertain ? ' <span class="diag-edge">· 경계(참고)</span>' : ''}</p><p class="diag-why">${diagReason(myG, d)}</p></div>
                 <div class="d-tile hl" style="grid-column:1/-1;"><p class="k">${r.yearCount}개년 평균 환산등급 70%컷</p><p class="v">${r.averageGrade.toFixed(2)}</p><p class="gap-box ${gap.cls}" style="justify-content:flex-start;margin-top:3px;font-size:11.5px;">내 등급 대비 <span class="arr">${gap.arrow}</span>${gap.text}</p></div>
                 <div style="grid-column:1/-1;overflow-x:auto;"><table class="dm-year-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
                 <div class="d-tile"><p class="k">계열 / 전형유형</p><p class="v" style="font-size:14px;">${r.category} · ${r.kind}</p></div>
