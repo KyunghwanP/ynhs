@@ -67,6 +67,36 @@ function hasCriteriaTable(t){ return /(반영\s*영역)/.test(t) && /(등급|합
 const FORM_WORDS = ['논술','학생부교과','교과','학생부종합','종합','실기','정시','지역균형','지역인재','농어촌','기회균형','특성화'];
 function detectForms(t){ return FORM_WORDS.filter(w => t.includes(w)); }
 
+// 좌표 기반 줄 복원: y로 행을 묶고 x로 정렬 → 표 구조가 살아남(값이 그룹에서 안 떨어짐).
+//   큰 x간격은 '|'로 표시해 열 경계 힌트를 남긴다. (기존: 좌표 버리고 한 줄로 이어붙여 표 붕괴)
+function pageLines(tc){
+  const items = tc.items.filter(it => it.str && it.str.trim() !== '');
+  items.forEach(it => { it._x = it.transform[4]; it._y = it.transform[5]; it._h = Math.abs(it.transform[3])||10; });
+  items.sort((a,b) => (b._y - a._y) || (a._x - b._x));
+  const lines = []; let cur = []; let lastY = null;
+  for(const it of items){
+    const tol = Math.max(3, it._h * 0.6);
+    if(lastY === null || Math.abs(it._y - lastY) <= tol) cur.push(it);
+    else { lines.push(cur); cur = [it]; }
+    lastY = it._y;
+  }
+  if(cur.length) lines.push(cur);
+  return lines.map(line => {
+    line.sort((a,b) => a._x - b._x);
+    let s = '', prevEnd = null;
+    for(const it of line){
+      if(prevEnd !== null){
+        const gap = it._x - prevEnd;
+        if(gap > 14) s += '  |  ';      // 열 경계 힌트
+        else if(gap > 1.5) s += ' ';
+      }
+      s += it.str;
+      prevEnd = it._x + (it.width || 0);
+    }
+    return s.trim();
+  }).filter(s => s);
+}
+
 const $ = id => document.getElementById(id);
 const logBox = $('log');
 let results = [], counts = {ok:0, scan:0, fail:0};
@@ -106,8 +136,8 @@ async function processOne(u, anchorOnly){
   for(let p=1; p<=N; p++){
     const page = await doc.getPage(p);
     const tc = await page.getTextContent();
-    const text = tc.items.map(it=>it.str).join(' ').replace(/\s+/g,' ').trim();
-    pageText[p] = text; totalLen += text.length;
+    const text = pageLines(tc).join('\n');       // 좌표 기반 줄 복원(표 구조 보존)
+    pageText[p] = text; totalLen += text.replace(/\s/g,'').length;
   }
   try{ await doc.destroy(); }catch(e){}
   const scanned = totalLen < 200;
