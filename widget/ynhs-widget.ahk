@@ -589,6 +589,7 @@ StyleWindow(hwnd) {
 ; ══════════════════════════════════════════════════════════════
 global gToasts := []          ; 활성 토스트 [{g,hwnd,h,onClick,timer}] — 오래된→최신 순
 global gToastHooked := false
+global gToastSeen := Map()     ; 웹에서 온 알림 중복 방지(이미 띄운 이벤트 id) — 여러 위젯이 같은 걸 보내도 1회
 global TOAST_W := 344, TOAST_H := 94, TOAST_GAP := 10, TOAST_MARGIN := 16
 
 ; ── 종류별 컬러 이모지(공지/시간표/마감/과제/성적/기본) ─────────────────────
@@ -1082,6 +1083,30 @@ OnWebMsg(gh, key, sender, args) {
         RaiseWidget(gh)
     else if (SubStr(m, 1, 3) = "op:")
         SetWidgetOpacity(gh, Integer(SubStr(m, 4)))
+    else if (SubStr(m, 1, 6) = "toast" Chr(31))    ; 웹앱 알림 → 위젯 토스트로
+        HandleToastMsg(m)
+}
+
+; 웹앱(index.html)이 보낸 알림을 위젯 토스트로 띄운다.
+;   형식: "toast"<US>id<US>type<US>goto<US>title<US>body   (US=Chr(31))
+;   여러 위젯 웹뷰가 같은 이벤트를 보낼 수 있어 id로 1회만 표시(gToastSeen).
+HandleToastMsg(m) {
+    global gToastSeen
+    parts := StrSplit(m, Chr(31))
+    if (parts.Length < 6)
+        return
+    id := parts[2], typ := parts[3], goPage := parts[4], title := parts[5], body := parts[6]
+    if (id != "") {
+        if gToastSeen.Has(id)
+            return
+        gToastSeen[id] := true
+    }
+    opts := { type: (typ != "" ? typ : "bell") }
+    if (goPage != "")
+        opts.goto := goPage
+    else
+        opts.onClick := (*) => OpenAppPage()       ; 페이지 없으면 앱만 표시
+    ShowToast(title, body, opts)
 }
 ; 누른 위젯만 다른 위젯들보다 앞으로 (다른 위젯을 이 위젯 바로 뒤로 내림 →
 ;   이 위젯의 z-order 자체는 안 올려서 '앱 창 위로 튀어나오는' 일이 없다)

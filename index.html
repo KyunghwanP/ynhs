@@ -4994,6 +4994,22 @@ let notifyReady = false;
 // 앱 시작 시 1회: 브라우저면 권한 요청 (Neutralino는 권한 불필요)
 // wry 데스크톱 앱이면 window.ipc(네이티브 다리)가 주입돼 있음 → 네이티브 토스트로 보냄
 const IS_WRY_APP = (typeof window !== 'undefined' && window.ipc && typeof window.ipc.postMessage === 'function');
+// 위젯 웹뷰(WebView2, ?widget=…)에서 실행 중인지 → 맞으면 알림을 '위젯 토스트'로 띄운다.
+const IS_WIDGET_WV = (function(){
+  try { return !!new URLSearchParams(location.search).get('widget')
+             && !!(window.chrome && window.chrome.webview); } catch(e){ return false; }
+})();
+// 위젯 AHK 호스트로 토스트 요청 전송. 형식: toast<US>id<US>type<US>goto<US>title<US>body (US=\x1f)
+function postWidgetToast(title, body, opts){
+  try {
+    var host = (window.chrome && window.chrome.webview) ? window.chrome.webview : null;
+    if(!host) return false;
+    var US = String.fromCharCode(31);
+    host.postMessage('toast'+US+((opts&&opts.id)||'')+US+((opts&&opts.type)||'bell')
+                     +US+((opts&&opts.goto)||'')+US+String(title||'')+US+String(body||''));
+    return true;
+  } catch(e){ return false; }
+}
 function initNotify(){
   if(IS_WRY_APP){ notifyReady = true; return; }   // 데스크톱 앱: 권한 불필요, 네이티브 토스트
   if(IS_NEUTRALINO){ notifyReady = true; return; }
@@ -5004,9 +5020,11 @@ function initNotify(){
   }
 }
 
-// 알림 띄우기
-function showAppNotify(title, body){
+// 알림 띄우기 (opts: {type, id, goto} — 위젯 토스트용)
+function showAppNotify(title, body, opts){
   try {
+    // 위젯 웹뷰에서 실행 중이면 → 카톡풍 위젯 토스트로(중복은 위젯 AHK가 id로 제거)
+    if(IS_WIDGET_WV && postWidgetToast(title, body, opts)) return;
     if(IS_WRY_APP){
       // wry 데스크톱 앱 → Rust로 보내 네이티브 Windows 토스트 (앱 최소화돼도 뜸)
       window.ipc.postMessage(JSON.stringify({ title: String(title||''), body: String(body||'') }));
@@ -5055,7 +5073,7 @@ function startConsultNotifyWatch(user){
         consultNotifySeen.add(s.id);
         const who = s.studentName || s.bookedName || '학부모';
         const when = `${s.date.slice(5).replace('-','/')} ${s.time}`;
-        showAppNotify('새 상담 예약', `${who} · ${when}`);
+        showAppNotify('새 상담 예약', `${who} · ${when}`, { type:'cal', id:'consult:'+s.id });
       }
     });
     // 취소된 것 정리
@@ -5083,7 +5101,7 @@ function startTaskNotifyWatch(user){
         const d = ch.doc.data();
         const sharedToMe = (d.sharedWith || []).some(s => myIds.includes(s));
         if(!sharedToMe) return;
-        showAppNotify('공유된 업무 일정', d.title || '새 일정이 공유되었습니다');
+        showAppNotify('공유된 업무 일정', d.title || '새 일정이 공유되었습니다', { type:'memo', id:'task:'+ch.doc.id });
       });
     }, err => {});
     taskNotifyUnsubs.push(unsub);
