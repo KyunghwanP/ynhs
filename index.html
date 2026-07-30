@@ -5025,6 +5025,8 @@ function showAppNotify(title, body, opts){
   try {
     // 위젯 웹뷰에서 실행 중이면 → 카톡풍 위젯 토스트로(중복은 위젯 AHK가 id로 제거)
     if(IS_WIDGET_WV && postWidgetToast(title, body, opts)) return;
+    // 앱(비위젯)인데 위젯이 실행 중이면 → 위젯이 토스트로 띄우므로 앱은 양보(앱↔위젯 중복 방지)
+    if(!IS_WIDGET_WV && typeof window !== 'undefined' && window.__ynhsWidgetRunning) return;
     if(IS_WRY_APP){
       // wry 데스크톱 앱 → Rust로 보내 네이티브 Windows 토스트 (앱 최소화돼도 뜸)
       window.ipc.postMessage(JSON.stringify({ title: String(title||''), body: String(body||'') }));

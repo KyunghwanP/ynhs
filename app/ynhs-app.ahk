@@ -188,11 +188,15 @@ StartWidget() {
 ;   밖에서 껐을 때는 프로세스가 사라진 걸 감지해 자동으로 꺼짐 처리한다.
 ;   (멈춘 프로세스가 남아도 체크를 강제로 켜지 않음 → 토글이 '끄기'로만 갇히는 문제 방지)
 RefreshWidgetCheck() {
-    global gWidgetOn
-    if (gWidgetOn && !ProcessExist("위젯.exe")) {
+    global gWidgetOn, wvc
+    running := ProcessExist("위젯.exe")
+    if (gWidgetOn && !running) {
         gWidgetOn := false
         A_TrayMenu.Uncheck("바탕화면 위젯")
     }
+    ; 알림 담당자 선출: 위젯 실행 중이면 위젯이 토스트로 띄우므로, 앱은 OS 알림을 양보한다.
+    ;   웹앱(showAppNotify)이 읽는 플래그를 주기적으로 주입한다.
+    try wvc.CoreWebView2.ExecuteScriptAsync("window.__ynhsWidgetRunning=" (running ? "true" : "false"))
 }
 
 ; 바탕화면에 '영남고' 바로가기 생성(로고 아이콘). 이미 있으면 건너뜀.
