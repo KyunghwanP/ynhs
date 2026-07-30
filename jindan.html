@@ -209,18 +209,23 @@
         .diag-tile .diag-lg { font-size: 22px; font-weight: 900; letter-spacing: -.02em; margin-top: 2px; }
         .diag-tile .diag-edge { font-size: 12px; font-weight: 800; opacity: .7; }
         .diag-tile .diag-why { font-size: 12.5px; font-weight: 700; line-height: 1.55; margin-top: 6px; opacity: .95; }
-        /* 3개년 추세 칩 (진단 라벨과 구분되게 아웃라인 스타일) */
-        .trend-chip { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 7px; font-size: 11px; font-weight: 800; border: 1px solid currentColor; background: #fff; }
+        /* 3개년 추세 색 (모달 상담포인트 태그 + 카드 메타줄 공용) */
         .tr-up   { color: #b45309; }   /* 컷 상승(경쟁 심화) — 주황 */
         .tr-down { color: #2563eb; }   /* 컷 하락(완화) — 파랑 */
         .tr-flat { color: #64748b; }   /* 보합 — 회색 */
-        /* 충원(추합) 여유 표시 */
-        .chung-line { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-width: 0; }
-        .chung-pill { flex-shrink: 0; padding: 3px 9px; border-radius: 8px; font-size: 11.5px; font-weight: 900; }
-        .chung-note { font-size: 11px; font-weight: 700; color: var(--slate-400); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* 충원(추합) 여유 색 (모달 태그용 — 배경 포함) */
         .ch-high { background: #dcfce7; color: #15803d; }   /* 여유 큼 */
         .ch-mid  { background: #fef9c3; color: #a16207; }   /* 보통 */
         .ch-low  { background: #fee2e2; color: #b91c1c; }   /* 적음 */
+        /* 카드 메타줄: 계열 · 추세 · 추합 (진단 칩만 남기고 나머지는 인라인 텍스트) */
+        .meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px; font-size: 12px; font-weight: 800; color: var(--slate-500); }
+        .meta-row .sep { color: var(--slate-300); font-weight: 700; }
+        .meta-row .m-up   { color: #b45309; }
+        .meta-row .m-down { color: #2563eb; }
+        .meta-row .m-flat { color: #64748b; }
+        .meta-row .m-high { color: #15803d; }
+        .meta-row .m-mid  { color: #a16207; }
+        .meta-row .m-low  { color: #b91c1c; }
         /* 상세모달 상담 포인트 */
         .tip-line { font-size: 12.5px; font-weight: 700; color: var(--slate-700); line-height: 1.5; margin-top: 6px; }
         .tip-ic { display: inline-block; font-size: 10px; font-weight: 900; padding: 1px 6px; border-radius: 6px; border: 1px solid currentColor; margin-right: 4px; vertical-align: middle; }
@@ -801,9 +806,9 @@
         function gradeTrend(rec) {
             const dl = rec.trendDelta;
             if (dl == null) return null;                        // 단년 → 추세 없음
-            if (Math.abs(dl) < 0.15) return { label: '컷 보합', cls: 'tr-flat', delta: dl };
-            if (dl < 0)             return { label: '컷 상승', cls: 'tr-up',   delta: dl };  // 합격선↑(경쟁 심화)
-            return                        { label: '컷 하락', cls: 'tr-down', delta: dl };  // 합격선↓(완화)
+            if (Math.abs(dl) < 0.15) return { label: '컷 보합', cls: 'tr-flat', dir: 'flat', arrow: '→', delta: dl };
+            if (dl < 0)             return { label: '컷 상승', cls: 'tr-up',   dir: 'up',   arrow: '▲', delta: dl };  // 합격선↑(경쟁 심화)
+            return                        { label: '컷 하락', cls: 'tr-down', dir: 'down', arrow: '▼', delta: dl };  // 합격선↓(완화)
         }
         // 상세모달용 추세 설명
         function trendReason(t) {
@@ -820,11 +825,11 @@
         function chungInfo(rec) {
             if (rec.chungRate == null) return null;
             const pct = Math.round(rec.chungRate * 100);
-            let cls, note;
-            if (rec.chungRate >= 1.0)      { cls = 'ch-high'; note = '추합 여유 큼 — 최초 불합격이어도 추합 기대'; }
-            else if (rec.chungRate >= 0.3) { cls = 'ch-mid';  note = '추합 보통 — 예비번호 앞이면 기대 가능'; }
-            else                           { cls = 'ch-low';  note = '추합 적음 — 최초합 안에 들어야 안전'; }
-            return { pct, cls, note };
+            let cls, lv, note;
+            if (rec.chungRate >= 1.0)      { cls = 'ch-high'; lv = 'high'; note = '추합 여유 큼 — 최초 불합격이어도 추합 기대'; }
+            else if (rec.chungRate >= 0.3) { cls = 'ch-mid';  lv = 'mid';  note = '추합 보통 — 예비번호 앞이면 기대 가능'; }
+            else                           { cls = 'ch-low';  lv = 'low';  note = '추합 적음 — 최초합 안에 들어야 안전'; }
+            return { pct, cls, lv, note };
         }
 
         // 카드 하단 3개년 스트립 — 학년도별 70%컷(큰 숫자) + 내 등급 대비 편차(빨강▲/파랑▼), 미제출은 –
@@ -1001,13 +1006,15 @@
                 const d = classify(target, r);
                 const t = gradeTrend(r);
                 const ch = chungInfo(r);
+                const meta = [`<span>${r.category}</span>`]
+                    .concat(t ? [`<span class="sep">·</span><span class="m-${t.dir}">${t.arrow} ${t.label}</span>`] : [])
+                    .concat(ch ? [`<span class="sep">·</span><span class="m-${ch.lv}">추합 ${ch.pct}%</span>`] : [])
+                    .join('');
                 return `<div class="uni-card" style="animation-delay:${Math.min((idx % PAGE_SIZE) * 0.03, 0.3)}s" onclick="openDetail(${idx})">
                     <div class="uni-card-top">
                         <div style="min-width:0;">
                             <div class="badge-row">
                                 <span class="diag-badge ${d.cls}${d.uncertain ? ' uncertain' : ''}">${d.label}${d.uncertain ? ' <span class="diag-edge">경계</span>' : ''}</span>
-                                <span class="cat-badge">${r.category}</span>
-                                ${t ? `<span class="trend-chip ${t.cls}">${t.label}</span>` : ''}
                             </div>
                             <h3 class="serif">${r.university}</h3>
                             <p class="campus-txt">${r.campus}</p>
@@ -1017,7 +1024,7 @@
                     <div class="uni-card-bottom">
                         <p class="dept-name">${r.department}</p>
                         <p class="adm-name">${r.admissionName}</p>
-                        ${ch ? `<div class="chung-line"><span class="chung-pill ${ch.cls}">추합 ${ch.pct}%</span><span class="chung-note">${ch.note}</span></div>` : ''}
+                        <div class="meta-row">${meta}</div>
                         <div class="year-strip">${yearStripHtml(r, target)}</div>
                         <p class="view-more">View More <span class="arrow">→</span></p>
                     </div>
