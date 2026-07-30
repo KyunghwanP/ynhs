@@ -209,6 +209,22 @@
         .diag-tile .diag-lg { font-size: 22px; font-weight: 900; letter-spacing: -.02em; margin-top: 2px; }
         .diag-tile .diag-edge { font-size: 12px; font-weight: 800; opacity: .7; }
         .diag-tile .diag-why { font-size: 12.5px; font-weight: 700; line-height: 1.55; margin-top: 6px; opacity: .95; }
+        /* 3개년 추세 칩 (진단 라벨과 구분되게 아웃라인 스타일) */
+        .trend-chip { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 7px; font-size: 11px; font-weight: 800; border: 1px solid currentColor; background: #fff; }
+        .tr-up   { color: #b45309; }   /* 컷 상승(경쟁 심화) — 주황 */
+        .tr-down { color: #2563eb; }   /* 컷 하락(완화) — 파랑 */
+        .tr-flat { color: #64748b; }   /* 보합 — 회색 */
+        /* 충원(추합) 여유 표시 */
+        .chung-line { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-width: 0; }
+        .chung-pill { flex-shrink: 0; padding: 3px 9px; border-radius: 8px; font-size: 11.5px; font-weight: 900; }
+        .chung-note { font-size: 11px; font-weight: 700; color: var(--slate-400); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ch-high { background: #dcfce7; color: #15803d; }   /* 여유 큼 */
+        .ch-mid  { background: #fef9c3; color: #a16207; }   /* 보통 */
+        .ch-low  { background: #fee2e2; color: #b91c1c; }   /* 적음 */
+        /* 상세모달 상담 포인트 */
+        .tip-line { font-size: 12.5px; font-weight: 700; color: var(--slate-700); line-height: 1.5; margin-top: 6px; }
+        .tip-ic { display: inline-block; font-size: 10px; font-weight: 900; padding: 1px 6px; border-radius: 6px; border: 1px solid currentColor; margin-right: 4px; vertical-align: middle; }
+        .tip-caveat { font-size: 11px; font-weight: 600; color: var(--slate-400); line-height: 1.5; margin-top: 8px; }
         .uni-card h3 { font-size: 20px; line-height: 1.2; color: var(--slate-900); }
         .uni-card:hover h3 { color: var(--indigo); }
         .campus-txt { display: inline-block; font-size: 12.5px; font-weight: 900; color: var(--slate-800); background: var(--slate-200); padding: 2px 10px; border-radius: 999px; letter-spacing: 0; margin-top: 7px; }
@@ -697,6 +713,16 @@
                 rec.vol70 = vals.length >= 2 ? (Math.max(...vals) - Math.min(...vals)) : 0;
                 const vals50 = SURVEY_YEARS.map(y => rec.years[y] && parseFloat(rec.years[y].grade50)).filter(v => v != null && !isNaN(v));
                 rec.avg50 = vals50.length ? vals50.reduce((a, b) => a + b, 0) / vals50.length : null;
+                // 추세: 첫 유효연도 → 마지막 유효연도 70%컷 변화 (vals는 연도 오름차순)
+                rec.trendDelta = vals.length >= 2 ? (vals[vals.length - 1] - vals[0]) : null;
+                // 추합률: 연도별 충원인원/모집인원(총) 평균 (충원·모집 모두 3개년 존재)
+                const chRates = [];
+                SURVEY_YEARS.forEach(y => {
+                    const yr = rec.years[y]; if (!yr) return;
+                    const w = parseFloat(yr.waitlist), q = parseFloat(yr.quotaTotal);
+                    if (!isNaN(w) && w >= 0 && !isNaN(q) && q > 0) chRates.push(w / q);
+                });
+                rec.chungRate = chRates.length ? chRates.reduce((a, b) => a + b, 0) / chRates.length : null;
                 records.push(rec);
             }
             return records;
@@ -768,6 +794,37 @@
                 : `내 등급 ${me}이(가) 합격자 분포(50%컷 ${a50} ~ 70%컷 ${a70}) 안 — 소신껏 지원권입니다.`;
             if (d.label === '소신') return `내 등급 ${me}이(가) 70%컷(${a70}) 하한 부근 — 도전(소신) 지원권입니다.`;
             return `내 등급 ${me}이(가) 70%컷(${a70})보다 아래 — 합격 가능성이 낮습니다.`;
+        }
+
+        // ─── 3개년 합격선 추세 ───
+        // 등급 숫자가 줄면(예 3.5→3.0) 합격선 상승=경쟁 심화, 늘면 하락=완화. 0.15 미만은 보합.
+        function gradeTrend(rec) {
+            const dl = rec.trendDelta;
+            if (dl == null) return null;                        // 단년 → 추세 없음
+            if (Math.abs(dl) < 0.15) return { label: '컷 보합', cls: 'tr-flat', delta: dl };
+            if (dl < 0)             return { label: '컷 상승', cls: 'tr-up',   delta: dl };  // 합격선↑(경쟁 심화)
+            return                        { label: '컷 하락', cls: 'tr-down', delta: dl };  // 합격선↓(완화)
+        }
+        // 상세모달용 추세 설명
+        function trendReason(t) {
+            if (!t) return '3개년 중 유효 데이터가 1개뿐이라 추세를 판단할 수 없습니다.';
+            const d = Math.abs(t.delta).toFixed(2);
+            if (t.cls === 'tr-up')   return `최근 3개년 합격선이 상승(약 ${d}등급 강화) — 올해는 더 치열할 수 있어 보수적으로.`;
+            if (t.cls === 'tr-down') return `최근 3개년 합격선이 하락(약 ${d}등급 완화) — 다소 여유가 생기는 추세.`;
+            return '최근 3개년 합격선이 큰 변동 없이 유지되는 추세입니다.';
+        }
+
+        // ─── 충원(추합) 여유 ───
+        // 어디가 70%컷은 '최종등록자' 기준이라 추합이 이미 반영됨 → 추합률은 합격선 보정이 아니라
+        // '예비번호 기대치·안정성' 지표로 활용한다. (충원배수 = 충원인원/모집인원)
+        function chungInfo(rec) {
+            if (rec.chungRate == null) return null;
+            const pct = Math.round(rec.chungRate * 100);
+            let cls, note;
+            if (rec.chungRate >= 1.0)      { cls = 'ch-high'; note = '추합 여유 큼 — 최초 불합격이어도 추합 기대'; }
+            else if (rec.chungRate >= 0.3) { cls = 'ch-mid';  note = '추합 보통 — 예비번호 앞이면 기대 가능'; }
+            else                           { cls = 'ch-low';  note = '추합 적음 — 최초합 안에 들어야 안전'; }
+            return { pct, cls, note };
         }
 
         // 카드 하단 3개년 스트립 — 학년도별 70%컷(큰 숫자) + 내 등급 대비 편차(빨강▲/파랑▼), 미제출은 –
@@ -942,12 +999,15 @@
             list.insertAdjacentHTML('afterbegin', currentFiltered.slice(0, visibleCount).map((r, idx) => {
                 const gap = gradeGap(r.averageGrade, target);
                 const d = classify(target, r);
+                const t = gradeTrend(r);
+                const ch = chungInfo(r);
                 return `<div class="uni-card" style="animation-delay:${Math.min((idx % PAGE_SIZE) * 0.03, 0.3)}s" onclick="openDetail(${idx})">
                     <div class="uni-card-top">
                         <div style="min-width:0;">
                             <div class="badge-row">
                                 <span class="diag-badge ${d.cls}${d.uncertain ? ' uncertain' : ''}">${d.label}${d.uncertain ? ' <span class="diag-edge">경계</span>' : ''}</span>
                                 <span class="cat-badge">${r.category}</span>
+                                ${t ? `<span class="trend-chip ${t.cls}">${t.label}</span>` : ''}
                             </div>
                             <h3 class="serif">${r.university}</h3>
                             <p class="campus-txt">${r.campus}</p>
@@ -957,6 +1017,7 @@
                     <div class="uni-card-bottom">
                         <p class="dept-name">${r.department}</p>
                         <p class="adm-name">${r.admissionName}</p>
+                        ${ch ? `<div class="chung-line"><span class="chung-pill ${ch.cls}">추합 ${ch.pct}%</span><span class="chung-note">${ch.note}</span></div>` : ''}
                         <div class="year-strip">${yearStripHtml(r, target)}</div>
                         <p class="view-more">View More <span class="arrow">→</span></p>
                     </div>
@@ -1002,16 +1063,24 @@
                 ['경쟁률', y => (y && y.competition) ? y.competition + ' : 1' : null],
                 ['충원 (추합)', y => y && y.waitlist],
                 ['모집인원 (총)', y => y && y.quotaTotal],
+                ['추합률 (충원/모집)', y => {
+                    if (!y) return null;
+                    const w = parseFloat(y.waitlist), q = parseFloat(y.quotaTotal);
+                    return (!isNaN(w) && w >= 0 && !isNaN(q) && q > 0) ? Math.round(w / q * 100) + '%' : null;
+                }],
             ];
             const head = `<tr><th></th>${SURVEY_YEARS.map(y => `<th>'${schoolYearShort(y)}<span class="yy">학년도</span></th>`).join('')}</tr>`;
             const body = rows.map(([label, fn, hl]) =>
                 `<tr${hl ? ' class="hl"' : ''}><th class="rl">${label}</th>${SURVEY_YEARS.map(y => (hl ? cell70 : cell(fn))(r.years[y])).join('')}</tr>`
             ).join('');
             const d = classify(myG, r);
+            const t = gradeTrend(r);
+            const ch = chungInfo(r);
             document.getElementById('dm-grid').innerHTML = `
                 <div class="d-tile wide diag-tile ${d.cls}"><p class="k">입시 진단</p><p class="diag-lg">${d.label}${d.uncertain ? ' <span class="diag-edge">· 경계(참고)</span>' : ''}</p><p class="diag-why">${diagReason(myG, d)}</p></div>
                 <div class="d-tile hl" style="grid-column:1/-1;"><p class="k">${r.yearCount}개년 평균 환산등급 70%컷</p><p class="v">${r.averageGrade.toFixed(2)}</p><p class="gap-box ${gap.cls}" style="justify-content:flex-start;margin-top:3px;font-size:11.5px;">내 등급 대비 <span class="arr">${gap.arrow}</span>${gap.text}</p></div>
                 <div style="grid-column:1/-1;overflow-x:auto;"><table class="dm-year-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+                <div class="d-tile wide"><p class="k">상담 포인트</p><p class="tip-line"><b class="tip-ic ${t ? t.cls : 'tr-flat'}">추세</b> ${trendReason(t)}</p>${ch ? `<p class="tip-line"><b class="tip-ic ${ch.cls}">추합</b> ${ch.note} (평균 추합률 ${ch.pct}%)</p>` : ''}<p class="tip-caveat">※ 어디가 컷은 최종등록자 기준이라 추합이 이미 반영됨 — 추합률은 예비번호 기대·안정성 참고용입니다.</p></div>
                 <div class="d-tile"><p class="k">계열 / 전형유형</p><p class="v" style="font-size:14px;">${r.category} · ${r.kind}</p></div>
                 <div class="d-tile"><p class="k">대학코드</p><p class="v">${fmt(r.uniCode)}</p></div>`;
             document.getElementById('detail-overlay').classList.add('open');
