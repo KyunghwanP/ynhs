@@ -1240,11 +1240,18 @@
         }
         // ── 수능최저학력기준 안내 (해당 학교·학과·전형) ──
         // 최저 기준을 한 줄 텍스트로 (예: "국·수·영·탐 2개 합5 · 한4")
+        // 기준값: 데이터의 값이 null이면 원문에서 복구 (예: "3개 합 6이내" → 6) — 표시·판정 공용
+        function mincutVal(rule) {
+            if (rule['값'] != null) return rule['값'];
+            const m = String(rule['원문'] || '').match(/(?:합|각|단일)\s*(\d+)|(\d+)\s*이내/);
+            return m ? parseInt(m[1] || m[2], 10) : null;
+        }
         function critText(rule) {
             if (rule['최저있음'] !== 'Y') return '수능최저 미적용';
             const m = rule['방식']==='sum'?'합':rule['방식']==='each'?'각':rule['방식']==='single'?'단일':'';
             const area = (rule['반영영역']||[]).join('·');
-            return `${area} ${rule['택N']||''}개 ${m}${rule['값']!=null?rule['값']:''}${typeof rule['한국사']==='number'?' · 한'+rule['한국사']:''}`;
+            const v = mincutVal(rule);
+            return `${area} ${rule['택N']||''}개 ${m}${v!=null?' '+v:''}${typeof rule['한국사']==='number'?' · 한'+rule['한국사']:''}`;
         }
         // 전형유형 일치도: 2=구체매칭, 1=전 전형(모든전형 적용), 0=불일치(정시 포함)
         function typeMatch(rule, r) {
@@ -1323,11 +1330,7 @@
         function evalMincut(rule, csat) {
             if (!csat || rule['최저있음'] !== 'Y') return null;
             const method = rule['방식'], N = rule['택N'];
-            let val = rule['값'];
-            if (val == null) {   // 값 누락 시 원문에서 기준 숫자 복구 (예: "3개 합 6이내" → 6)
-                const m = String(rule['원문'] || '').match(/(?:합|각|단일)\s*(\d+)|(\d+)\s*이내/);
-                if (m) val = parseInt(m[1] || m[2], 10);
-            }
+            const val = mincutVal(rule);
             if (!['sum', 'each', 'single'].includes(method) || val == null || !N)
                 return { cls: 'unknown', label: '미판정', detail: '규칙이 복잡해 자동 판정을 생략했습니다. 원문(요강)을 확인하세요.' };
             const g = { '국': gnum(csat['국']), '수': gnum(csat['수']), '영': gnum(csat['영']) };
