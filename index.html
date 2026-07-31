@@ -2139,6 +2139,13 @@
     background:#fff;color:#475569;font-size:18px;line-height:1;cursor:pointer;
     box-shadow:0 2px 6px rgba(0,0,0,0.08);
   }
+  .jd-open{
+    position:absolute;top:10px;right:56px;z-index:2;
+    height:36px;padding:0 12px;border:1px solid #e2e8f0;border-radius:10px;
+    background:#fff;color:#4f46e5;font-size:13px;font-weight:800;line-height:1;cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,0.08);display:flex;align-items:center;gap:5px;font-family:inherit;
+  }
+  .jd-open:hover{ background:#eef2ff; }
   @media (max-width:640px){ .jd-overlay{padding:0;} .jd-box{border-radius:0;height:100%;} }
   .swap-list{display:flex;flex-direction:column;gap:8px;}
   .swap-cand{
@@ -4820,6 +4827,7 @@
 <div class="jd-overlay" id="jindanModal">
   <div class="jd-box">
     <button class="jd-close" id="jindanModalClose" title="닫기">✕</button>
+    <button class="jd-open" id="jindanOpenBtn" title="새 페이지로 크게 보기">⛶ 페이지로</button>
     <iframe id="jindanFrame" title="적정 대학 진단"></iframe>
   </div>
 </div>
@@ -6138,10 +6146,15 @@ history.replaceState({ page: 'home' }, '');
 history.pushState({ page: 'home', root: true }, '');
 
 // 적정 대학 진단 모달 — 학생 종합검색 화면을 유지한 채 위에 띄움
-function openJindanModal(grade, isGrade9){
+let _jindanFullUrl = '';
+function openJindanModal(grade, isGrade9, ctx){
   clearTimeout(exitArmTimer);
+  ctx = ctx || {};
   // 1·2학년은 5등급제(?gpa5=), 3학년은 9등급제(?grade9=)로 프리필 — jindan이 모드 자동 전환
-  document.getElementById('jindanFrame').src = `${REMOTE_BASE}jindan.html?${isGrade9 ? 'grade9' : 'gpa5'}=${grade}&embed=1`;
+  // 학생 반/번호(?sgrade=&sban=&sbun=)를 함께 넘기면 jindan 좌측 학생 선택기가 자동 선택됨
+  const stu = (ctx.grade && ctx.ban && ctx.bun) ? `&sgrade=${ctx.grade}&sban=${ctx.ban}&sbun=${ctx.bun}` : '';
+  _jindanFullUrl = `${REMOTE_BASE}jindan.html?${isGrade9 ? 'grade9' : 'gpa5'}=${grade}${stu}`;
+  document.getElementById('jindanFrame').src = `${_jindanFullUrl}&embed=1`;
   document.getElementById('jindanModal').classList.add('open');
 }
 function closeJindanModal(){
@@ -6239,6 +6252,7 @@ document.getElementById('swapModalClose').addEventListener('click', ()=>{
 swapModal.addEventListener('click', e=>{ if(e.target===swapModal) closeSwapModal(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeSwapModal(); });
 document.getElementById('jindanModalClose').addEventListener('click', closeJindanModal);
+document.getElementById('jindanOpenBtn').addEventListener('click', () => { if (_jindanFullUrl) window.open(_jindanFullUrl, '_blank', 'noopener'); });
 document.getElementById('jindanModal').addEventListener('click', e=>{ if(e.target.id==='jindanModal') closeJindanModal(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeJindanModal(); });
 
@@ -8665,7 +8679,7 @@ async function s360ShowDetail(s){
       <div style="font-size:14px;color:var(--ink-soft);margin-top:6px;">국어·수학·탐구는 등급 /백분위 표기</div>` : '<div style="font-size:15px;">모의고사 기록 없음</div>';
     gEl.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${gpa || '<span style="font-size:15px;">내신 정보 없음</span>'}</div>${s360ChartsHtml(st.history)}${table}<div id="s360SusiMatch"></div>`;
     const jBtn = document.getElementById('s360JindanBtn');
-    if (jBtn) jBtn.addEventListener('click', () => openJindanModal(jindanIs9 ? jindanG9 : jindanGpa, jindanIs9));
+    if (jBtn) jBtn.addEventListener('click', () => openJindanModal(jindanIs9 ? jindanG9 : jindanGpa, jindanIs9, { grade: parseInt(s.grade), ban: parseInt(s.room), bun: parseInt(s.num) }));
     s360RenderSusiMatch(st); // 내신 기반 졸업생 합격 사례 — 비동기로 뒤에 채움
     // 차트 라이브러리(vendor 셀프호스팅) 지연 로드 후 렌더 — 실패해도 표는 그대로 표시
     if (gEl.querySelector('.s360-charts')) {
