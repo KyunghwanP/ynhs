@@ -1321,7 +1321,12 @@
         function gnum(v) { const n = parseFloat(v); return isNaN(n) ? null : n; }
         function evalMincut(rule, csat) {
             if (!csat || rule['최저있음'] !== 'Y') return null;
-            const method = rule['방식'], N = rule['택N'], val = rule['값'];
+            const method = rule['방식'], N = rule['택N'];
+            let val = rule['값'];
+            if (val == null) {   // 값 누락 시 원문에서 기준 숫자 복구 (예: "3개 합 6이내" → 6)
+                const m = String(rule['원문'] || '').match(/(?:합|각|단일)\s*(\d+)|(\d+)\s*이내/);
+                if (m) val = parseInt(m[1] || m[2], 10);
+            }
             if (!['sum', 'each', 'single'].includes(method) || val == null || !N)
                 return { cls: 'unknown', label: '미판정', detail: '규칙이 복잡해 자동 판정을 생략했습니다. 원문(요강)을 확인하세요.' };
             const g = { '국': gnum(csat['국']), '수': gnum(csat['수']), '영': gnum(csat['영']) };
