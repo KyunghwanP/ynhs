@@ -588,7 +588,6 @@
         let showAmbitious = true;
         let admissionKind = '교과';           // 학생부 전형 구분: '교과' | '종합' (스위치 토글)
         let susiMincut = {};                    // 대학코드(int문자열) → 수능최저 규칙 배열
-        let mockGrades = {국:'',수:'',영:'',탐:'',한:''};   // 학생 모의고사 등급(수능최저 판정용)
         let currentFiltered = [];              // 현재 필터 결과 (모달·더 보기에서 참조)
         let visibleCount = 150;
         const PAGE_SIZE = 150;
@@ -1097,38 +1096,15 @@
             document.getElementById('detail-overlay').classList.add('open');
             document.body.style.overflow = 'hidden';
         }
-        // ── 수능최저 판정 (학생 모의고사 등급 vs 대학 최저 규칙) ──
-        function setMock(k, v) { mockGrades[k] = v; if (_guideRec) renderSusi(_guideRec); }
-        function evalMincut(rule, g) {
-            const gg = {}; ['국','수','영','탐','한'].forEach(k => { const n = parseFloat(g[k]); gg[k] = isNaN(n) ? null : n; });
-            const N = rule['택N'];
-            if (!N || !rule['방식'] || rule['값'] == null) return { status: 'unknown' };
-            const pool = rule['반영영역'].map(a => gg[a]).filter(v => v != null);
-            let picked;
-            if (rule['수학포함'] && gg['수'] != null) {
-                const others = rule['반영영역'].filter(a => a !== '수').map(a => gg[a]).filter(v => v != null).sort((a,b)=>a-b);
-                if (others.length < N - 1) return { status: 'unknown' };
-                picked = [gg['수'], ...others.slice(0, N - 1)];
-            } else {
-                if (rule['방식'] !== 'single' && pool.length < N) return { status: 'unknown' };
-                picked = [...pool].sort((a,b)=>a-b).slice(0, N);
-            }
-            let ok;
-            if (rule['방식'] === 'sum') ok = picked.reduce((a,b)=>a+b,0) <= rule['값'];
-            else if (rule['방식'] === 'each') ok = picked.every(v => v <= rule['값']);
-            else if (rule['방식'] === 'single') { if (!pool.length) return { status:'unknown' }; ok = Math.min(...pool) <= rule['값']; }
-            else return { status: 'unknown' };
-            if (typeof rule['한국사'] === 'number') { if (gg['한'] == null) return { status:'unknown' }; if (gg['한'] > rule['한국사']) ok = false; }
-            return { status: ok ? 'pass' : 'fail' };
-        }
-        // 최저 기준을 한 줄 텍스트로 (예: "국·수·영·탐 2개 합5 /한4")
+        // ── 수능최저학력기준 안내 (해당 학교·학과·전형) ──
+        // 최저 기준을 한 줄 텍스트로 (예: "국·수·영·탐 2개 합5 · 한4")
         function critText(rule) {
             if (rule['최저있음'] !== 'Y') return '수능최저 미적용';
             const m = rule['방식']==='sum'?'합':rule['방식']==='each'?'각':rule['방식']==='single'?'단일':'';
             const area = (rule['반영영역']||[]).join('·');
             return `${area} ${rule['택N']||''}개 ${m}${rule['값']!=null?rule['값']:''}${typeof rule['한국사']==='number'?' · 한'+rule['한국사']:''}`;
         }
-        // 전형 일치도: 2=구체매칭, 1=전 전형(모든전형 적용), 0=불일치(정시 포함)
+        // 전형유형 일치도: 2=구체매칭, 1=전 전형(모든전형 적용), 0=불일치(정시 포함)
         function typeMatch(rule, r) {
             const tag = s => { s=s||''; const t=new Set();
                 if (s.includes('교과')) t.add('교과');
@@ -1143,6 +1119,18 @@
             if (rt.size===0) return 1;                              // '전 전형'·'수시'·'기타' → 모든 전형 적용
             for (const x of rt) if (at.has(x)) return 2;
             return 0;
+        }
+        // 전형명(상세) 일치도: 3=특수전형 키워드 일치, 2=둘다 일반, 1=규칙만 일반, 0=불일치
+        const NAME_KW = ['지역인재','지역균형','기회균형','고른기회','사회통합','사회배려','사회기여','농어촌',
+            '특성화고','특기자','기초생활','국가보훈','만학','성인','재직자','서해5도','다문화','장애','고교추천','학교장추천','추천','고교연계'];
+        function nameScore(rule, r) {
+            const rn = rule['전형명']||'', an = r.admissionName||'';
+            const rk = NAME_KW.filter(k => rn.includes(k));
+            const ak = NAME_KW.filter(k => an.includes(k));
+            if (rk.length && rk.some(k => ak.includes(k))) return 3;   // 특수전형 키워드 일치(지역인재 등)
+            if (!rk.length && !ak.length) return 2;                    // 둘 다 일반전형
+            if (!rk.length && ak.length) return 1;                     // 규칙은 일반, 입결은 특수(부분 인정)
+            return 0;                                                  // 규칙은 특수인데 입결과 불일치
         }
         // 모집단위 일치도: 4=정확, 3=부분, 2=계열, 1=전체/해당모집단위, 0=불일치
         function unitMatch(rule, r) {
@@ -1165,18 +1153,17 @@
         function renderSusi(r) {
             const el = document.getElementById('dm-susi');
             const all = susiMincut[r.uniCode] || [];
-            const g = mockGrades;
-            const inp = (k, label) => `<label style="font-size:11px;font-weight:800;color:#64748b;">${label}<input type="number" min="1" max="9" value="${g[k]}" oninput="setMock('${k}',this.value)" style="width:42px;margin-left:3px;padding:4px;border:1px solid #cbd5e1;border-radius:6px;text-align:center;"></label>`;
             let html = `<div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:12px;">
-                <p style="font-weight:900;font-size:14px;margin:0 0 8px;">🎯 수능최저 판정 <span style="font-size:11px;color:#94a3b8;">(모의고사 등급 입력)</span></p>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">${inp('국','국')}${inp('수','수')}${inp('영','영')}${inp('탐','탐')}${inp('한','한국사')}</div>`;
+                <p style="font-weight:900;font-size:14px;margin:0 0 10px;">🎯 수능최저학력기준
+                    <span style="font-size:11px;color:#94a3b8;font-weight:600;">${r.department || ''} · ${r.admissionName || ''}</span></p>`;
             if (!all.length) { el.innerHTML = html + `<p style="color:#64748b;font-size:13px;">이 대학의 수능최저 데이터가 없습니다.</p></div>`; return; }
 
-            // 이 학과·전형에 해당하는 규칙만 점수화해서 최적 매칭 선택
-            const scored = all.map(rule => ({ rule, tm: typeMatch(rule, r), um: unitMatch(rule, r) }))
+            // 이 학과·전형에 해당하는 규칙만 점수화(전형유형→전형명→모집단위)해서 최적 매칭 선택
+            const scored = all.map(rule => ({ rule, tm: typeMatch(rule, r), ns: nameScore(rule, r), um: unitMatch(rule, r) }))
                               .filter(x => x.tm > 0 && x.um > 0);
-            const best = scored.length ? Math.max(...scored.map(x => x.tm*10 + x.um)) : 0;
-            const picked = scored.filter(x => x.tm*10 + x.um === best).map(x => x.rule);
+            const score = x => x.tm*1000 + x.ns*100 + x.um*10;
+            const best = scored.length ? Math.max(...scored.map(score)) : 0;
+            const picked = scored.filter(x => score(x) === best).map(x => x.rule);
 
             if (picked.length) {
                 const anyY = picked.some(p => p['최저있음'] === 'Y');
@@ -1185,19 +1172,12 @@
                         <b style="color:#059669;">이 학과·전형은 수능최저를 적용하지 않습니다.</b></div>`;
                 } else {
                     picked.filter(p => p['최저있음']==='Y').forEach(rule => {
-                        const ev = evalMincut(rule, g);
-                        const badge = ev.status==='pass' ? '<span style="color:#059669;">충족 ✅</span>'
-                                    : ev.status==='fail' ? '<span style="color:#dc2626;">미충족 ❌</span>'
-                                    : '<span style="color:#94a3b8;">등급 입력 시 판정</span>';
-                        const bg = ev.status==='pass'?'#ecfdf5':ev.status==='fail'?'#fef2f2':'#f8fafc';
-                        const bd = ev.status==='pass'?'#a7f3d0':ev.status==='fail'?'#fecaca':'#e2e8f0';
-                        html += `<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:12px 14px;margin-bottom:8px;">
-                            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-                                <span style="font-size:12px;color:#64748b;">${rule['전형유형']||''} ${rule['전형명']||''} · ${rule['모집단위']||''}</span>
-                                <b style="font-size:14px;white-space:nowrap;">${badge}</b></div>
-                            <p style="font-size:15px;font-weight:900;margin:6px 0 0;">${critText(rule)}</p>
-                            ${rule['수학제한'] && rule['수학제한']!=='-' ? `<p style="font-size:11px;color:#64748b;margin:3px 0 0;">수학: ${rule['수학제한']}</p>`:''}
-                            ${rule['탐구'] && rule['탐구']!=='-' ? `<p style="font-size:11px;color:#64748b;margin:2px 0 0;">탐구: ${rule['탐구']}</p>`:''}
+                        html += `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+                            <span style="font-size:12px;color:#64748b;">${rule['전형유형']||''} ${rule['전형명']||''} · ${rule['모집단위']||''}</span>
+                            <p style="font-size:17px;font-weight:900;margin:6px 0 0;color:#1e293b;">${critText(rule)}</p>
+                            ${rule['수학제한'] && rule['수학제한']!=='-' ? `<p style="font-size:12px;color:#64748b;margin:4px 0 0;">· 수학: ${rule['수학제한']}</p>`:''}
+                            ${rule['탐구'] && rule['탐구']!=='-' ? `<p style="font-size:12px;color:#64748b;margin:2px 0 0;">· 탐구: ${rule['탐구']}</p>`:''}
+                            ${rule['비고'] && rule['비고']!=='-' ? `<p style="font-size:11px;color:#94a3b8;margin:4px 0 0;">${rule['비고']}</p>`:''}
                         </div>`;
                     });
                 }
@@ -1210,16 +1190,14 @@
             if (yAll.length) {
                 html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12px;color:#6366f1;font-weight:800;">이 대학 전체 최저 보기 (${yAll.length}건)</summary>
                     <div style="overflow-x:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">
-                    <tr style="background:#eef2ff;"><th style="padding:6px;text-align:left;">전형</th><th style="padding:6px;text-align:left;">모집단위</th><th style="padding:6px;">최저 기준</th><th style="padding:6px;">판정</th></tr>`;
+                    <tr style="background:#eef2ff;"><th style="padding:6px;text-align:left;">전형</th><th style="padding:6px;text-align:left;">모집단위</th><th style="padding:6px;">최저 기준</th></tr>`;
                 yAll.forEach(rule => {
-                    const ev = evalMincut(rule, g);
-                    const badge = ev.status==='pass' ? '<b style="color:#059669;">✅</b>' : ev.status==='fail' ? '<b style="color:#dc2626;">❌</b>' : '<span style="color:#94a3b8;">–</span>';
                     const hi = picked.includes(rule) ? 'background:#fef9c3;' : '';
-                    html += `<tr style="border-top:1px solid #e2e8f0;${hi}"><td style="padding:6px;">${rule['전형유형']||''} ${rule['전형명']||''}</td><td style="padding:6px;">${rule['모집단위']||''}</td><td style="padding:6px;text-align:center;">${critText(rule)}</td><td style="padding:6px;text-align:center;">${badge}</td></tr>`;
+                    html += `<tr style="border-top:1px solid #e2e8f0;${hi}"><td style="padding:6px;">${rule['전형유형']||''} ${rule['전형명']||''}</td><td style="padding:6px;">${rule['모집단위']||''}</td><td style="padding:6px;text-align:center;">${critText(rule)}</td></tr>`;
                 });
                 html += `</table></div></details>`;
             }
-            html += `<p style="font-size:11px;color:#94a3b8;margin-top:8px;">※ 자동 판정은 참고용 — 미적분/기하·과탐 2과목 평균 등 세부조건은 원문(요강)으로 최종 확인하세요.</p></div>`;
+            html += `<p style="font-size:11px;color:#94a3b8;margin-top:8px;">※ 참고용 — 미적분/기하 지정·과탐 2과목 평균 등 세부조건은 원문(요강)으로 최종 확인하세요.</p></div>`;
             el.innerHTML = html;
         }
         function closeDetail() {
