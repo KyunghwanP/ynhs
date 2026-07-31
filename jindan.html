@@ -1201,17 +1201,24 @@
             for (const x of rt) if (at.has(x)) return 2;
             return 0;
         }
-        // 전형명(상세) 일치도: 3=특수전형 키워드 일치, 2=둘다 일반, 1=규칙만 일반, 0=불일치
+        // 전형명(상세) 매칭 — 리포트 전형명의 괄호 안 내용을 규칙 전형명과 부분 일치
         const NAME_KW = ['지역인재','지역균형','기회균형','고른기회','사회통합','사회배려','사회기여','농어촌',
-            '특성화고','특기자','기초생활','국가보훈','만학','성인','재직자','서해5도','다문화','장애','고교추천','학교장추천','추천','고교연계'];
+            '특성화고','특성화','특수교육','특기자','기초생활','국가보훈','만학','성인','재직자','서해5도',
+            '다문화','장애','학교장추천','고교추천','고교연계','추천','논술','실기','면접',
+            '교과성적우수자','교과우수자','학생부우수자','학교생활우수자','창의인재','모바일과학인재','영농창업','고른기회'];
+        function canonName(s) {
+            s = s || '';
+            const m = s.match(/\(([^)]*)\)/); if (m) s = m[1];   // "학생부교과(지역인재전형)" → 괄호 안 우선
+            for (const k of NAME_KW) if (s.includes(k)) return k;
+            if (s.includes('일반')) return '일반';
+            return '';                                           // 미상
+        }
+        // 일치도: 3=같은 특수전형(지역인재=지역인재 등), 2=한쪽 일반/미상, 0=서로 다른 특수전형
         function nameScore(rule, r) {
-            const rn = rule['전형명']||'', an = r.admissionName||'';
-            const rk = NAME_KW.filter(k => rn.includes(k));
-            const ak = NAME_KW.filter(k => an.includes(k));
-            if (rk.length && rk.some(k => ak.includes(k))) return 3;   // 특수전형 키워드 일치(지역인재 등)
-            if (!rk.length && !ak.length) return 2;                    // 둘 다 일반전형
-            if (!rk.length && ak.length) return 1;                     // 규칙은 일반, 입결은 특수(부분 인정)
-            return 0;                                                  // 규칙은 특수인데 입결과 불일치
+            const a = canonName(r.admissionName), b = canonName(rule['전형명']);
+            if (a === b) return a ? 3 : 2;                        // 같으면 3 (둘 다 미상이면 2)
+            if (a === '일반' || b === '일반' || !a || !b) return 2;  // 한쪽이 일반/미상 → 약하게 인정
+            return 0;                                             // 둘 다 특수인데 서로 다름 → 제외
         }
         // 모집단위 일치도: 4=정확, 3=부분, 2=계열, 1=전체/해당모집단위, 0=불일치
         function unitMatch(rule, r) {
@@ -1241,7 +1248,7 @@
 
             // 이 학과·전형에 해당하는 규칙만 점수화(전형유형→전형명→모집단위)해서 최적 매칭 선택
             const scored = all.map(rule => ({ rule, tm: typeMatch(rule, r), ns: nameScore(rule, r), um: unitMatch(rule, r) }))
-                              .filter(x => x.tm > 0 && x.um > 0);
+                              .filter(x => x.tm > 0 && x.ns > 0 && x.um > 0);
             const score = x => x.tm*1000 + x.ns*100 + x.um*10;
             const best = scored.length ? Math.max(...scored.map(score)) : 0;
             const picked = scored.filter(x => score(x) === best).map(x => x.rule);
