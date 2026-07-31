@@ -325,6 +325,25 @@
         .d-tile.hl { background: var(--indigo-50); border-color: var(--indigo-100); }
         .d-tile.hl .v { color: var(--indigo); }
         .d-tile.wide { grid-column: 1 / -1; }
+        /* 데스크톱: 모달을 가로로 넓혀 2열(좌=컷 정보 / 우=수능최저)로 — 스크롤 최소화 + 내용 확대.
+           모바일(≤719px)은 현행 그대로 세로 스택 유지. */
+        @media (min-width: 720px) {
+            .detail-modal { max-width: 64rem; padding: 32px 36px 26px; }
+            .detail-modal h3 { font-size: 28px; }
+            .detail-dept { font-size: 16px; }
+            .dm-body { display: flex; gap: 22px; align-items: flex-start; }
+            .dm-body #dm-grid { flex: 1 1 0; min-width: 0; margin-top: 4px; }
+            .dm-body .dm-right { flex: 1 1 0; min-width: 0; }
+            .d-tile { padding: 15px 18px; }
+            .d-tile .k { font-size: 11.5px; }
+            .d-tile .v { font-size: 21px; }
+            .diag-tile .diag-lg, .diag-note .diag-lg { font-size: 25px; }
+            .diag-tile .diag-why, .diag-note .diag-why { font-size: 13.5px; }
+            .tip-line { font-size: 13.5px; }
+            .tip-caveat { font-size: 12px; }
+            .dm-year-table { font-size: 14px; }
+            .dm-year-table tr.hl td { font-size: 17px; }
+        }
         /* 상세 모달 3개년 비교표 */
         .dm-year-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .dm-year-table th, .dm-year-table td { padding: 7px 8px; text-align: center; border-bottom: 1px solid var(--slate-100); font-variant-numeric: tabular-nums; }
@@ -597,8 +616,14 @@
             <p class="campus-txt" id="dm-campus"></p>
             <p class="detail-dept" id="dm-dept"></p>
             <p class="detail-adm" id="dm-adm"></p>
-            <div class="detail-grid" id="dm-grid"></div>
-            <div id="dm-susi"></div>
+            <div class="dm-body">
+                <div class="detail-grid" id="dm-grid"></div>
+                <div class="dm-right">
+                    <div id="dm-tip"></div>
+                    <div id="dm-susi"></div>
+                    <div class="d-tile" id="dm-meta" style="margin-top:12px;"></div>
+                </div>
+            </div>
             <button class="dm-guide-btn" id="dm-guide-btn" onclick="openGuide()">📑 이 대학 수시 모집요강 보기</button>
             <p class="detail-note">출처 : 2024~2026학년도 어디가 입결 · 환산점수/등급은 각 대학 환산 기준의 50%·70% 컷입니다. 리스트 탐색·정렬은 <b>3개년 환산등급 70%컷 평균</b> 기준입니다.</p>
         </div>
@@ -1204,11 +1229,12 @@
             document.getElementById('dm-grid').innerHTML = `
                 ${diagTileHtml}
                 <div class="d-tile hl" style="grid-column:1/-1;"><p class="k">${r.yearCount}개년 평균 환산등급 70%컷</p><p class="v">${r.averageGrade.toFixed(2)}</p><p class="gap-box ${gap.cls}" style="justify-content:flex-start;margin-top:3px;font-size:11.5px;">내 등급 대비 <span class="arr">${gap.arrow}</span>${gap.text}</p></div>
-                <div style="grid-column:1/-1;overflow-x:auto;"><table class="dm-year-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-                <div class="d-tile wide"><p class="k">상담 포인트</p><p class="tip-line"><b class="tip-ic ${t ? t.cls : 'tr-flat'}">추세</b> ${trendReason(t)}</p>${ch ? `<p class="tip-line"><b class="tip-ic ${ch.cls}">추합</b> ${ch.note} (평균 추합률 ${ch.pct}%)</p>` : ''}<p class="tip-caveat">※ 어디가 컷은 최종등록자 기준이라 추합이 이미 반영됨 — 추합률은 예비번호 기대·안정성 참고용입니다.</p></div>
-                <div class="d-tile"><p class="k">계열 / 전형유형</p><p class="v" style="font-size:14px;">${r.category} · ${r.kind}</p></div>
-                <div class="d-tile"><p class="k">대학코드</p><p class="v">${fmt(r.uniCode)}</p></div>`;
+                <div style="grid-column:1/-1;overflow-x:auto;"><table class="dm-year-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+            document.getElementById('dm-tip').innerHTML =
+                `<div class="d-tile wide"><p class="k">상담 포인트</p><p class="tip-line"><b class="tip-ic ${t ? t.cls : 'tr-flat'}">추세</b> ${trendReason(t)}</p>${ch ? `<p class="tip-line"><b class="tip-ic ${ch.cls}">추합</b> ${ch.note} (평균 추합률 ${ch.pct}%)</p>` : ''}<p class="tip-caveat">※ 어디가 컷은 최종등록자 기준이라 추합이 이미 반영됨 — 추합률은 예비번호 기대·안정성 참고용입니다.</p></div>`;
             renderSusi(r);
+            document.getElementById('dm-meta').innerHTML =
+                `<p class="k">계열 / 전형유형 / 대학코드</p><p class="v" style="font-size:15px;">${r.category} · ${r.kind} · ${fmt(r.uniCode)}</p>`;
             document.getElementById('detail-overlay').classList.add('open');
             document.body.style.overflow = 'hidden';
         }
@@ -1542,6 +1568,16 @@
             gradeSel.innerHTML = ''; gradeSel.appendChild(opt('', '학년'));
             Object.keys(tree).sort((a, b) => a - b).forEach(g => gradeSel.appendChild(opt(g, g + '학년')));
             gradeSel.disabled = false;
+            autoSelectFromParams();
+        }
+        // 학생종합검색에서 넘어온 학생 자동 선택 (?sgrade=&sban=&sbun=) — 명단·내신·모의고사까지 자동 반영
+        function autoSelectFromParams() {
+            const p = new URLSearchParams(location.search);
+            const sg = p.get('sgrade'), sb = p.get('sban'), sn = p.get('sbun');
+            if (!sg || !sb || !sn || !tree || !tree[sg] || !tree[sg][sb] || !tree[sg][sb][sn]) return;
+            gradeSel.value = sg; gradeSel.dispatchEvent(new Event('change'));   // 반 옵션 채움
+            banSel.value = sb; banSel.dispatchEvent(new Event('change'));       // 번호 옵션 채움
+            bunSel.value = sn; bunSel.dispatchEvent(new Event('change'));       // 학생 로드(내신·모의고사)
         }
         function resetSel(sel, ph) { sel.innerHTML = ''; sel.appendChild(opt('', ph)); sel.disabled = true; }
 
