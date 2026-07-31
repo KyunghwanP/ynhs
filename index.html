@@ -6252,7 +6252,7 @@ document.getElementById('swapModalClose').addEventListener('click', ()=>{
 swapModal.addEventListener('click', e=>{ if(e.target===swapModal) closeSwapModal(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeSwapModal(); });
 document.getElementById('jindanModalClose').addEventListener('click', closeJindanModal);
-document.getElementById('jindanOpenBtn').addEventListener('click', () => { if (_jindanFullUrl) window.open(_jindanFullUrl, '_blank', 'noopener'); });
+document.getElementById('jindanOpenBtn').addEventListener('click', () => { if (_jindanFullUrl) window.location.href = _jindanFullUrl; });
 document.getElementById('jindanModal').addEventListener('click', e=>{ if(e.target.id==='jindanModal') closeJindanModal(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeJindanModal(); });
 
