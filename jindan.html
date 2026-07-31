@@ -238,6 +238,12 @@
         .diag-note .k { color: #b45309; opacity: .8; }
         .diag-note .diag-lg { font-size: 15px; font-weight: 900; color: #92400e; margin-top: 2px; }
         .diag-note .diag-why { font-size: 12.5px; font-weight: 700; line-height: 1.55; margin-top: 6px; color: #92400e; }
+        /* 수능최저 충족 판정 배지 (학생 선택 시) */
+        .mc-badge { padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 900; flex-shrink: 0; }
+        .mc-pass { background: #dcfce7; color: #15803d; }
+        .mc-near { background: #fef9c3; color: #a16207; }
+        .mc-fail { background: #fee2e2; color: #b91c1c; }
+        .mc-unknown { background: #e2e8f0; color: #64748b; }
         /* 3개년 추세 색 (모달 상담포인트 태그 + 카드 메타줄 공용) */
         .tr-up   { color: #b45309; }   /* 컷 상승(경쟁 심화) — 주황 */
         .tr-down { color: #2563eb; }   /* 컷 하락(완화) — 파랑 */
@@ -388,6 +394,7 @@
             <div class="sp-result" id="stu-result">
                 <div class="nm" id="stu-name"></div>
                 <div class="gr" id="stu-grade-val"></div>
+                <div class="gr" id="stu-csat" style="margin-top:3px;color:var(--slate-500);font-weight:700;font-size:11.5px;"></div>
             </div>
             <p class="sp-hint" id="stu-hint">교사용 앱에서 로그인하면 담당 학생 명단이 표시됩니다.</p>
         </aside>
@@ -1269,12 +1276,75 @@
             if (/전체|전 ?모집|전 ?학과|전 ?학부|전 ?계열|모든|해당 ?모집단위|자율전공|자유전공/.test(u)) return 1;
             return 0;
         }
+        // ── 수능최저 충족 판정 (학생 모의고사 등급 vs 규칙) ──
+        // 기준: 최근 모의고사 / 애매한 규칙은 보수적으로 '미판정'. 탐구는 기본 상위1과목, '2과목평균' 명시 시 평균.
+        function gnum(v) { const n = parseFloat(v); return isNaN(n) ? null : n; }
+        function evalMincut(rule, csat) {
+            if (!csat || rule['최저있음'] !== 'Y') return null;
+            const method = rule['방식'], N = rule['택N'], val = rule['값'];
+            if (!['sum', 'each', 'single'].includes(method) || val == null || !N)
+                return { cls: 'unknown', label: '미판정', detail: '규칙이 복잡해 자동 판정을 생략했습니다. 원문(요강)을 확인하세요.' };
+            const g = { '국': gnum(csat['국']), '수': gnum(csat['수']), '영': gnum(csat['영']) };
+            // 탐구 값 산출
+            const tam = (csat['탐'] || []).map(gnum).filter(v => v != null);
+            let tamNote = '';
+            if (tam.length) {
+                const tg = rule['탐구'] || '';
+                if (/평균/.test(tg) && tam.length >= 2) {
+                    const avg = (tam[0] + tam[1]) / 2;
+                    g['탐'] = /절사|버림/.test(tg) ? Math.floor(avg) : Math.round(avg);
+                    tamNote = `탐 2과목평균 ${g['탐']}`;
+                } else { g['탐'] = Math.min(...tam); tamNote = `탐 상위1 ${g['탐']}`; }
+            }
+            // 한국사 별도 (반영영역 밖)
+            let histFail = false, histNote = '';
+            const histReq = gnum(rule['한국사']);
+            if (histReq != null) {
+                const h = gnum(csat['한']);
+                if (h == null) histNote = `한국사 미확인(기준 ${histReq})`;
+                else if (h > histReq) { histFail = true; histNote = `한국사 ${h}>기준 ${histReq}`; }
+                else histNote = `한국사 ${h}≤${histReq} ✓`;
+            }
+            const reflected = rule['반영영역'] && rule['반영영역'].length ? rule['반영영역'] : ['국', '수', '영', '탐'];
+            const avail = reflected.filter(a => g[a] != null).map(a => ({ area: a, grade: g[a] }));
+            if (avail.length < N) return { cls: 'unknown', label: '미판정', detail: `학생 등급이 부족해 판정 불가 (필요 ${N}개 영역)` };
+            const sorted = [...avail].sort((a, b) => a.grade - b.grade);
+            let chosen;
+            if (rule['수학포함']) {
+                const su = avail.find(x => x.area === '수');
+                if (!su) return { cls: 'unknown', label: '미판정', detail: '수학 필수인데 수학 등급이 없습니다.' };
+                chosen = [su, ...sorted.filter(x => x.area !== '수').slice(0, N - 1)];
+            } else chosen = sorted.slice(0, N);
+            let ok, near, shown;
+            if (method === 'sum') {
+                const s = chosen.reduce((a, b) => a + b.grade, 0);
+                ok = s <= val; near = !ok && s <= val + 1; shown = `합 ${s} (기준 ${val})`;
+            } else {
+                const worst = Math.max(...chosen.map(x => x.grade));
+                ok = worst <= val; near = !ok && worst <= val + 1;
+                shown = method === 'single' ? `${worst} (기준 ${val})` : `각 최고 ${worst} (기준 ${val})`;
+            }
+            let label, cls;
+            if (histFail) { label = '미충족'; cls = 'fail'; }
+            else if (ok) { label = '충족'; cls = 'pass'; }
+            else if (near) { label = '근접'; cls = 'near'; }
+            else { label = '미충족'; cls = 'fail'; }
+            let detail = `${chosen.map(x => x.area + x.grade).join('·')} → ${shown}`;
+            if (tamNote && reflected.includes('탐')) detail += ` · ${tamNote}`;
+            if (histNote) detail += ` · ${histNote}`;
+            return { cls, label, detail };
+        }
         function renderSusi(r) {
             const el = document.getElementById('dm-susi');
             const all = susiMincut[r.uniCode] || [];
+            const cs = window.studentCsat;
+            const basis = cs
+                ? `<span style="font-size:11px;color:#4f46e5;font-weight:800;background:#eef2ff;border:1px solid #e0e7ff;border-radius:999px;padding:2px 9px;">👤 ${cs.examDate || '최근'} 모의 기준 판정</span>`
+                : `<span style="font-size:11px;color:#94a3b8;font-weight:600;">※ 왼쪽에서 학생을 선택하면 충족 여부를 자동 판정합니다.</span>`;
             let html = `<div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:12px;">
-                <p style="font-weight:900;font-size:14px;margin:0 0 10px;">🎯 수능최저학력기준
-                    <span style="font-size:11px;color:#94a3b8;font-weight:600;">${r.department || ''} · ${r.admissionName || ''}</span></p>`;
+                <p style="font-weight:900;font-size:14px;margin:0 0 6px;">🎯 수능최저학력기준
+                    <span style="font-size:11px;color:#94a3b8;font-weight:600;">${r.department || ''} · ${r.admissionName || ''}</span></p>
+                <p style="margin:0 0 10px;">${basis}</p>`;
             if (!all.length) { el.innerHTML = html + `<p style="color:#64748b;font-size:13px;">이 대학의 수능최저 데이터가 없습니다.</p></div>`; return; }
 
             // 이 학과·전형에 해당하는 규칙만 점수화(전형유형→전형명→모집단위)해서 최적 매칭 선택
@@ -1295,10 +1365,14 @@
                         const k = `${p['전형유형']}|${p['택N']}|${p['방식']}|${p['값']}|${p['수학포함']}`;
                         if (_seen.has(k)) return false; _seen.add(k); return true;
                     }).forEach(rule => {
+                        const ev = evalMincut(rule, cs);
                         const cond = (label, val) => `<p style="font-size:14px;font-weight:700;color:#334155;margin:6px 0 0;"><span style="display:inline-block;min-width:38px;color:#4f46e5;font-weight:900;">${label}</span>${val}</p>`;
                         html += `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:8px;">
                             <span style="font-size:12px;color:#64748b;">${rule['전형유형']||''} ${rule['전형명']||''} · ${rule['모집단위']||''}</span>
                             <p style="font-size:19px;font-weight:900;margin:6px 0 2px;color:#0f172a;">${critText(rule)}</p>
+                            ${ev ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 0;">
+                                <span class="mc-badge mc-${ev.cls}">${ev.label}</span>
+                                <span style="font-size:12px;color:#475569;font-weight:600;">${ev.detail}</span></div>`:''}
                             ${rule['수학제한'] && rule['수학제한']!=='-' ? cond('수학', rule['수학제한']) : ''}
                             ${rule['탐구'] && rule['탐구']!=='-' ? cond('탐구', rule['탐구']) : ''}
                             ${rule['비고'] && rule['비고']!=='-' ? `<p style="font-size:12px;color:#64748b;margin:6px 0 0;">${rule['비고']}</p>`:''}
@@ -1324,6 +1398,10 @@
             html += `<p style="font-size:11px;color:#94a3b8;margin-top:8px;">※ 참고용 — 미적분/기하 지정·과탐 2과목 평균 등 세부조건은 원문(요강)으로 최종 확인하세요.</p></div>`;
             el.innerHTML = html;
         }
+        // 학생 선택이 바뀌면 열려 있는 모달의 수능최저 판정을 갱신
+        window.refreshSusi = function() {
+            if (_guideRec && document.getElementById('detail-overlay').classList.contains('open')) renderSusi(_guideRec);
+        };
         function closeDetail() {
             document.getElementById('detail-overlay').classList.remove('open');
             document.body.style.overflow = '';
@@ -1454,21 +1532,36 @@
 
         gradeSel.addEventListener('change', () => {
             const g = gradeSel.value;
-            resetSel(banSel, '반'); resetSel(bunSel, '번호(학생)'); resultEl.style.display = 'none';
+            resetSel(banSel, '반'); resetSel(bunSel, '번호(학생)'); resultEl.style.display = 'none'; clearCsat();
             if (!g || !tree[g]) return;
             Object.keys(tree[g]).sort((a, b) => a - b).forEach(b => banSel.appendChild(opt(b, b + '반')));
             banSel.disabled = false;
         });
         banSel.addEventListener('change', () => {
             const g = gradeSel.value, b = banSel.value;
-            resetSel(bunSel, '번호(학생)'); resultEl.style.display = 'none';
+            resetSel(bunSel, '번호(학생)'); resultEl.style.display = 'none'; clearCsat();
             if (!g || !b || !tree[g][b]) return;
             Object.keys(tree[g][b]).sort((a, b2) => a - b2).forEach(n => bunSel.appendChild(opt(n, n + '번 ' + tree[g][b][n])));
             bunSel.disabled = false;
         });
+        // 최근 모의고사 등급 추출 → window.studentCsat (수능최저 판정용). history: 오래된→최신
+        function extractCsat(st) {
+            const hist = Array.isArray(st.history) ? st.history : [];
+            const gg = x => (x && x.g != null && x.g !== '-' && x.g !== '') ? x.g : null;
+            const sg = x => (x != null && x !== '-' && x !== '') ? x : null;
+            for (let i = hist.length - 1; i >= 0; i--) {
+                const h = hist[i]; if (!h) continue;
+                const kor = gg(h.kor), math = gg(h.math), eng = sg(h.eng), his = sg(h.hist), t1 = gg(h.tam1), t2 = gg(h.tam2);
+                if (kor != null || math != null || eng != null || t1 != null || t2 != null)
+                    return { '국': kor, '수': math, '영': eng, '한': his, '탐': [t1, t2].filter(v => v != null), mathSub: (h.math && h.math.sub) || '', examDate: h.examDate || '' };
+            }
+            return null;
+        }
+        function clearCsat() { window.studentCsat = null; if (window.refreshSusi) window.refreshSusi(); }
+
         bunSel.addEventListener('change', async () => {
             const g = gradeSel.value, b = banSel.value, n = bunSel.value;
-            if (!g || !b || !n) { resultEl.style.display = 'none'; return; }
+            if (!g || !b || !n) { resultEl.style.display = 'none'; clearCsat(); return; }
             const key = g + '-' + b;
             const name = (tree[g] && tree[g][b] && tree[g][b][n]) || '';
             try {
@@ -1477,10 +1570,17 @@
                     classCache[key] = s.exists() ? s.data() : { students: {} };
                 }
                 const st = (classCache[key].students || {})[n] || {};
+                $('stu-name').textContent = `${g}학년 ${b}반 ${n}번 ${name}`;
+                // 최근 모의고사 → 수능최저 판정용 (내신 유무와 무관하게 먼저 반영)
+                const cs = extractCsat(st);
+                window.studentCsat = cs;
+                $('stu-csat').textContent = cs
+                    ? `최근 모의(${cs.examDate || '-'}): ` + [cs['국'] != null ? '국' + cs['국'] : '', cs['수'] != null ? '수' + cs['수'] : '', cs['영'] != null ? '영' + cs['영'] : '', cs['탐'].length ? '탐' + cs['탐'].join('·') : '', cs['한'] != null ? '한' + cs['한'] : ''].filter(Boolean).join(' ')
+                    : '모의고사 기록 없음 — 최저 판정 불가';
+                if (window.refreshSusi) window.refreshSusi();
                 // 필드명 주의(index.html과 동일): gpa9=5등급제 내신, gpa5=9등급제 내신
                 const is3 = String(g) === '3';
                 const val = is3 ? st.gpa5 : st.gpa9;
-                $('stu-name').textContent = `${g}학년 ${b}반 ${n}번 ${name}`;
                 if (!val || val === '-') {
                     $('stu-grade-val').textContent = '등록된 내신 정보가 없습니다.';
                     resultEl.style.display = 'block';
