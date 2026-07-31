@@ -233,6 +233,11 @@
         .diag-tile .diag-lg { font-size: 22px; font-weight: 900; letter-spacing: -.02em; margin-top: 2px; }
         .diag-tile .diag-edge { font-size: 12px; font-weight: 800; opacity: .7; }
         .diag-tile .diag-why { font-size: 12.5px; font-weight: 700; line-height: 1.55; margin-top: 6px; opacity: .95; }
+        /* 종합전형: 성적 기반 진단 라벨 대신 안내 타일 (성적 외 요소가 커 혼선 방지) */
+        .diag-note { background: #fffbeb; border: 1px solid #fde68a; }
+        .diag-note .k { color: #b45309; opacity: .8; }
+        .diag-note .diag-lg { font-size: 15px; font-weight: 900; color: #92400e; margin-top: 2px; }
+        .diag-note .diag-why { font-size: 12.5px; font-weight: 700; line-height: 1.55; margin-top: 6px; color: #92400e; }
         /* 3개년 추세 색 (모달 상담포인트 태그 + 카드 메타줄 공용) */
         .tr-up   { color: #b45309; }   /* 컷 상승(경쟁 심화) — 주황 */
         .tr-down { color: #2563eb; }   /* 컷 하락(완화) — 파랑 */
@@ -469,6 +474,7 @@
                 <div class="lg-item"><span class="lg-sw lab-risk">위험</span><span class="lg-tx"><b>70%컷 + 완충</b> 초과 — 합격 낮음</span></div>
                 <div class="lg-item"><span class="lg-sw" style="border:1px dashed var(--slate-400);color:var(--slate-500);">경계</span><span class="lg-tx">데이터 부족·경계선 — <b>단정 말고 참고</b></span></div>
                 <p class="sp-hint" style="margin-top:2px;">※ 완충 m = 그 학과 <b>3개년 컷 변동폭 ÷2</b> (0.15~0.4). 매년 출렁이는 학과일수록 넓게·보수적으로 판정.</p>
+                <p class="sp-hint" style="margin-top:2px;">※ <b>종합전형에는 진단 라벨을 표시하지 않습니다</b> — 성적 외 요소(활동·세특·면접)가 커 성적만으로 판단하면 혼선을 줍니다.</p>
             </div>
             <hr class="lg-div">
             <div class="lg-group">
@@ -1086,7 +1092,9 @@
             emptyState.style.display = currentFiltered.length ? 'none' : 'block';
             list.insertAdjacentHTML('afterbegin', currentFiltered.slice(0, visibleCount).map((r, idx) => {
                 const gap = gradeGap(r.averageGrade, target);
-                const d = classify(target, r);
+                // 종합전형은 성적 외 요소(활동·세특·면접)가 커 성적 기반 진단 라벨을 표시하지 않음
+                const isJonghap = admissionKind === '종합';
+                const d = isJonghap ? null : classify(target, r);
                 const t = gradeTrend(r);
                 const ch = chungInfo(r);
                 const meta = [`<span>${r.category}</span>`]
@@ -1096,9 +1104,9 @@
                 return `<div class="uni-card" style="animation-delay:${Math.min((idx % PAGE_SIZE) * 0.03, 0.3)}s" onclick="openDetail(${idx})">
                     <div class="uni-card-top">
                         <div style="min-width:0;">
-                            <div class="badge-row">
+                            ${d ? `<div class="badge-row">
                                 <span class="diag-badge ${d.cls}${d.uncertain ? ' uncertain' : ''}">${d.label}${d.uncertain ? ' <span class="diag-edge">경계</span>' : ''}</span>
-                            </div>
+                            </div>` : ''}
                             <h3 class="serif">${r.university}</h3>
                             <p class="campus-txt">${r.campus}</p>
                         </div>
@@ -1163,11 +1171,16 @@
             const body = rows.map(([label, fn, hl]) =>
                 `<tr${hl ? ' class="hl"' : ''}><th class="rl">${label}</th>${SURVEY_YEARS.map(y => (hl ? cell70 : cell(fn))(r.years[y])).join('')}</tr>`
             ).join('');
-            const d = classify(myG, r);
+            // 종합전형은 성적 외 요소가 커 성적 기반 진단 라벨을 표시하지 않고 안내로 대체
+            const isJonghap = admissionKind === '종합';
+            const d = isJonghap ? null : classify(myG, r);
             const t = gradeTrend(r);
             const ch = chungInfo(r);
+            const diagTileHtml = d
+                ? `<div class="d-tile wide diag-tile ${d.cls}"><p class="k">입시 진단</p><p class="diag-lg">${d.label}${d.uncertain ? ' <span class="diag-edge">· 경계(참고)</span>' : ''}</p><p class="diag-why">${diagReason(myG, d)}</p></div>`
+                : `<div class="d-tile wide diag-note"><p class="k">입시 진단</p><p class="diag-lg">종합전형은 성적만으로 판단하지 않습니다</p><p class="diag-why">활동·세특·면접 등 성적 외 요소가 크게 작용해 안정/적정/소신 라벨은 제공하지 않습니다. 아래 컷·추세·추합·수능최저는 참고 지표로만 활용하세요.</p></div>`;
             document.getElementById('dm-grid').innerHTML = `
-                <div class="d-tile wide diag-tile ${d.cls}"><p class="k">입시 진단</p><p class="diag-lg">${d.label}${d.uncertain ? ' <span class="diag-edge">· 경계(참고)</span>' : ''}</p><p class="diag-why">${diagReason(myG, d)}</p></div>
+                ${diagTileHtml}
                 <div class="d-tile hl" style="grid-column:1/-1;"><p class="k">${r.yearCount}개년 평균 환산등급 70%컷</p><p class="v">${r.averageGrade.toFixed(2)}</p><p class="gap-box ${gap.cls}" style="justify-content:flex-start;margin-top:3px;font-size:11.5px;">내 등급 대비 <span class="arr">${gap.arrow}</span>${gap.text}</p></div>
                 <div style="grid-column:1/-1;overflow-x:auto;"><table class="dm-year-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
                 <div class="d-tile wide"><p class="k">상담 포인트</p><p class="tip-line"><b class="tip-ic ${t ? t.cls : 'tr-flat'}">추세</b> ${trendReason(t)}</p>${ch ? `<p class="tip-line"><b class="tip-ic ${ch.cls}">추합</b> ${ch.note} (평균 추합률 ${ch.pct}%)</p>` : ''}<p class="tip-caveat">※ 어디가 컷은 최종등록자 기준이라 추합이 이미 반영됨 — 추합률은 예비번호 기대·안정성 참고용입니다.</p></div>
