@@ -1251,6 +1251,14 @@
                 const d2 = dep.replace(/학과|학부|학전공|전공|계열|과$/g,'');
                 const u2 = u.replace(/학과|학부|학전공|전공|계열|과$/g,'');
                 if (d2.length>=2 && (u.includes(d2) || (u2.length>=2 && dep.includes(u2)))) return 3;
+                // 단과대학 ↔ 학과 매핑(의약 계열): "의과대학" 규칙이 "의예과"에 매칭되도록
+                // (단어경계 체크 — "수의과대학"이 "의과대학"에 오매칭되지 않도록)
+                const COL = [['수의과대학','수의'],['의과대학','의예'],['의학과','의예'],['치과대학','치의'],
+                             ['치의학','치의'],['약학대학','약'],['간호대학','간호']];
+                for (const [c, dk] of COL) {
+                    const idx = u.indexOf(c);
+                    if (idx >= 0 && (idx === 0 || /[^가-힣]/.test(u[idx-1])) && dep.includes(dk)) return 3;
+                }
             }
             if (/계열|인문|자연|공학|예체능|의약|사회|이공/.test(u)) {
                 const kw = {인문:['인문'],사회:['사회','상경','인문'],자연:['자연','이학','이공'],
@@ -1272,7 +1280,7 @@
             // 이 학과·전형에 해당하는 규칙만 점수화(전형유형→전형명→모집단위)해서 최적 매칭 선택
             const scored = all.map(rule => ({ rule, tm: typeMatch(rule, r), ns: nameScore(rule, r), um: unitMatch(rule, r) }))
                               .filter(x => x.tm > 0 && x.ns > 0 && x.um > 0);
-            const score = x => x.tm*1000 + x.ns*100 + x.um*10;
+            const score = x => x.tm*1000 + x.um*100 + x.ns*10;   // 전형유형 > 모집단위 > 전형명
             const best = scored.length ? Math.max(...scored.map(score)) : 0;
             const picked = scored.filter(x => score(x) === best).map(x => x.rule);
 
