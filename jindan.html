@@ -253,7 +253,6 @@
         /* 수능최저 충족 판정 배지 (학생 선택 시) */
         .mc-badge { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 900; flex-shrink: 0; white-space: nowrap; }
         .mc-pass { background: #dcfce7; color: #15803d; }
-        .mc-near { background: #fef9c3; color: #a16207; }
         .mc-fail { background: #fee2e2; color: #b91c1c; }
         .mc-unknown { background: #e2e8f0; color: #64748b; }
         /* 3개년 추세 색 (모달 상담포인트 태그 + 카드 메타줄 공용) */
@@ -1356,20 +1355,18 @@
                 if (!su) return { cls: 'unknown', label: '미판정', detail: '수학 필수인데 수학 등급이 없습니다.' };
                 chosen = [su, ...sorted.filter(x => x.area !== '수').slice(0, N - 1)];
             } else chosen = sorted.slice(0, N);
-            let ok, near, shown;
+            let ok, shown;
             if (method === 'sum') {
                 const s = chosen.reduce((a, b) => a + b.grade, 0);
-                ok = s <= val; near = !ok && s <= val + 1; shown = `합 ${s} (기준 ${val})`;
+                ok = s <= val; shown = `합 ${s} (기준 ${val})`;
             } else {
                 const worst = Math.max(...chosen.map(x => x.grade));
-                ok = worst <= val; near = !ok && worst <= val + 1;
+                ok = worst <= val;
                 shown = method === 'single' ? `${worst} (기준 ${val})` : `각 최고 ${worst} (기준 ${val})`;
             }
-            let label, cls;
-            if (histFail) { label = '미충족'; cls = 'fail'; }
-            else if (ok) { label = '충족'; cls = 'pass'; }
-            else if (near) { label = '근접'; cls = 'near'; }
-            else { label = '미충족'; cls = 'fail'; }
+            // 수능최저는 충족/미충족 이분법 — '근접' 개념 없음
+            const label = (!histFail && ok) ? '충족' : '미충족';
+            const cls = (!histFail && ok) ? 'pass' : 'fail';
             let detail = `${chosen.map(x => x.area + x.grade).join('·')} → ${shown}`;
             if (tamNote && reflected.includes('탐')) detail += ` · ${tamNote}`;
             if (histNote) detail += ` · ${histNote}`;
