@@ -68,6 +68,18 @@
         .sp-result .nm { font-size: 13.5px; font-weight: 900; color: var(--slate-900); }
         .sp-result .gr { font-size: 12.5px; font-weight: 800; color: var(--indigo-dark); margin-top: 3px; }
         .sp-hint { font-size: 11.5px; font-weight: 600; color: var(--slate-400); line-height: 1.5; }
+        /* 모의고사 이력 (회차 선택) */
+        #stu-hist-wrap { display: none; flex-direction: column; gap: 6px; }
+        .sp-hist-title { font-size: 12px; font-weight: 900; color: var(--slate-600); }
+        .sp-hist-title span { font-size: 10.5px; font-weight: 600; color: var(--slate-400); }
+        #stu-hist-list { display: flex; flex-direction: column; gap: 5px; max-height: 300px; overflow-y: auto; }
+        .hist-row { display: flex; flex-direction: column; gap: 2px; text-align: left; width: 100%; padding: 8px 11px; border: 1.5px solid var(--slate-200); border-radius: 10px; background: #fff; cursor: pointer; transition: border-color .15s, background .15s; }
+        .hist-row:hover { border-color: var(--indigo-100); background: var(--slate-50); }
+        .hist-row.selected { border-color: var(--indigo); background: var(--indigo-50); }
+        .hr-date { font-size: 11.5px; font-weight: 900; color: var(--slate-700); }
+        .hist-row.selected .hr-date { color: var(--indigo-dark); }
+        .hr-tag { font-size: 9.5px; font-weight: 900; color: var(--indigo); }
+        .hr-grades { font-size: 11.5px; font-weight: 700; color: var(--slate-500); font-variant-numeric: tabular-nums; }
         /* 범례(우측) */
         .legend-panel .lg-group { display: flex; flex-direction: column; gap: 7px; }
         .legend-panel .lg-h { font-size: 12px; font-weight: 900; color: var(--slate-400); text-transform: uppercase; letter-spacing: .1em; margin-top: 4px; }
@@ -394,7 +406,10 @@
             <div class="sp-result" id="stu-result">
                 <div class="nm" id="stu-name"></div>
                 <div class="gr" id="stu-grade-val"></div>
-                <div class="gr" id="stu-csat" style="margin-top:3px;color:var(--slate-500);font-weight:700;font-size:11.5px;"></div>
+            </div>
+            <div id="stu-hist-wrap">
+                <p class="sp-hist-title">📊 모의고사 이력 <span>클릭해 최저 판정 기준 선택</span></p>
+                <div id="stu-hist-list"></div>
             </div>
             <p class="sp-hint" id="stu-hint">교사용 앱에서 로그인하면 담당 학생 명단이 표시됩니다.</p>
         </aside>
@@ -1544,20 +1559,43 @@
             Object.keys(tree[g][b]).sort((a, b2) => a - b2).forEach(n => bunSel.appendChild(opt(n, n + '번 ' + tree[g][b][n])));
             bunSel.disabled = false;
         });
-        // 최근 모의고사 등급 추출 → window.studentCsat (수능최저 판정용). history: 오래된→최신
-        function extractCsat(st) {
-            const hist = Array.isArray(st.history) ? st.history : [];
-            const gg = x => (x && x.g != null && x.g !== '-' && x.g !== '') ? x.g : null;
-            const sg = x => (x != null && x !== '-' && x !== '') ? x : null;
-            for (let i = hist.length - 1; i >= 0; i--) {
-                const h = hist[i]; if (!h) continue;
-                const kor = gg(h.kor), math = gg(h.math), eng = sg(h.eng), his = sg(h.hist), t1 = gg(h.tam1), t2 = gg(h.tam2);
-                if (kor != null || math != null || eng != null || t1 != null || t2 != null)
-                    return { '국': kor, '수': math, '영': eng, '한': his, '탐': [t1, t2].filter(v => v != null), mathSub: (h.math && h.math.sub) || '', examDate: h.examDate || '' };
-            }
-            return null;
+        // 모의고사 회차별 등급 → 수능최저 판정용. history: 오래된→최신 (리스트는 최신부터)
+        const _gg = x => (x && x.g != null && x.g !== '-' && x.g !== '') ? x.g : null;   // kor/math/tam: {g}
+        const _sg = x => (x != null && x !== '-' && x !== '') ? x : null;                 // eng/hist: 값 직접
+        function csatFromExam(h) {
+            const kor = _gg(h.kor), math = _gg(h.math), eng = _sg(h.eng), his = _sg(h.hist), t1 = _gg(h.tam1), t2 = _gg(h.tam2);
+            if (kor == null && math == null && eng == null && t1 == null && t2 == null) return null;
+            return { '국': kor, '수': math, '영': eng, '한': his, '탐': [t1, t2].filter(v => v != null), mathSub: (h.math && h.math.sub) || '', examDate: h.examDate || '' };
         }
-        function clearCsat() { window.studentCsat = null; if (window.refreshSusi) window.refreshSusi(); }
+        function examGradeStr(cs) {
+            return [cs['국'] != null ? '국' + cs['국'] : '', cs['수'] != null ? '수' + cs['수'] : '', cs['영'] != null ? '영' + cs['영'] : '', cs['탐'].length ? '탐' + cs['탐'].join('·') : '', cs['한'] != null ? '한' + cs['한'] : ''].filter(Boolean).join(' ');
+        }
+        let histExams = [];   // [{cs, date}] 최신순
+        let selIdx = 0;
+        function renderHistory() {
+            const wrap = $('stu-hist-wrap'), list = $('stu-hist-list');
+            if (!histExams.length) { wrap.style.display = 'none'; window.studentCsat = null; if (window.refreshSusi) window.refreshSusi(); return; }
+            wrap.style.display = 'flex';
+            list.innerHTML = histExams.map((e, i) => `<button type="button" class="hist-row${i === selIdx ? ' selected' : ''}" data-i="${i}">
+                <span class="hr-date">${e.date || '-'}${i === selIdx ? ' <span class="hr-tag">· 판정 기준</span>' : ''}</span>
+                <span class="hr-grades">${examGradeStr(e.cs)}</span></button>`).join('');
+            list.querySelectorAll('.hist-row').forEach(btn => btn.addEventListener('click', () => selectExam(+btn.dataset.i)));
+        }
+        function selectExam(i) {
+            if (!histExams[i]) return;
+            selIdx = i;
+            window.studentCsat = histExams[i].cs;
+            renderHistory();
+            if (window.refreshSusi) window.refreshSusi();
+        }
+        function loadHistory(st) {
+            const hist = Array.isArray(st.history) ? st.history : [];
+            histExams = hist.slice().reverse().map(h => { const cs = csatFromExam(h); return cs ? { cs, date: cs.examDate } : null; }).filter(Boolean);
+            selIdx = 0;
+            window.studentCsat = histExams.length ? histExams[0].cs : null;
+            renderHistory();
+        }
+        function clearCsat() { window.studentCsat = null; histExams = []; selIdx = 0; const w = document.getElementById('stu-hist-wrap'); if (w) w.style.display = 'none'; if (window.refreshSusi) window.refreshSusi(); }
 
         bunSel.addEventListener('change', async () => {
             const g = gradeSel.value, b = banSel.value, n = bunSel.value;
@@ -1571,12 +1609,8 @@
                 }
                 const st = (classCache[key].students || {})[n] || {};
                 $('stu-name').textContent = `${g}학년 ${b}반 ${n}번 ${name}`;
-                // 최근 모의고사 → 수능최저 판정용 (내신 유무와 무관하게 먼저 반영)
-                const cs = extractCsat(st);
-                window.studentCsat = cs;
-                $('stu-csat').textContent = cs
-                    ? `최근 모의(${cs.examDate || '-'}): ` + [cs['국'] != null ? '국' + cs['국'] : '', cs['수'] != null ? '수' + cs['수'] : '', cs['영'] != null ? '영' + cs['영'] : '', cs['탐'].length ? '탐' + cs['탐'].join('·') : '', cs['한'] != null ? '한' + cs['한'] : ''].filter(Boolean).join(' ')
-                    : '모의고사 기록 없음 — 최저 판정 불가';
+                // 모의고사 이력 렌더 + 최신 회차를 기본 판정 기준으로 (내신 유무와 무관하게 먼저 반영)
+                loadHistory(st);
                 if (window.refreshSusi) window.refreshSusi();
                 // 필드명 주의(index.html과 동일): gpa9=5등급제 내신, gpa5=9등급제 내신
                 const is3 = String(g) === '3';
