@@ -1379,9 +1379,16 @@
             const el = document.getElementById('dm-susi');
             const all = susiMincut[r.uniCode] || [];
             const cs = window.studentCsat;
-            const basis = cs
-                ? `<span style="font-size:11px;color:#4f46e5;font-weight:800;background:#eef2ff;border:1px solid #e0e7ff;border-radius:999px;padding:2px 9px;">👤 ${cs.examDate || '최근'} 모의 기준 판정</span>`
-                : `<span style="font-size:11px;color:#94a3b8;font-weight:600;">※ 왼쪽에서 학생을 선택하면 충족 여부를 자동 판정합니다.</span>`;
+            const exams = window.studentExams || [];
+            let basis;
+            if (cs && exams.length > 1) {   // 회차 여러 개 → 모달에서 직접 선택 가능
+                const opts = exams.map((e, i) => `<option value="${i}"${i === window.studentExamIdx ? ' selected' : ''}>${e.date || ('회차 ' + (i + 1))}${e.grades ? ' · ' + e.grades : ''}</option>`).join('');
+                basis = `<span style="font-size:11px;color:#4f46e5;font-weight:800;margin-right:6px;">👤 판정 기준</span><select onchange="window.selectStudentExam(+this.value)" style="font-family:inherit;font-size:11.5px;font-weight:700;color:#4338ca;background:#eef2ff;border:1px solid #e0e7ff;border-radius:8px;padding:3px 8px;cursor:pointer;max-width:100%;">${opts}</select>`;
+            } else if (cs) {
+                basis = `<span style="font-size:11px;color:#4f46e5;font-weight:800;background:#eef2ff;border:1px solid #e0e7ff;border-radius:999px;padding:2px 9px;">👤 ${cs.examDate || '최근'} 모의 기준 판정</span>`;
+            } else {
+                basis = `<span style="font-size:11px;color:#94a3b8;font-weight:600;">※ 왼쪽에서 학생을 선택하면 충족 여부를 자동 판정합니다.</span>`;
+            }
             let html = `<div style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:12px;">
                 <p style="font-weight:900;font-size:14px;margin:0 0 6px;">🎯 수능최저학력기준
                     <span style="font-size:11px;color:#94a3b8;font-weight:600;">${r.department || ''} · ${r.admissionName || ''}</span></p>
@@ -1429,10 +1436,12 @@
             if (yAll.length) {
                 html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12px;color:#6366f1;font-weight:800;">이 대학 전체 최저 보기 (${yAll.length}건)</summary>
                     <div style="overflow-x:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">
-                    <tr style="background:#eef2ff;"><th style="padding:6px;text-align:left;">전형</th><th style="padding:6px;text-align:left;">모집단위</th><th style="padding:6px;">최저 기준</th></tr>`;
+                    <tr style="background:#eef2ff;"><th style="padding:6px;text-align:left;">전형</th><th style="padding:6px;text-align:left;">모집단위</th><th style="padding:6px;">최저 기준</th>${cs ? '<th style="padding:6px;">판정</th>' : ''}</tr>`;
                 yAll.forEach(rule => {
                     const hi = picked.includes(rule) ? 'background:#fef9c3;' : '';
-                    html += `<tr style="border-top:1px solid #e2e8f0;${hi}"><td style="padding:6px;">${rule['전형유형']||''} ${rule['전형명']||''}</td><td style="padding:6px;">${rule['모집단위']||''}</td><td style="padding:6px;text-align:center;">${critText(rule)}</td></tr>`;
+                    const ev = cs ? evalMincut(rule, cs) : null;
+                    const evCell = cs ? `<td style="padding:6px;text-align:center;">${ev ? `<span class="mc-badge mc-${ev.cls}">${ev.label}</span>` : '-'}</td>` : '';
+                    html += `<tr style="border-top:1px solid #e2e8f0;${hi}"><td style="padding:6px;">${rule['전형유형']||''} ${rule['전형명']||''}</td><td style="padding:6px;">${rule['모집단위']||''}</td><td style="padding:6px;text-align:center;">${critText(rule)}</td>${evCell}</tr>`;
                 });
                 html += `</table></div></details>`;
             }
@@ -1621,17 +1630,21 @@
             if (!histExams[i]) return;
             selIdx = i;
             window.studentCsat = histExams[i].cs;
+            window.studentExamIdx = i;
             renderHistory();
             if (window.refreshSusi) window.refreshSusi();
         }
+        window.selectStudentExam = selectExam;   // 모달 안 드롭다운에서 회차 전환용
         function loadHistory(st) {
             const hist = Array.isArray(st.history) ? st.history : [];
             histExams = hist.slice().reverse().map(h => { const cs = csatFromExam(h); return cs ? { cs, date: cs.examDate } : null; }).filter(Boolean);
             selIdx = 0;
             window.studentCsat = histExams.length ? histExams[0].cs : null;
+            window.studentExams = histExams.map(e => ({ date: e.date, grades: examGradeStr(e.cs) }));   // 모달 드롭다운 라벨용
+            window.studentExamIdx = 0;
             renderHistory();
         }
-        function clearCsat() { window.studentCsat = null; histExams = []; selIdx = 0; const w = document.getElementById('stu-hist-wrap'); if (w) w.style.display = 'none'; if (window.refreshSusi) window.refreshSusi(); }
+        function clearCsat() { window.studentCsat = null; window.studentExams = []; window.studentExamIdx = 0; histExams = []; selIdx = 0; const w = document.getElementById('stu-hist-wrap'); if (w) w.style.display = 'none'; if (window.refreshSusi) window.refreshSusi(); }
 
         bunSel.addEventListener('change', async () => {
             const g = gradeSel.value, b = banSel.value, n = bunSel.value;
