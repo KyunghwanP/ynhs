@@ -1430,6 +1430,7 @@
                             ${rule['수학제한'] && rule['수학제한']!=='-' ? cond('수학', rule['수학제한']) : ''}
                             ${rule['탐구'] && rule['탐구']!=='-' ? cond('탐구', rule['탐구']) : ''}
                             ${rule['비고'] && rule['비고']!=='-' ? `<p style="font-size:12px;color:#64748b;margin:6px 0 0;">${rule['비고']}</p>`:''}
+                            ${rule['원문'] && rule['원문']!=='-' ? `<p style="font-size:11px;color:#94a3b8;font-weight:600;margin:8px 0 0;padding-top:8px;border-top:1px dashed #e2e8f0;">📄 원문: ${rule['원문']}</p>`:''}
                         </div>`;
                     });
                 }
