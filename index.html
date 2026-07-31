@@ -6146,15 +6146,15 @@ history.replaceState({ page: 'home' }, '');
 history.pushState({ page: 'home', root: true }, '');
 
 // 적정 대학 진단 모달 — 학생 종합검색 화면을 유지한 채 위에 띄움
-let _jindanFullUrl = '';
+let _jindanQuery = '';
 function openJindanModal(grade, isGrade9, ctx){
   clearTimeout(exitArmTimer);
   ctx = ctx || {};
   // 1·2학년은 5등급제(?gpa5=), 3학년은 9등급제(?grade9=)로 프리필 — jindan이 모드 자동 전환
   // 학생 반/번호(?sgrade=&sban=&sbun=)를 함께 넘기면 jindan 좌측 학생 선택기가 자동 선택됨
   const stu = (ctx.grade && ctx.ban && ctx.bun) ? `&sgrade=${ctx.grade}&sban=${ctx.ban}&sbun=${ctx.bun}` : '';
-  _jindanFullUrl = `${REMOTE_BASE}jindan.html?${isGrade9 ? 'grade9' : 'gpa5'}=${grade}${stu}`;
-  document.getElementById('jindanFrame').src = `${_jindanFullUrl}&embed=1`;
+  _jindanQuery = `${isGrade9 ? 'grade9' : 'gpa5'}=${grade}${stu}`;
+  document.getElementById('jindanFrame').src = `${REMOTE_BASE}jindan.html?${_jindanQuery}&embed=1`;
   document.getElementById('jindanModal').classList.add('open');
 }
 function closeJindanModal(){
@@ -6252,7 +6252,13 @@ document.getElementById('swapModalClose').addEventListener('click', ()=>{
 swapModal.addEventListener('click', e=>{ if(e.target===swapModal) closeSwapModal(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeSwapModal(); });
 document.getElementById('jindanModalClose').addEventListener('click', closeJindanModal);
-document.getElementById('jindanOpenBtn').addEventListener('click', () => { if (_jindanFullUrl) window.location.href = _jindanFullUrl; });
+document.getElementById('jindanOpenBtn').addEventListener('click', () => {
+  if (!_jindanQuery) return;
+  closeJindanModal();
+  navigateTo('grades');                 // 진로진학 상담 페이지(앱 사이드바·헤더 유지)
+  const gf = document.getElementById('gradesFrame');
+  if (gf) gf.src = `jindan.html?${_jindanQuery}`;   // 프레임에 jindan 로드(자체 헤더 ← 홈 포함)
+});
 document.getElementById('jindanModal').addEventListener('click', e=>{ if(e.target.id==='jindanModal') closeJindanModal(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeJindanModal(); });
 
