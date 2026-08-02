@@ -1393,6 +1393,9 @@
   .s360-pane-roster{width:252px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper);}
   .s360-pane-detail{flex:1;min-width:0;background:var(--bg-base);padding:16px;}
   .s360-cl-grade{font-size:12px;font-weight:900;color:var(--ink-soft);padding:8px 8px 4px;}
+  .s360-cl-grade-tog{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 8px 7px;margin-top:2px;border:none;background:transparent;font-family:inherit;font-size:12px;font-weight:900;color:var(--ink-soft);cursor:pointer;text-align:left;}
+  .s360-cl-grade-tog:hover,.s360-cl-grade-tog.open{color:var(--ink);}
+  .s360-cl-caret{font-size:10px;opacity:.7;}
   .s360-cl-item{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;padding:9px 10px;margin-bottom:3px;border:none;border-radius:9px;background:transparent;color:var(--ink);font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;text-align:left;}
   .s360-cl-item:hover{background:var(--paper);}
   .s360-cl-item.active{background:var(--mon);color:#fff;}
@@ -8221,6 +8224,7 @@ let s360Mode = 'class';   // 그룹 탭: class | club
 let s360Group = null;     // 선택된 그룹 { type, key, label } | null
 let s360View = 'groups';  // groups | list | detail | panes
 let s360PaneStudent = null;   // FHD 3열 모드에서 선택된 학생
+let s360OpenGrade = null;     // 3열 좌측 학반 아코디언에서 펼쳐진 학년
 
 function initSearchPage(){
   const inp = document.getElementById('s360Input');
@@ -8260,8 +8264,9 @@ function s360Render(){
     if (s360Mode === 'club') { s360RenderClubSearch(q); return; }   // 동아리별 → 동아리 칩 검색
     s360RenderSearch(q); return;
   }
-  // 학급별 + 넓은 화면(FHD) → 3열 마스터-디테일 (학반 리스트 | 명렬 | 상세)
-  if (s360Mode === 'class' && s360IsWide()) { s360RenderClassPanes(); return; }
+  // 학급별 + 넓은 화면(FHD) + 반 선택됨 → 3열 마스터-디테일 (학반 리스트 | 명렬 | 상세)
+  // 반 미선택(처음 열 때)이면 기존 칩(학급 카드) 목록 유지
+  if (s360Mode === 'class' && s360IsWide() && s360Group) { s360RenderClassPanes(); return; }
   if (s360Group) { s360RenderGroupStudents(); return; }
   s360RenderGroups();
 }
@@ -8383,6 +8388,11 @@ function s360RenderGroupStudents(){
 // ── FHD 3열 마스터-디테일 (학급별 전용): [학반 리스트 | 반 명렬 | 학생 상세] ──
 function s360RenderClassPanes(){
   s360View = 'panes';
+  // 이전에 고른 학생이 현재 선택 반과 다르면 해제
+  if (s360PaneStudent && s360Group) {
+    const [g,r] = s360Group.key.split('-');
+    if (!(String(parseInt(s360PaneStudent.grade))===g && String(parseInt(s360PaneStudent.room))===r)) s360PaneStudent = null;
+  }
   const body = document.getElementById('s360Body');
   body.classList.add('s360-body-panes');
   body.innerHTML = `<div class="s360-3pane">
@@ -8399,9 +8409,12 @@ function s360FillClassPane(){
   const classKeys = [...new Set(allStudents.map(s => s.grade && s.room ? `${parseInt(s.grade)}-${parseInt(s.room)}` : null).filter(Boolean))]
     .sort((a,b)=>{ const [ag,ar]=a.split('-').map(Number),[bg,br]=b.split('-').map(Number); return ag-bg||ar-br; });
   const grades = [...new Set(classKeys.map(k=>k.split('-')[0]))].sort();
+  if (!s360OpenGrade && s360Group) s360OpenGrade = s360Group.key.split('-')[0];   // 선택 학년만 펼침
   let html='';
   grades.forEach(g=>{
-    html += `<div class="s360-cl-grade">${g}학년</div>`;
+    const open = s360OpenGrade === g;
+    html += `<button type="button" class="s360-cl-grade-tog${open?' open':''}" data-g="${g}"><span>${g}학년</span><span class="s360-cl-caret">${open?'▾':'▸'}</span></button>`;
+    if (!open) return;
     html += classKeys.filter(k=>k.split('-')[0]===g).map(key=>{
       const room = key.split('-')[1];
       const cnt = allStudents.filter(s=>String(parseInt(s.grade))===g && String(parseInt(s.room))===room).length;
@@ -8410,9 +8423,14 @@ function s360FillClassPane(){
     }).join('');
   });
   el.innerHTML = html;
+  el.querySelectorAll('.s360-cl-grade-tog').forEach(b=>b.addEventListener('click',()=>{
+    s360OpenGrade = (s360OpenGrade === b.dataset.g) ? null : b.dataset.g;   // 클릭한 학년 토글(단일 펼침)
+    s360FillClassPane();
+  }));
   el.querySelectorAll('.s360-cl-item').forEach(b=>b.addEventListener('click',()=>{
     const key=b.dataset.key; const [grade,room]=key.split('-');
     s360Group={ type:'class', key, label:`${grade}학년 ${room}반` };
+    s360OpenGrade = grade;
     s360PaneStudent=null;
     s360FillClassPane(); s360FillRosterPane(); s360FillDetailPane();
   }));
