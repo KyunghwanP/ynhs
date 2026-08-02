@@ -8365,10 +8365,23 @@ function s360RenderRows(students, headLabel){
   document.getElementById('s360ListBack').addEventListener('click', () => s360Back());
   body.querySelectorAll('.spot-row').forEach(row => {
     row.addEventListener('click', () => {
-      history.pushState({ page: 'search' }, '');
-      s360ShowDetail(students[parseInt(row.dataset.i)]);
+      s360OpenStudent(students[parseInt(row.dataset.i)]);
     });
   });
+}
+// 학생 열기: 넓은 화면 + 학급별이면 3열로 진입(사이드바 유지), 아니면 기존 상세
+function s360OpenStudent(s){
+  if (s360IsWide() && s360Mode === 'class') {
+    const grade = String(parseInt(s.grade)), room = String(parseInt(s.room));
+    s360Group = { type:'class', key:`${grade}-${room}`, label:`${grade}학년 ${room}반` };
+    s360OpenGrade = grade;
+    s360PaneStudent = s;
+    const inp = document.getElementById('s360Input'); if (inp) inp.value = '';   // 검색어 비움
+    s360RenderClassPanes();
+    return;
+  }
+  history.pushState({ page: 'search' }, '');
+  s360ShowDetail(s);
 }
 
 function s360RenderGroupStudents(){
