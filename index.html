@@ -1385,6 +1385,27 @@
   .s360-body .sg-current-label{color:var(--ink);}
   .s360-list-box{max-width:900px;margin:0 auto;background:var(--paper);border-radius:12px;border:1px solid var(--rule);overflow:hidden;}
   .s360-list-head{max-width:900px;margin:0 auto;}
+  /* FHD 3열 마스터-디테일 (학급별 전용, 넓은 화면) */
+  .s360-body.s360-body-panes{padding:0;overflow:hidden;}
+  .s360-3pane{display:flex;height:100%;min-height:0;}
+  .s360-3pane .s360-pane{overflow-y:auto;min-height:0;}
+  .s360-pane-classes{width:134px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper-soft);padding:8px 6px;}
+  .s360-pane-roster{width:252px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper);}
+  .s360-pane-detail{flex:1;min-width:0;background:var(--bg-base);padding:16px;}
+  .s360-cl-grade{font-size:12px;font-weight:900;color:var(--ink-soft);padding:8px 8px 4px;}
+  .s360-cl-item{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;padding:9px 10px;margin-bottom:3px;border:none;border-radius:9px;background:transparent;color:var(--ink);font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;text-align:left;}
+  .s360-cl-item:hover{background:var(--paper);}
+  .s360-cl-item.active{background:var(--mon);color:#fff;}
+  .s360-cl-cnt{font-size:12px;font-weight:700;color:var(--ink-soft);}
+  .s360-cl-item.active .s360-cl-cnt{color:#fff;opacity:.85;}
+  .s360-roster-head{position:sticky;top:0;background:var(--paper);z-index:1;padding:12px 14px;font-size:13px;font-weight:900;color:var(--ink);border-bottom:1px solid var(--rule);}
+  .s360-rs-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:none;border-bottom:1px solid var(--rule);background:transparent;color:var(--ink);font-family:inherit;cursor:pointer;text-align:left;}
+  .s360-rs-item:hover{background:var(--paper-soft);}
+  .s360-rs-item.active{background:#eef2ff;box-shadow:inset 3px 0 0 var(--mon);}
+  html.dark .s360-rs-item.active{background:#26354F;}
+  .s360-rs-num{font-family:'IBM Plex Mono';font-size:13px;font-weight:700;color:var(--ink-soft);min-width:22px;}
+  .s360-rs-name{font-size:15px;font-weight:800;}
+  .s360-pane-hint{padding:44px 20px;text-align:center;color:var(--ink-soft);font-size:14px;font-weight:700;line-height:1.6;}
   .s360-card{max-width:1400px;margin:0 auto;background:var(--paper);border-radius:14px;box-shadow:0 4px 20px -8px rgba(0,0,0,.15);padding:24px 28px;}
   /* 상세 헤더: 넓은 화면은 [이름·상벌점 왼쪽 · 사진 오른쪽], 모바일은 [이름 → 사진 → 상벌점] */
   .s360-head{display:grid;grid-template-columns:1fr auto;grid-template-areas:"info photo" "pts photo";column-gap:18px;row-gap:12px;align-items:start;margin-bottom:14px;}
@@ -6225,7 +6246,7 @@ window.addEventListener('popstate', (e)=>{
 
   // 4.6. 학생 종합검색 드릴다운(그룹 학생 목록·검색 결과·상세) → 한 단계 뒤로
   if (document.getElementById('searchPage')?.classList.contains('active')
-      && typeof s360View !== 'undefined' && s360View !== 'groups') {
+      && typeof s360View !== 'undefined' && s360View !== 'groups' && s360View !== 'panes') {
     s360Back();
     return;
   }
@@ -8198,7 +8219,8 @@ function spotLoadData(){
 let s360Init = false;
 let s360Mode = 'class';   // 그룹 탭: class | club
 let s360Group = null;     // 선택된 그룹 { type, key, label } | null
-let s360View = 'groups';  // groups | list | detail
+let s360View = 'groups';  // groups | list | detail | panes
+let s360PaneStudent = null;   // FHD 3열 모드에서 선택된 학생
 
 function initSearchPage(){
   const inp = document.getElementById('s360Input');
@@ -8233,12 +8255,23 @@ function s360Render(){
   if (!spotLoaded){ body.innerHTML = '<div class="spot-empty">학생 데이터를 불러오는 중...</div>'; return; }
   if (!allStudents.length){ body.innerHTML = '<div class="spot-empty">학생 연락망 데이터가 없습니다.</div>'; return; }
   const q = document.getElementById('s360Input').value.trim();
+  document.getElementById('s360Body').classList.remove('s360-body-panes');
   if (q) {
     if (s360Mode === 'club') { s360RenderClubSearch(q); return; }   // 동아리별 → 동아리 칩 검색
     s360RenderSearch(q); return;
   }
+  // 학급별 + 넓은 화면(FHD) → 3열 마스터-디테일 (학반 리스트 | 명렬 | 상세)
+  if (s360Mode === 'class' && s360IsWide()) { s360RenderClassPanes(); return; }
   if (s360Group) { s360RenderGroupStudents(); return; }
   s360RenderGroups();
+}
+function s360IsWide(){ return window.matchMedia('(min-width: 1100px)').matches; }
+// 화면 폭이 3열 경계(1100px)를 넘나들면 검색 화면 재렌더 (1회만 등록)
+if (!window._s360MqBound) {
+  window._s360MqBound = true;
+  window.matchMedia('(min-width: 1100px)').addEventListener('change', () => {
+    if (document.getElementById('searchPage')?.classList.contains('active') && s360View !== 'detail') s360Render();
+  });
 }
 
 // 상세/드릴다운에서 한 단계 뒤로 (popstate·뒤로가기 버튼 공용)
@@ -8345,6 +8378,65 @@ function s360RenderGroupStudents(){
       .sort((a,b) => (parseInt(a.grade)||0)-(parseInt(b.grade)||0) || (parseInt(a.room)||0)-(parseInt(b.room)||0) || (parseInt(a.num)||0)-(parseInt(b.num)||0));
   }
   s360RenderRows(filtered, g.label);
+}
+
+// ── FHD 3열 마스터-디테일 (학급별 전용): [학반 리스트 | 반 명렬 | 학생 상세] ──
+function s360RenderClassPanes(){
+  s360View = 'panes';
+  const body = document.getElementById('s360Body');
+  body.classList.add('s360-body-panes');
+  body.innerHTML = `<div class="s360-3pane">
+    <div class="s360-pane s360-pane-classes" id="s360PaneClasses"></div>
+    <div class="s360-pane s360-pane-roster" id="s360PaneRoster"></div>
+    <div class="s360-pane s360-pane-detail" id="s360PaneDetail"></div>
+  </div>`;
+  s360FillClassPane();
+  s360FillRosterPane();
+  s360FillDetailPane();
+}
+function s360FillClassPane(){
+  const el = document.getElementById('s360PaneClasses'); if (!el) return;
+  const classKeys = [...new Set(allStudents.map(s => s.grade && s.room ? `${parseInt(s.grade)}-${parseInt(s.room)}` : null).filter(Boolean))]
+    .sort((a,b)=>{ const [ag,ar]=a.split('-').map(Number),[bg,br]=b.split('-').map(Number); return ag-bg||ar-br; });
+  const grades = [...new Set(classKeys.map(k=>k.split('-')[0]))].sort();
+  let html='';
+  grades.forEach(g=>{
+    html += `<div class="s360-cl-grade">${g}학년</div>`;
+    html += classKeys.filter(k=>k.split('-')[0]===g).map(key=>{
+      const room = key.split('-')[1];
+      const cnt = allStudents.filter(s=>String(parseInt(s.grade))===g && String(parseInt(s.room))===room).length;
+      const active = (s360Group && s360Group.key===key) ? ' active' : '';
+      return `<button type="button" class="s360-cl-item${active}" data-key="${key}"><span>${room}반</span><span class="s360-cl-cnt">${cnt}</span></button>`;
+    }).join('');
+  });
+  el.innerHTML = html;
+  el.querySelectorAll('.s360-cl-item').forEach(b=>b.addEventListener('click',()=>{
+    const key=b.dataset.key; const [grade,room]=key.split('-');
+    s360Group={ type:'class', key, label:`${grade}학년 ${room}반` };
+    s360PaneStudent=null;
+    s360FillClassPane(); s360FillRosterPane(); s360FillDetailPane();
+  }));
+}
+function s360FillRosterPane(){
+  const el = document.getElementById('s360PaneRoster'); if (!el) return;
+  if (!s360Group){ el.innerHTML = `<div class="s360-pane-hint">← 왼쪽에서 반을 선택하세요</div>`; return; }
+  const [grade,room]=s360Group.key.split('-');
+  const students = allStudents.filter(s=>String(parseInt(s.grade))===grade && String(parseInt(s.room))===room)
+    .sort((a,b)=>(parseInt(a.num)||0)-(parseInt(b.num)||0));
+  el.innerHTML = `<div class="s360-roster-head">${s360Group.label} · ${students.length}명</div>` + students.map((s,i)=>{
+    const active = (s360PaneStudent && spotKey(s360PaneStudent)===spotKey(s)) ? ' active' : '';
+    return `<button type="button" class="s360-rs-item${active}" data-i="${i}"><span class="s360-rs-num">${String(s.num||'').padStart(2,'0')}</span><span class="s360-rs-name">${escapeHtml(s.name||'')}</span></button>`;
+  }).join('');
+  el.querySelectorAll('.s360-rs-item').forEach(b=>b.addEventListener('click',()=>{
+    s360PaneStudent = students[parseInt(b.dataset.i)];
+    s360FillRosterPane();   // 선택 하이라이트 갱신
+    s360FillDetailPane();
+  }));
+}
+function s360FillDetailPane(){
+  const el = document.getElementById('s360PaneDetail'); if (!el) return;
+  if (!s360PaneStudent){ el.innerHTML = `<div class="s360-pane-hint">학생을 선택하면 상세가 표시됩니다.</div>`; return; }
+  s360ShowDetail(s360PaneStudent, el);
 }
 
 // 동아리별 탭에서 검색 → 매칭되는 동아리 칩(띄어쓰기 무시). 칩 클릭 → 그 동아리 학생 목록.
@@ -8590,9 +8682,10 @@ async function s360LoadElectives(s){
   }
 }
 
-async function s360ShowDetail(s){
-  s360View = 'detail';
-  const main = document.getElementById('s360Body');
+async function s360ShowDetail(s, targetEl){
+  const paneMode = !!targetEl;              // 3열 모드: 상세 패널에 렌더(전체 교체 아님)
+  if (!paneMode) s360View = 'detail';
+  const main = targetEl || document.getElementById('s360Body');
   main.scrollTop = 0;
   await loadSciMap(); // 과학중점 배지용 (1학년 비고란 데이터)
   const p = spotPts.get(spotKey(s));
@@ -8612,7 +8705,7 @@ async function s360ShowDetail(s){
   }
 
   main.innerHTML = `
-    <button class="s360-back" id="s360BackBtn">← 학생 목록으로</button>
+    ${paneMode ? '' : '<button class="s360-back" id="s360BackBtn">← 학생 목록으로</button>'}
     <div class="s360-card">
       <div class="s360-head">
         <div class="s360-head-info">
@@ -8632,7 +8725,7 @@ async function s360ShowDetail(s){
         <div id="s360Grades" style="font-size:15px;color:var(--ink-soft);">불러오는 중...</div>
       </div>
     </div>`;
-  document.getElementById('s360BackBtn').addEventListener('click', () => s360Back());
+  if (!paneMode) document.getElementById('s360BackBtn').addEventListener('click', () => s360Back());
   document.getElementById('s360ContactBtn').addEventListener('click', () => showStudentDetail(s));
   s360LoadPhoto(s);      // 사진명렬(studentPhotos) — 있으면 헤더에 표시
   s360LoadElectives(s);
