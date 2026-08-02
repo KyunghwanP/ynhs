@@ -4475,9 +4475,8 @@
            career.html(메뉴 허브) → grades.html(모의고사 분석), 이동은 iframe 안에서 이뤄짐
            데이터: GitHub Actions(sync-grades.js)가 성적 시트를 Firestore gradesMock에 동기화 -->
       <div class="page-view" id="gradesPage">
-        <div id="gradesPageHead" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--rule);flex-shrink:0;">
-          <span id="gradesPageTitle" style="font-family:'Pretendard','Noto Sans KR';font-weight:900;font-size:16px;color:var(--ink);">🎓 진로진학 상담</span>
-          <button class="sg-back-btn" id="gradesHomeBtn" style="display:none;" onclick="document.getElementById('gradesFrame').src='career.html'">← 진로진학 상담 홈으로 돌아가기</button>
+        <div id="gradesPageHead" style="display:none;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--rule);flex-shrink:0;">
+          <button class="sg-back-btn" id="gradesHomeBtn" onclick="document.getElementById('gradesFrame').src='career.html'">← 진로진학 상담 홈으로 돌아가기</button>
         </div>
         <iframe id="gradesFrame" data-src="career.html" title="진로진학 상담" style="flex:1;width:100%;border:0;background:#f1f5f9;"></iframe>
       </div>
@@ -7652,9 +7651,9 @@ document.getElementById('gradesFrame')?.addEventListener('load', function() {
   try {
     const isSim = this.contentWindow.location.pathname.includes('subject-sim');
     if (!isSim) document.body.classList.remove('sim-full');
-    const title = document.getElementById('gradesPageTitle'), homeBtn = document.getElementById('gradesHomeBtn');
-    if (title) title.style.display = isSim ? 'none' : '';
-    if (homeBtn) homeBtn.style.display = isSim ? 'inline-flex' : 'none';
+    // 중복 제목 제거 — 하위(시뮬레이터) 페이지일 때만 '홈으로 돌아가기' 바 표시
+    const head = document.getElementById('gradesPageHead');
+    if (head) head.style.display = isSim ? 'flex' : 'none';
   } catch(e) {}
 });
 
