@@ -1390,11 +1390,14 @@
   .s360-3pane{display:flex;height:100%;min-height:0;}
   .s360-3pane .s360-pane{overflow-y:auto;min-height:0;}
   .s360-pane-classes{width:134px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper-soft);padding:8px 6px;}
-  .s360-pane-roster{width:252px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper);}
-  /* 학생 선택 전(2열): 명렬이 남는 폭을 넓게 채움 */
+  .s360-pane-roster{width:260px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper);}
+  /* 학생 선택 전(2열): 명렬이 남는 폭을 넓게 채우고 rich 행 표시 */
   .s360-3pane:not(.has-detail) .s360-pane-roster{width:auto;flex:1;}
+  /* 명렬(2열, 학급 선택)은 기존 목록 그대로의 rich 행 사용 (.spot-row 기본 스타일) */
   .s360-pane-detail{flex:1;min-width:0;background:var(--bg-base);padding:16px;}
   .s360-cl-grade{font-size:12px;font-weight:900;color:var(--ink-soft);padding:8px 8px 4px;}
+  .s360-cl-all{display:flex;align-items:center;gap:6px;width:100%;padding:9px 10px;margin-bottom:6px;border:1px solid var(--rule);border-radius:9px;background:var(--paper);font-family:inherit;font-size:12.5px;font-weight:800;color:var(--ink-soft);cursor:pointer;text-align:left;}
+  .s360-cl-all:hover{color:var(--mon);border-color:var(--mon);}
   .s360-cl-grade-tog{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 8px 7px;margin-top:2px;border:none;background:transparent;font-family:inherit;font-size:12px;font-weight:900;color:var(--ink-soft);cursor:pointer;text-align:left;}
   .s360-cl-grade-tog:hover,.s360-cl-grade-tog.open{color:var(--ink);}
   .s360-cl-caret{font-size:10px;opacity:.7;}
@@ -8426,7 +8429,7 @@ function s360FillClassPane(){
     .sort((a,b)=>{ const [ag,ar]=a.split('-').map(Number),[bg,br]=b.split('-').map(Number); return ag-bg||ar-br; });
   const grades = [...new Set(classKeys.map(k=>k.split('-')[0]))].sort();
   if (!s360OpenGrade && s360Group) s360OpenGrade = s360Group.key.split('-')[0];   // 선택 학년만 펼침
-  let html='';
+  let html='<button type="button" class="s360-cl-all" id="s360ClAll">≡ 전체 학급</button>';   // 칩 카드 그리드로
   grades.forEach(g=>{
     const open = s360OpenGrade === g;
     html += `<button type="button" class="s360-cl-grade-tog${open?' open':''}" data-g="${g}"><span>${g}학년</span><span class="s360-cl-caret">${open?'▾':'▸'}</span></button>`;
@@ -8439,6 +8442,8 @@ function s360FillClassPane(){
     }).join('');
   });
   el.innerHTML = html;
+  const allBtn = document.getElementById('s360ClAll');
+  if (allBtn) allBtn.addEventListener('click', ()=>{ s360Group=null; s360PaneStudent=null; s360OpenGrade=null; s360Render(); });   // 전체 학급 카드 그리드로
   el.querySelectorAll('.s360-cl-grade-tog').forEach(b=>b.addEventListener('click',()=>{
     s360OpenGrade = (s360OpenGrade === b.dataset.g) ? null : b.dataset.g;   // 클릭한 학년 토글(단일 펼침)
     s360FillClassPane();
@@ -8457,11 +8462,26 @@ function s360FillRosterPane(){
   const [grade,room]=s360Group.key.split('-');
   const students = allStudents.filter(s=>String(parseInt(s.grade))===grade && String(parseInt(s.room))===room)
     .sort((a,b)=>(parseInt(a.num)||0)-(parseInt(b.num)||0));
-  el.innerHTML = `<div class="s360-roster-head">${s360Group.label} · ${students.length}명</div>` + students.map((s,i)=>{
-    const active = (s360PaneStudent && spotKey(s360PaneStudent)===spotKey(s)) ? ' active' : '';
-    return `<button type="button" class="s360-rs-item${active}" data-i="${i}"><span class="s360-rs-num">${String(s.num||'').padStart(2,'0')}</span><span class="s360-rs-name">${escapeHtml(s.name||'')}</span></button>`;
+  // 2열(넓을 때)은 기존 목록처럼 rich 행(학번·이름·과학중점·동아리·상벌점),
+  // 3열(상세 열려 명렬이 좁을 때)은 번호·이름만 간단 행(상세에 전체 정보가 뜨므로)
+  const compact = !!s360PaneStudent;
+  const rows = students.map((s,i)=>{
+    const active = (s360PaneStudent && spotKey(s360PaneStudent)===spotKey(s)) ? (compact ? ' active' : ' rs-on') : '';
+    if (compact) {
+      return `<button type="button" class="s360-rs-item${active}" data-i="${i}"><span class="s360-rs-num">${String(s.num||'').padStart(2,'0')}</span><span class="s360-rs-name">${escapeHtml(s.name||'')}</span></button>`;
+    }
+    const p = spotPts.get(spotKey(s));
+    const ptsBadge = p ? `<span class="spot-badge ${Number(p.total)<0?'neg':'pos'}"><span class="spot-badge-lbl">상벌점 </span>${p.total}</span>` : '';
+    return `<div class="spot-row${active}" data-i="${i}">
+      <span class="spot-grn">${s.grade}-${s.room}-${String(s.num||'').padStart(2,'0')}</span>
+      <span class="spot-name">${escapeHtml(s.name||'')}</span>
+      <span class="spot-cell">${isSciStudent(s) ? '<span class="spot-badge sci">⚗️<span class="spot-badge-lbl"> 과학중점</span></span>' : ''}</span>
+      <span class="spot-cell">${s.club ? `<span class="spot-badge club" data-club="${escapeHtml(s.club)}">🎯 ${escapeHtml(s.club)}</span>` : ''}</span>
+      <span class="spot-cell spot-cell-pts">${ptsBadge}</span>
+    </div>`;
   }).join('');
-  el.querySelectorAll('.s360-rs-item').forEach(b=>b.addEventListener('click',()=>{
+  el.innerHTML = `<div class="s360-roster-head">${s360Group.label} · ${students.length}명</div>${rows}`;
+  el.querySelectorAll('.spot-row, .s360-rs-item').forEach(b=>b.addEventListener('click',()=>{
     const first = !s360PaneStudent;   // 처음 학생 선택이면 상세 패널을 새로 생성(2열→3열)
     s360PaneStudent = students[parseInt(b.dataset.i)];
     if (first) { s360RenderClassPanes(); return; }
