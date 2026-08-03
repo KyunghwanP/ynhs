@@ -1391,16 +1391,19 @@
   .s360-3pane .s360-pane{overflow-y:auto;min-height:0;}
   .s360-pane-classes{width:134px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper-soft);padding:8px 6px;}
   .s360-pane-roster{width:260px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper);}
-  /* 학생 선택 전(2열): 명렬이 남는 폭을 넓게 채우고 rich 행 표시 */
-  .s360-3pane:not(.has-detail) .s360-pane-roster{width:auto;flex:1;}
+  /* 학생 선택 전(2열): 명렬이 남는 폭을 채우되 목록은 max-width 가운데(좌우 여백) */
+  .s360-3pane:not(.has-detail) .s360-pane-roster{width:auto;flex:1;padding:16px 16px 28px;}
   /* 명렬(2열, 학급 선택)은 기존 목록 그대로의 rich 행 사용 (.spot-row 기본 스타일) */
   .s360-pane-detail{flex:1;min-width:0;background:var(--bg-base);padding:16px;}
   .s360-cl-grade{font-size:12px;font-weight:900;color:var(--ink-soft);padding:8px 8px 4px;}
   .s360-cl-all{display:flex;align-items:center;gap:6px;width:100%;padding:9px 10px;margin-bottom:6px;border:1px solid var(--rule);border-radius:9px;background:var(--paper);font-family:inherit;font-size:12.5px;font-weight:800;color:var(--ink-soft);cursor:pointer;text-align:left;}
   .s360-cl-all:hover{color:var(--mon);border-color:var(--mon);}
-  .s360-cl-grade-tog{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 8px 7px;margin-top:2px;border:none;background:transparent;font-family:inherit;font-size:12px;font-weight:900;color:var(--ink-soft);cursor:pointer;text-align:left;}
-  .s360-cl-grade-tog:hover,.s360-cl-grade-tog.open{color:var(--ink);}
-  .s360-cl-caret{font-size:10px;opacity:.7;}
+  .s360-cl-grade-tog{display:flex;align-items:center;justify-content:space-between;width:100%;padding:11px 8px 9px;margin-top:4px;border:none;background:transparent;font-family:inherit;font-size:15px;font-weight:900;color:var(--ink-soft);cursor:pointer;text-align:left;}
+  .s360-cl-grade-tog[data-g="1"]{color:#2563eb;}
+  .s360-cl-grade-tog[data-g="2"]{color:#0d9488;}
+  .s360-cl-grade-tog[data-g="3"]{color:#d97706;}
+  .s360-cl-grade-tog:hover{background:var(--paper);}
+  .s360-cl-caret{font-size:11px;opacity:.7;}
   .s360-cl-item{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px;padding:9px 10px;margin-bottom:3px;border:none;border-radius:9px;background:transparent;color:var(--ink);font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;text-align:left;}
   .s360-cl-item:hover{background:var(--paper);}
   .s360-cl-item.active{background:var(--mon);color:#fff;}
@@ -8480,7 +8483,12 @@ function s360FillRosterPane(){
       <span class="spot-cell spot-cell-pts">${ptsBadge}</span>
     </div>`;
   }).join('');
-  el.innerHTML = `<div class="s360-roster-head">${s360Group.label} · ${students.length}명</div>${rows}`;
+  if (compact) {
+    el.innerHTML = `<div class="s360-roster-head">${s360Group.label} · ${students.length}명</div>${rows}`;
+  } else {
+    // 기존 목록 그대로: max-width 가운데 정렬(좌우 여백) + 카드 박스
+    el.innerHTML = `<div class="s360-list-head" style="padding:2px 4px 10px;font-size:14px;font-weight:900;color:var(--ink);">${s360Group.label} · ${students.length}명</div><div class="s360-list-box">${rows}</div>`;
+  }
   el.querySelectorAll('.spot-row, .s360-rs-item').forEach(b=>b.addEventListener('click',()=>{
     const first = !s360PaneStudent;   // 처음 학생 선택이면 상세 패널을 새로 생성(2열→3열)
     s360PaneStudent = students[parseInt(b.dataset.i)];
