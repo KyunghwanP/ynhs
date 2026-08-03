@@ -1391,6 +1391,8 @@
   .s360-3pane .s360-pane{overflow-y:auto;min-height:0;}
   .s360-pane-classes{width:134px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper-soft);padding:8px 6px;}
   .s360-pane-roster{width:252px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper);}
+  /* 학생 선택 전(2열): 명렬이 남는 폭을 넓게 채움 */
+  .s360-3pane:not(.has-detail) .s360-pane-roster{width:auto;flex:1;}
   .s360-pane-detail{flex:1;min-width:0;background:var(--bg-base);padding:16px;}
   .s360-cl-grade{font-size:12px;font-weight:900;color:var(--ink-soft);padding:8px 8px 4px;}
   .s360-cl-grade-tog{display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 8px 7px;margin-top:2px;border:none;background:transparent;font-family:inherit;font-size:12px;font-weight:900;color:var(--ink-soft);cursor:pointer;text-align:left;}
@@ -8408,14 +8410,15 @@ function s360RenderClassPanes(){
   }
   const body = document.getElementById('s360Body');
   body.classList.add('s360-body-panes');
-  body.innerHTML = `<div class="s360-3pane">
+  const hasStudent = !!s360PaneStudent;   // 학생 선택 전엔 명렬이 넓게(2열), 선택하면 상세 열림(3열)
+  body.innerHTML = `<div class="s360-3pane${hasStudent ? ' has-detail' : ''}">
     <div class="s360-pane s360-pane-classes" id="s360PaneClasses"></div>
     <div class="s360-pane s360-pane-roster" id="s360PaneRoster"></div>
-    <div class="s360-pane s360-pane-detail" id="s360PaneDetail"></div>
+    ${hasStudent ? '<div class="s360-pane s360-pane-detail" id="s360PaneDetail"></div>' : ''}
   </div>`;
   s360FillClassPane();
   s360FillRosterPane();
-  s360FillDetailPane();
+  if (hasStudent) s360FillDetailPane();
 }
 function s360FillClassPane(){
   const el = document.getElementById('s360PaneClasses'); if (!el) return;
@@ -8445,7 +8448,7 @@ function s360FillClassPane(){
     s360Group={ type:'class', key, label:`${grade}학년 ${room}반` };
     s360OpenGrade = grade;
     s360PaneStudent=null;
-    s360FillClassPane(); s360FillRosterPane(); s360FillDetailPane();
+    s360RenderClassPanes();   // 반 바꾸면 상세 닫고 명렬 넓게(2열)로 재구성
   }));
 }
 function s360FillRosterPane(){
@@ -8459,8 +8462,10 @@ function s360FillRosterPane(){
     return `<button type="button" class="s360-rs-item${active}" data-i="${i}"><span class="s360-rs-num">${String(s.num||'').padStart(2,'0')}</span><span class="s360-rs-name">${escapeHtml(s.name||'')}</span></button>`;
   }).join('');
   el.querySelectorAll('.s360-rs-item').forEach(b=>b.addEventListener('click',()=>{
+    const first = !s360PaneStudent;   // 처음 학생 선택이면 상세 패널을 새로 생성(2열→3열)
     s360PaneStudent = students[parseInt(b.dataset.i)];
-    s360FillRosterPane();   // 선택 하이라이트 갱신
+    if (first) { s360RenderClassPanes(); return; }
+    s360FillRosterPane();   // 이미 3열이면 하이라이트+상세만 갱신
     s360FillDetailPane();
   }));
 }
