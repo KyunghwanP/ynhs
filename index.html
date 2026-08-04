@@ -4419,7 +4419,7 @@
 
               <!-- 벌점 상위 학생 -->
               <div class="pts-stat-card">
-                <div class="pts-stat-card-title">⚠️ 벌점 상위 학생 <span class="pts-stat-sub">(선도 관심)</span></div>
+                <div class="pts-stat-card-title">⚠️ 선도 관심 학생 <span class="pts-stat-sub">(합계 낮은 순)</span></div>
                 <div class="pts-stat-hint">이름을 누르면 상세 내역이 열립니다.</div>
                 <div id="ptsDemeritTop"></div>
               </div>
@@ -12545,20 +12545,21 @@ function renderPtsStats(){
 
   renderPtsRoomRank();
 
-  // 벌점 상위 학생
-  const dtop = arr.filter(s => Math.abs(s.demerit||0) > 0)
-    .map(s => ({ s, mag: Math.abs(s.demerit||0) }))
-    .sort((a,b) => b.mag - a.mag)
+  // 선도 관심 학생 (합계 낮은 순)
+  const dtop = arr.filter(s => (s.total||0) < 0)
+    .map(s => ({ s, v: s.total||0 }))
+    .sort((a,b) => a.v - b.v)
     .slice(0, 10);
   _ptsStatDemeritTop = dtop.map(x => x.s);
-  const dmax = dtop.length ? dtop[0].mag : 1;
+  const dmax = dtop.length ? Math.abs(dtop[0].v) : 1;
   document.getElementById('ptsDemeritTop').innerHTML = dtop.length
     ? dtop.map((x,i) => {
         const s = x.s;
-        const label = `${escapeHtml(s.name)} <span class="pts-bar-sub">${s.grade}-${s.room}-${String(s.num).padStart(2,'0')}</span>`;
-        return ptsBarRow(label, `-${x.mag}`, x.mag/dmax, 'red', `showPtsStatStudent(${i})`);
+        const dm = Math.abs(s.demerit||0);
+        const label = `${escapeHtml(s.name)} <span class="pts-bar-sub">${s.grade}-${s.room}-${String(s.num).padStart(2,'0')}${dm?` · 벌점${dm}`:''}</span>`;
+        return ptsBarRow(label, `${x.v}`, Math.abs(x.v)/dmax, 'red', `showPtsStatStudent(${i})`);
       }).join('')
-    : '<div class="pts-stat-empty">벌점 보유 학생이 없습니다. 👍</div>';
+    : '<div class="pts-stat-empty">합계가 음수인 학생이 없습니다. 👍</div>';
 
   // 항목별 빈도 (기록 detail → PTS_RULES 부호로 분류)
   const meritFreq = new Map(), demeritFreq = new Map();
