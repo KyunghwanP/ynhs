@@ -1391,8 +1391,9 @@
   .s360-3pane .s360-pane{overflow-y:auto;min-height:0;}
   .s360-pane-classes{width:134px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper-soft);padding:8px 6px;}
   .s360-pane-roster{width:260px;flex-shrink:0;border-right:1px solid var(--rule);background:var(--paper);}
-  /* 학생 선택 전(2열): 명렬이 남는 폭을 채우되 목록은 max-width 가운데(좌우 여백) */
-  .s360-3pane:not(.has-detail) .s360-pane-roster{width:auto;flex:1;padding:16px 16px 28px;}
+  /* 학생 선택 전(2열): 명렬이 남는 폭을 채우되 목록은 max-width 가운데(좌우 여백),
+     배경은 상세 패널처럼 어둡게 해서 가운데 카드가 도드라지게 */
+  .s360-3pane:not(.has-detail) .s360-pane-roster{width:auto;flex:1;padding:16px 16px 28px;background:var(--bg-base);}
   /* 명렬(2열, 학급 선택)은 기존 목록 그대로의 rich 행 사용 (.spot-row 기본 스타일) */
   .s360-pane-detail{flex:1;min-width:0;background:var(--bg-base);padding:16px;}
   .s360-cl-grade{font-size:12px;font-weight:900;color:var(--ink-soft);padding:8px 8px 4px;}
