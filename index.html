@@ -1583,6 +1583,8 @@
   }
   .pts-bar-row.clickable{ cursor:pointer;border-radius:8px; }
   .pts-bar-row.clickable:hover{ background:var(--paper-soft); }
+  /* 선도 관심 목록: 이름+학번+벌점이 안 잘리게 라벨 칸 넓힘 */
+  .pts-lead-list .pts-bar-row{ grid-template-columns:172px 1fr auto; }
   .pts-bar-label{
     font-size:13.5px;font-weight:700;color:var(--ink);
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -4415,7 +4417,7 @@
               <div class="pts-stat-card">
                 <div class="pts-stat-card-title">⚠️ 선도 관심 학생 <span class="pts-stat-sub">(합계 낮은 순)</span></div>
                 <div class="pts-stat-hint">이름을 누르면 상세 내역이 열립니다.</div>
-                <div id="ptsDemeritTop"></div>
+                <div id="ptsDemeritTop" class="pts-lead-list"></div>
               </div>
 
               <!-- 항목별 빈도 -->
