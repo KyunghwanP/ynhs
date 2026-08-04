@@ -1568,8 +1568,6 @@
   .pts-stat-sub{ font-size:12px;font-weight:600;color:var(--ink-soft); }
   .pts-stat-hint{ font-size:11.5px;color:var(--ink-soft);margin-bottom:10px; }
   .pts-stat-empty{ font-size:13px;color:var(--ink-soft);padding:14px 4px;text-align:center; }
-  .pts-stat-2col{ display:grid;grid-template-columns:1fr 1fr;gap:14px; }
-  @media (max-width:560px){ .pts-stat-2col{ grid-template-columns:1fr; } }
   .pts-stat-toggle{ margin-left:auto;display:inline-flex;gap:4px; }
   .pts-mini-btn{
     padding:4px 10px;border-radius:14px;border:1.5px solid var(--rule);
@@ -4420,23 +4418,6 @@
                 <div id="ptsDemeritTop" class="pts-lead-list"></div>
               </div>
 
-              <!-- 항목별 빈도 -->
-              <div class="pts-stat-2col">
-                <div class="pts-stat-card">
-                  <div class="pts-stat-card-title">⭐ 상점 항목 Top</div>
-                  <div id="ptsMeritReasons"></div>
-                </div>
-                <div class="pts-stat-card">
-                  <div class="pts-stat-card-title">🚫 벌점 항목 Top</div>
-                  <div id="ptsDemeritReasons"></div>
-                </div>
-              </div>
-
-              <!-- 월별 추이 -->
-              <div class="pts-stat-card">
-                <div class="pts-stat-card-title">📅 월별 부여 추이</div>
-                <div id="ptsMonthlyTrend"></div>
-              </div>
             </div>
           </div>
         </div>
@@ -12439,28 +12420,6 @@ window.closePtsDetailBtn = closePtsDetailBtn;
 // ══════════════════════════════════════════
 let ptsStatsGrade = 'all';
 let _ptsStatDemeritTop = [];
-let _ptsRuleMap = null;
-
-// 규정(PTS_RULES) label → score 매핑 (기록 detail 분류용)
-function ptsNormLabel(s){ return String(s||'').replace(/^#/,'').replace(/\s+/g,''); }
-function ptsRuleScore(detail){
-  if (!_ptsRuleMap) {
-    _ptsRuleMap = new Map();
-    ['상점','벌점감점','벌점'].forEach(k => (PTS_RULES[k]||[]).forEach(r => {
-      _ptsRuleMap.set(ptsNormLabel(r.label), r.score);
-    }));
-  }
-  const k = ptsNormLabel(detail);
-  return _ptsRuleMap.has(k) ? _ptsRuleMap.get(k) : null;
-}
-function ptsMonthKey(date){
-  const s = String(date||'');
-  let m = s.match(/(\d{4})\D+(\d{1,2})/);   // YYYY-MM(-DD)
-  if (m) return m[1] + '-' + m[2].padStart(2,'0');
-  m = s.match(/(\d{1,2})\D+(\d{1,2})/);       // M/D → 올해로 가정
-  if (m) return new Date().getFullYear() + '-' + m[1].padStart(2,'0');
-  return null;
-}
 
 function ptsStatStudents(){
   return ptsStatsGrade === 'all'
@@ -12488,7 +12447,7 @@ function renderPtsStats(){
   const upd = document.getElementById('ptsStatsUpdated');
   if (!ptsViewData.length) {
     if (upd) upd.textContent = '데이터가 없습니다.';
-    ['ptsKpiGrid','ptsGradeCompare','ptsRoomRank','ptsDemeritTop','ptsMeritReasons','ptsDemeritReasons','ptsMonthlyTrend']
+    ['ptsKpiGrid','ptsGradeCompare','ptsRoomRank','ptsDemeritTop']
       .forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<div class="pts-stat-empty">데이터가 없습니다.</div>'; });
     return;
   }
@@ -12551,55 +12510,6 @@ function renderPtsStats(){
         return ptsBarRow(label, `${x.v}`, Math.abs(x.v)/dmax, 'red', `showPtsStatStudent(${i})`);
       }).join('')
     : '<div class="pts-stat-empty">합계가 음수인 학생이 없습니다. 👍</div>';
-
-  // 항목별 빈도 (기록 detail → PTS_RULES 부호로 분류)
-  const meritFreq = new Map(), demeritFreq = new Map();
-  arr.forEach(s => (s.records||[]).forEach(r => {
-    const sc = ptsRuleScore(r.detail);
-    if (sc === null) return;
-    const key = ptsNormLabel(r.detail) ? String(r.detail).replace(/^#/,'').trim() : '';
-    if (!key) return;
-    const bucket = sc > 0 ? meritFreq : sc < 0 ? demeritFreq : null;
-    if (!bucket) return;
-    bucket.set(key, (bucket.get(key)||0) + 1);
-  }));
-  const renderReasons = (map, cls, elId) => {
-    const list = [...map.entries()].sort((a,b) => b[1]-a[1]).slice(0, 8);
-    const max = list.length ? list[0][1] : 1;
-    document.getElementById(elId).innerHTML = list.length
-      ? list.map(([label,cnt]) => ptsBarRow(escapeHtml(label), cnt + '건', cnt/max, cls)).join('')
-      : '<div class="pts-stat-empty">규정 항목 기록이 없습니다.</div>';
-  };
-  renderReasons(meritFreq, 'green', 'ptsMeritReasons');
-  renderReasons(demeritFreq, 'red', 'ptsDemeritReasons');
-
-  // 월별 추이
-  const months = new Map();
-  arr.forEach(s => (s.records||[]).forEach(r => {
-    const mk = ptsMonthKey(r.date);
-    if (!mk) return;
-    const sc = ptsRuleScore(r.detail);
-    const o = months.get(mk) || { m:0, d:0 };
-    if (sc !== null && sc < 0) o.d++; else o.m++;
-    months.set(mk, o);
-  }));
-  const mkeys = [...months.keys()].sort().slice(-8);
-  const mmax = mkeys.reduce((mx,k) => Math.max(mx, months.get(k).m + months.get(k).d), 1);
-  document.getElementById('ptsMonthlyTrend').innerHTML = mkeys.length
-    ? mkeys.map(k => {
-        const o = months.get(k);
-        const gw = Math.round(o.m/mmax*100), rw = Math.round(o.d/mmax*100);
-        const [y,mo] = k.split('-');
-        return `<div class="pts-bar-row">
-          <span class="pts-bar-label">${y.slice(2)}.${mo}</span>
-          <span class="pts-bar-track dual">
-            <span class="pts-bar-fill green" style="width:${gw}%;"></span>
-            <span class="pts-bar-fill red" style="width:${rw}%;"></span>
-          </span>
-          <span class="pts-bar-val">⭐${o.m} 🚫${o.d}</span>
-        </div>`;
-      }).join('')
-    : '<div class="pts-stat-empty">날짜 기록이 없습니다.</div>';
 }
 
 function renderPtsRoomRank(){
