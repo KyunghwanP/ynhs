@@ -4406,20 +4406,14 @@
 
               <!-- 반별 순위 -->
               <div class="pts-stat-card">
-                <div class="pts-stat-card-title">🏫 반별 순위
-                  <span class="pts-stat-toggle" id="ptsRoomMetricToggle">
-                    <button class="pts-mini-btn active" data-metric="net" onclick="setPtsRoomMetric('net')">순점수</button>
-                    <button class="pts-mini-btn" data-metric="demerit" onclick="setPtsRoomMetric('demerit')">벌점</button>
-                    <button class="pts-mini-btn" data-metric="merit" onclick="setPtsRoomMetric('merit')">상점</button>
-                  </span>
-                </div>
+                <div class="pts-stat-card-title">🏫 반별 순위 <span class="pts-stat-sub">(순점수 평균)</span></div>
                 <div class="pts-stat-hint">막대를 누르면 해당 반 조회로 이동합니다.</div>
                 <div id="ptsRoomRank"></div>
               </div>
 
               <!-- 벌점 상위 학생 -->
               <div class="pts-stat-card">
-                <div class="pts-stat-card-title">⚠️ 벌점 상위 학생 <span class="pts-stat-sub">(선도 관심)</span></div>
+                <div class="pts-stat-card-title">⚠️ 선도 관심 학생 <span class="pts-stat-sub">(합계 낮은 순)</span></div>
                 <div class="pts-stat-hint">이름을 누르면 상세 내역이 열립니다.</div>
                 <div id="ptsDemeritTop"></div>
               </div>
@@ -12442,7 +12436,6 @@ window.closePtsDetailBtn = closePtsDetailBtn;
 // 상벌점 통계 대시보드
 // ══════════════════════════════════════════
 let ptsStatsGrade = 'all';
-let ptsRoomMetric = 'net';
 let _ptsStatDemeritTop = [];
 let _ptsRuleMap = null;
 
@@ -12489,13 +12482,6 @@ function selectPtsStatsGrade(g){
     b.classList.toggle('active', b.dataset.sgrade === g));
   renderPtsStats();
 }
-function setPtsRoomMetric(m){
-  ptsRoomMetric = m;
-  document.querySelectorAll('#ptsRoomMetricToggle .pts-mini-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.metric === m));
-  renderPtsRoomRank();
-}
-
 function renderPtsStats(){
   const upd = document.getElementById('ptsStatsUpdated');
   if (!ptsViewData.length) {
@@ -12528,16 +12514,19 @@ function renderPtsStats(){
   const gcCard = document.getElementById('ptsGradeCompareCard');
   if (ptsStatsGrade === 'all') {
     gcCard.style.display = '';
-    const rows = ['1','2','3'].map(g => {
+    const gstats = ['1','2','3'].map(g => {
       const gs = ptsViewData.filter(s => String(s.grade) === g);
-      if (!gs.length) return '';
+      if (!gs.length) return null;
       const gn = gs.length;
       const dh = gs.filter(s => Math.abs(s.demerit||0) > 0).length;
       const avg = gs.reduce((a,s) => a + (s.total||0), 0) / gn;
-      return ptsBarRow(g + '학년',
-        `벌점보유 ${dh}명 · 순점 ${avg>0?'+':''}${avg.toFixed(1)}`,
-        gn ? dh/gn : 0, 'red');
-    }).join('');
+      return { g, gn, dh, avg };
+    }).filter(Boolean);
+    const gvals = gstats.map(x => x.avg);
+    const gmin = Math.min(0, ...gvals), gmax = Math.max(0, ...gvals), grange = (gmax-gmin)||1;
+    const rows = gstats.map(x => ptsBarRow(x.g + '학년',
+      `${x.avg>0?'+':''}${x.avg.toFixed(1)} · 벌점보유 ${x.dh}명`,
+      (x.avg - gmin) / grange, 'blue')).join('');
     document.getElementById('ptsGradeCompare').innerHTML = rows || '<div class="pts-stat-empty">데이터가 없습니다.</div>';
   } else {
     gcCard.style.display = 'none';
@@ -12545,20 +12534,21 @@ function renderPtsStats(){
 
   renderPtsRoomRank();
 
-  // 벌점 상위 학생
-  const dtop = arr.filter(s => Math.abs(s.demerit||0) > 0)
-    .map(s => ({ s, mag: Math.abs(s.demerit||0) }))
-    .sort((a,b) => b.mag - a.mag)
+  // 선도 관심 학생 (합계 낮은 순)
+  const dtop = arr.filter(s => (s.total||0) < 0)
+    .map(s => ({ s, v: s.total||0 }))
+    .sort((a,b) => a.v - b.v)
     .slice(0, 10);
   _ptsStatDemeritTop = dtop.map(x => x.s);
-  const dmax = dtop.length ? dtop[0].mag : 1;
+  const dmax = dtop.length ? Math.abs(dtop[0].v) : 1;
   document.getElementById('ptsDemeritTop').innerHTML = dtop.length
     ? dtop.map((x,i) => {
         const s = x.s;
-        const label = `${escapeHtml(s.name)} <span class="pts-bar-sub">${s.grade}-${s.room}-${String(s.num).padStart(2,'0')}</span>`;
-        return ptsBarRow(label, `-${x.mag}`, x.mag/dmax, 'red', `showPtsStatStudent(${i})`);
+        const dm = Math.abs(s.demerit||0);
+        const label = `${escapeHtml(s.name)} <span class="pts-bar-sub">${s.grade}-${s.room}-${String(s.num).padStart(2,'0')}${dm?` · 벌점${dm}`:''}</span>`;
+        return ptsBarRow(label, `${x.v}`, Math.abs(x.v)/dmax, 'red', `showPtsStatStudent(${i})`);
       }).join('')
-    : '<div class="pts-stat-empty">벌점 보유 학생이 없습니다. 👍</div>';
+    : '<div class="pts-stat-empty">합계가 음수인 학생이 없습니다. 👍</div>';
 
   // 항목별 빈도 (기록 detail → PTS_RULES 부호로 분류)
   const meritFreq = new Map(), demeritFreq = new Map();
@@ -12617,31 +12607,18 @@ function renderPtsRoomRank(){
     const [g,r] = key.split('-');
     const rs = arr.filter(s => String(s.grade)===g && String(s.room)===r);
     const cnt = rs.length;
-    let val;
-    if (ptsRoomMetric === 'net')       val = cnt ? rs.reduce((a,s)=>a+(s.total||0),0)/cnt : 0;
-    else if (ptsRoomMetric === 'demerit') val = rs.reduce((a,s)=>a+Math.abs(s.demerit||0),0);
-    else                               val = rs.reduce((a,s)=>a+(s.merit||0),0);
+    const val = cnt ? rs.reduce((a,s)=>a+(s.total||0),0)/cnt : 0;   // 순점수(합계) 평균
     return { key, g, r, val, cnt };
   }).sort((a,b) => b.val - a.val);
 
   const vals = data.map(d => d.val);
-  let ratioOf;
-  if (ptsRoomMetric === 'net') {
-    const min = Math.min(0, ...vals), max = Math.max(0, ...vals), range = (max-min)||1;
-    ratioOf = v => (v - min) / range;
-  } else {
-    const max = Math.max(1, ...vals);
-    ratioOf = v => v / max;
-  }
-  const cls = ptsRoomMetric === 'merit' ? 'green' : ptsRoomMetric === 'demerit' ? 'red' : 'blue';
-  const fmt = d => ptsRoomMetric === 'net'
-    ? (d.val>0?'+':'') + d.val.toFixed(1)
-    : (ptsRoomMetric==='merit' ? '+' : '−') + Math.round(d.val);
+  const min = Math.min(0, ...vals), max = Math.max(0, ...vals), range = (max-min)||1;
 
   document.getElementById('ptsRoomRank').innerHTML = data.length
     ? data.map(d => ptsBarRow(
         `${d.g}-${d.r} <span class="pts-bar-sub">${d.cnt}명</span>`,
-        fmt(d), ratioOf(d.val), cls, `ptsJumpRoom('${d.key}')`)).join('')
+        (d.val>0?'+':'') + d.val.toFixed(1),
+        (d.val - min) / range, 'blue', `ptsJumpRoom('${d.key}')`)).join('')
     : '<div class="pts-stat-empty">데이터가 없습니다.</div>';
 }
 
@@ -12655,7 +12632,6 @@ function ptsJumpRoom(key){
 }
 
 window.selectPtsStatsGrade = selectPtsStatsGrade;
-window.setPtsRoomMetric    = setPtsRoomMetric;
 window.showPtsStatStudent  = showPtsStatStudent;
 window.ptsJumpRoom         = ptsJumpRoom;
 
