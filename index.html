@@ -1487,7 +1487,7 @@
 
   /* 상벌점 조회·입력/조회 탭 */
   .pts-mode-tabs{
-    display:grid;grid-template-columns:1fr 1fr;
+    display:grid;grid-template-columns:1fr 1fr 1fr;
     border-bottom:2px solid var(--rule);
     margin-bottom:0;
     background:var(--paper);
@@ -1542,6 +1542,63 @@
   .pts-group-card.active{background:var(--mon);border-color:var(--mon);color:#fff;}
   .pts-group-card-name{font-weight:700;font-size:16px;}
   .pts-group-card-count{font-size:12px;opacity:0.7;margin-top:2px;}
+
+  /* 통계 대시보드 */
+  .pts-stats-wrap{ width:100%;max-width:680px; }
+  .pts-stats-updated{ font-size:12px;color:var(--ink-soft);margin-bottom:12px;text-align:right; }
+  .pts-kpi-grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));
+    gap:8px;margin-bottom:16px;
+  }
+  .pts-kpi-card{
+    background:var(--paper);border:1.5px solid var(--rule);border-radius:12px;
+    padding:12px 8px;text-align:center;
+  }
+  .pts-kpi-val{ font-size:22px;font-weight:900;color:var(--ink);line-height:1.1; }
+  .pts-kpi-val.plus{ color:#15803d; } .pts-kpi-val.minus{ color:#b91c1c; }
+  .pts-kpi-label{ font-size:12px;color:var(--ink-soft);margin-top:4px;font-weight:600; }
+  .pts-stat-card{
+    background:var(--paper);border:1.5px solid var(--rule);border-radius:14px;
+    padding:14px 16px;margin-bottom:14px;
+  }
+  .pts-stat-card-title{
+    font-size:15px;font-weight:800;color:var(--ink);margin-bottom:4px;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  }
+  .pts-stat-sub{ font-size:12px;font-weight:600;color:var(--ink-soft); }
+  .pts-stat-hint{ font-size:11.5px;color:var(--ink-soft);margin-bottom:10px; }
+  .pts-stat-empty{ font-size:13px;color:var(--ink-soft);padding:14px 4px;text-align:center; }
+  .pts-stat-2col{ display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+  @media (max-width:560px){ .pts-stat-2col{ grid-template-columns:1fr; } }
+  .pts-stat-toggle{ margin-left:auto;display:inline-flex;gap:4px; }
+  .pts-mini-btn{
+    padding:4px 10px;border-radius:14px;border:1.5px solid var(--rule);
+    background:var(--paper);color:var(--ink-soft);
+    font-family:'Pretendard','Noto Sans KR';font-weight:700;font-size:12px;cursor:pointer;
+  }
+  .pts-mini-btn.active{ background:var(--mon);border-color:var(--mon);color:#fff; }
+  .pts-bar-row{
+    display:grid;grid-template-columns:112px 1fr auto;gap:10px;align-items:center;
+    padding:5px 2px;
+  }
+  .pts-bar-row.clickable{ cursor:pointer;border-radius:8px; }
+  .pts-bar-row.clickable:hover{ background:var(--paper-soft); }
+  .pts-bar-label{
+    font-size:13.5px;font-weight:700;color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .pts-bar-sub{ font-size:11px;font-weight:600;color:var(--ink-soft);font-family:'IBM Plex Mono'; }
+  .pts-bar-track{
+    height:12px;background:var(--bg-base);border-radius:7px;overflow:hidden;
+    display:flex;min-width:0;
+  }
+  .pts-bar-fill{ height:100%;border-radius:7px; }
+  .pts-bar-track.dual .pts-bar-fill{ border-radius:0; }
+  .pts-bar-fill.green{ background:#22c55e; } .pts-bar-fill.red{ background:#ef4444; } .pts-bar-fill.blue{ background:var(--mon); }
+  .pts-bar-val{
+    font-size:13px;font-weight:800;color:var(--ink);
+    font-family:'IBM Plex Mono';white-space:nowrap;min-width:44px;text-align:right;
+  }
 
   .pts-student-list{
     background:var(--paper);border-radius:12px;
@@ -4191,6 +4248,7 @@
         <div style="background:var(--paper);">
           <div class="pts-mode-tabs">
             <button class="pts-mode-btn active" id="ptsModeView" onclick="switchPointsMode('view')">📊 조회</button>
+            <button class="pts-mode-btn" id="ptsModeStats" onclick="switchPointsMode('stats')">📈 통계</button>
             <button class="pts-mode-btn" id="ptsModeInput" onclick="switchPointsMode('input')">✏️ 입력</button>
           </div>
         </div>
@@ -4319,6 +4377,70 @@
               </div>
 
               <div class="pts-view-empty" id="ptsViewEmpty" style="display:none;">데이터가 없습니다.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 통계 화면 -->
+        <div id="ptsStatsSection" style="display:none;flex:1;overflow:hidden;flex-direction:column;">
+          <div class="pts-view-body">
+            <div class="pts-stats-wrap">
+              <div class="pts-stats-updated" id="ptsStatsUpdated">불러오는 중...</div>
+
+              <!-- 학년 필터 -->
+              <div class="pts-grade-tabs" id="ptsStatsGradeTabs">
+                <button class="pts-grade-btn active" data-sgrade="all" onclick="selectPtsStatsGrade('all')">전체</button>
+                <button class="pts-grade-btn" data-sgrade="1" onclick="selectPtsStatsGrade('1')">1학년</button>
+                <button class="pts-grade-btn" data-sgrade="2" onclick="selectPtsStatsGrade('2')">2학년</button>
+                <button class="pts-grade-btn" data-sgrade="3" onclick="selectPtsStatsGrade('3')">3학년</button>
+              </div>
+
+              <!-- 요약 KPI -->
+              <div class="pts-kpi-grid" id="ptsKpiGrid"></div>
+
+              <!-- 학년별 비교 (전체일 때만) -->
+              <div class="pts-stat-card" id="ptsGradeCompareCard">
+                <div class="pts-stat-card-title">🎓 학년별 비교</div>
+                <div id="ptsGradeCompare"></div>
+              </div>
+
+              <!-- 반별 순위 -->
+              <div class="pts-stat-card">
+                <div class="pts-stat-card-title">🏫 반별 순위
+                  <span class="pts-stat-toggle" id="ptsRoomMetricToggle">
+                    <button class="pts-mini-btn active" data-metric="net" onclick="setPtsRoomMetric('net')">순점수</button>
+                    <button class="pts-mini-btn" data-metric="demerit" onclick="setPtsRoomMetric('demerit')">벌점</button>
+                    <button class="pts-mini-btn" data-metric="merit" onclick="setPtsRoomMetric('merit')">상점</button>
+                  </span>
+                </div>
+                <div class="pts-stat-hint">막대를 누르면 해당 반 조회로 이동합니다.</div>
+                <div id="ptsRoomRank"></div>
+              </div>
+
+              <!-- 벌점 상위 학생 -->
+              <div class="pts-stat-card">
+                <div class="pts-stat-card-title">⚠️ 벌점 상위 학생 <span class="pts-stat-sub">(선도 관심)</span></div>
+                <div class="pts-stat-hint">이름을 누르면 상세 내역이 열립니다.</div>
+                <div id="ptsDemeritTop"></div>
+              </div>
+
+              <!-- 항목별 빈도 -->
+              <div class="pts-stat-2col">
+                <div class="pts-stat-card">
+                  <div class="pts-stat-card-title">⭐ 상점 항목 Top</div>
+                  <div id="ptsMeritReasons"></div>
+                </div>
+                <div class="pts-stat-card">
+                  <div class="pts-stat-card-title">🚫 벌점 항목 Top</div>
+                  <div id="ptsDemeritReasons"></div>
+                </div>
+              </div>
+
+              <!-- 월별 추이 -->
+              <div class="pts-stat-card">
+                <div class="pts-stat-card-title">📅 월별 부여 추이</div>
+                <div id="ptsMonthlyTrend"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -12102,19 +12224,20 @@ let ptsViewLoaded  = false;
 function switchPointsMode(mode) {
   const inputSec = document.getElementById('ptsInputSection');
   const viewSec  = document.getElementById('ptsViewSection');
+  const statsSec = document.getElementById('ptsStatsSection');
   const inputBtn = document.getElementById('ptsModeInput');
   const viewBtn  = document.getElementById('ptsModeView');
-  if (mode === 'input') {
-    inputSec.style.display = 'flex';
-    viewSec.style.display  = 'none';
-    inputBtn.classList.add('active');
-    viewBtn.classList.remove('active');
-  } else {
-    inputSec.style.display = 'none';
-    viewSec.style.display  = 'flex';
-    viewBtn.classList.add('active');
-    inputBtn.classList.remove('active');
-    if (!ptsViewLoaded) loadPtsViewData();
+  const statsBtn = document.getElementById('ptsModeStats');
+  const secs = { view: viewSec, stats: statsSec, input: inputSec };
+  const btns = { view: viewBtn, stats: statsBtn, input: inputBtn };
+  Object.keys(secs).forEach(k => {
+    secs[k].style.display = (k === mode) ? 'flex' : 'none';
+    btns[k].classList.toggle('active', k === mode);
+  });
+  if (mode === 'view' && !ptsViewLoaded) loadPtsViewData();
+  if (mode === 'stats') {
+    if (!ptsViewLoaded) loadPtsViewData().then(renderPtsStats);
+    else renderPtsStats();
   }
 }
 
@@ -12314,6 +12437,228 @@ function closePtsDetailBtn() {
 window.showPtsDetail     = showPtsDetail;
 window.closePtsDetail    = closePtsDetail;
 window.closePtsDetailBtn = closePtsDetailBtn;
+
+// ══════════════════════════════════════════
+// 상벌점 통계 대시보드
+// ══════════════════════════════════════════
+let ptsStatsGrade = 'all';
+let ptsRoomMetric = 'net';
+let _ptsStatDemeritTop = [];
+let _ptsRuleMap = null;
+
+// 규정(PTS_RULES) label → score 매핑 (기록 detail 분류용)
+function ptsNormLabel(s){ return String(s||'').replace(/^#/,'').replace(/\s+/g,''); }
+function ptsRuleScore(detail){
+  if (!_ptsRuleMap) {
+    _ptsRuleMap = new Map();
+    ['상점','벌점감점','벌점'].forEach(k => (PTS_RULES[k]||[]).forEach(r => {
+      _ptsRuleMap.set(ptsNormLabel(r.label), r.score);
+    }));
+  }
+  const k = ptsNormLabel(detail);
+  return _ptsRuleMap.has(k) ? _ptsRuleMap.get(k) : null;
+}
+function ptsMonthKey(date){
+  const s = String(date||'');
+  let m = s.match(/(\d{4})\D+(\d{1,2})/);   // YYYY-MM(-DD)
+  if (m) return m[1] + '-' + m[2].padStart(2,'0');
+  m = s.match(/(\d{1,2})\D+(\d{1,2})/);       // M/D → 올해로 가정
+  if (m) return new Date().getFullYear() + '-' + m[1].padStart(2,'0');
+  return null;
+}
+
+function ptsStatStudents(){
+  return ptsStatsGrade === 'all'
+    ? ptsViewData
+    : ptsViewData.filter(s => String(s.grade) === ptsStatsGrade);
+}
+
+function ptsBarRow(label, valText, ratio, cls, onclick){
+  const w = Math.max(2, Math.min(100, Math.round(ratio * 100)));
+  const clickAttr = onclick ? ` role="button" tabindex="0" onclick="${onclick}"` : '';
+  return `<div class="pts-bar-row${onclick?' clickable':''}"${clickAttr}>
+    <span class="pts-bar-label">${label}</span>
+    <span class="pts-bar-track"><span class="pts-bar-fill ${cls}" style="width:${w}%;"></span></span>
+    <span class="pts-bar-val">${valText}</span>
+  </div>`;
+}
+
+function selectPtsStatsGrade(g){
+  ptsStatsGrade = g;
+  document.querySelectorAll('#ptsStatsGradeTabs .pts-grade-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.sgrade === g));
+  renderPtsStats();
+}
+function setPtsRoomMetric(m){
+  ptsRoomMetric = m;
+  document.querySelectorAll('#ptsRoomMetricToggle .pts-mini-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.metric === m));
+  renderPtsRoomRank();
+}
+
+function renderPtsStats(){
+  const upd = document.getElementById('ptsStatsUpdated');
+  if (!ptsViewData.length) {
+    if (upd) upd.textContent = '데이터가 없습니다.';
+    ['ptsKpiGrid','ptsGradeCompare','ptsRoomRank','ptsDemeritTop','ptsMeritReasons','ptsDemeritReasons','ptsMonthlyTrend']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<div class="pts-stat-empty">데이터가 없습니다.</div>'; });
+    return;
+  }
+  const src = document.getElementById('ptsViewUpdated');
+  if (upd && src) upd.textContent = src.textContent;
+
+  const arr = ptsStatStudents();
+  const n = arr.length;
+  const totRecords    = arr.reduce((a,s) => a + ((s.records && s.records.length) || 0), 0);
+  const demeritHolders= arr.filter(s => Math.abs(s.demerit||0) > 0).length;
+  const meritHolders  = arr.filter(s => (s.merit||0) > 0).length;
+  const avgNet        = n ? arr.reduce((a,s) => a + (s.total||0), 0) / n : 0;
+
+  document.getElementById('ptsKpiGrid').innerHTML = [
+    ['대상 학생', n + '명', ''],
+    ['총 부여 건수', totRecords + '건', ''],
+    ['상점 보유', meritHolders + '명', 'plus'],
+    ['벌점 보유', demeritHolders + '명', 'minus'],
+    ['순점수 평균', (avgNet>0?'+':'') + avgNet.toFixed(1), avgNet>0?'plus':avgNet<0?'minus':''],
+  ].map(([label,val,cls]) =>
+    `<div class="pts-kpi-card"><div class="pts-kpi-val ${cls}">${val}</div><div class="pts-kpi-label">${label}</div></div>`
+  ).join('');
+
+  // 학년별 비교 (전체 필터일 때만)
+  const gcCard = document.getElementById('ptsGradeCompareCard');
+  if (ptsStatsGrade === 'all') {
+    gcCard.style.display = '';
+    const rows = ['1','2','3'].map(g => {
+      const gs = ptsViewData.filter(s => String(s.grade) === g);
+      if (!gs.length) return '';
+      const gn = gs.length;
+      const dh = gs.filter(s => Math.abs(s.demerit||0) > 0).length;
+      const avg = gs.reduce((a,s) => a + (s.total||0), 0) / gn;
+      return ptsBarRow(g + '학년',
+        `벌점보유 ${dh}명 · 순점 ${avg>0?'+':''}${avg.toFixed(1)}`,
+        gn ? dh/gn : 0, 'red');
+    }).join('');
+    document.getElementById('ptsGradeCompare').innerHTML = rows || '<div class="pts-stat-empty">데이터가 없습니다.</div>';
+  } else {
+    gcCard.style.display = 'none';
+  }
+
+  renderPtsRoomRank();
+
+  // 벌점 상위 학생
+  const dtop = arr.filter(s => Math.abs(s.demerit||0) > 0)
+    .map(s => ({ s, mag: Math.abs(s.demerit||0) }))
+    .sort((a,b) => b.mag - a.mag)
+    .slice(0, 10);
+  _ptsStatDemeritTop = dtop.map(x => x.s);
+  const dmax = dtop.length ? dtop[0].mag : 1;
+  document.getElementById('ptsDemeritTop').innerHTML = dtop.length
+    ? dtop.map((x,i) => {
+        const s = x.s;
+        const label = `${escapeHtml(s.name)} <span class="pts-bar-sub">${s.grade}-${s.room}-${String(s.num).padStart(2,'0')}</span>`;
+        return ptsBarRow(label, `-${x.mag}`, x.mag/dmax, 'red', `showPtsStatStudent(${i})`);
+      }).join('')
+    : '<div class="pts-stat-empty">벌점 보유 학생이 없습니다. 👍</div>';
+
+  // 항목별 빈도 (기록 detail → PTS_RULES 부호로 분류)
+  const meritFreq = new Map(), demeritFreq = new Map();
+  arr.forEach(s => (s.records||[]).forEach(r => {
+    const sc = ptsRuleScore(r.detail);
+    if (sc === null) return;
+    const key = ptsNormLabel(r.detail) ? String(r.detail).replace(/^#/,'').trim() : '';
+    if (!key) return;
+    const bucket = sc > 0 ? meritFreq : sc < 0 ? demeritFreq : null;
+    if (!bucket) return;
+    bucket.set(key, (bucket.get(key)||0) + 1);
+  }));
+  const renderReasons = (map, cls, elId) => {
+    const list = [...map.entries()].sort((a,b) => b[1]-a[1]).slice(0, 8);
+    const max = list.length ? list[0][1] : 1;
+    document.getElementById(elId).innerHTML = list.length
+      ? list.map(([label,cnt]) => ptsBarRow(escapeHtml(label), cnt + '건', cnt/max, cls)).join('')
+      : '<div class="pts-stat-empty">규정 항목 기록이 없습니다.</div>';
+  };
+  renderReasons(meritFreq, 'green', 'ptsMeritReasons');
+  renderReasons(demeritFreq, 'red', 'ptsDemeritReasons');
+
+  // 월별 추이
+  const months = new Map();
+  arr.forEach(s => (s.records||[]).forEach(r => {
+    const mk = ptsMonthKey(r.date);
+    if (!mk) return;
+    const sc = ptsRuleScore(r.detail);
+    const o = months.get(mk) || { m:0, d:0 };
+    if (sc !== null && sc < 0) o.d++; else o.m++;
+    months.set(mk, o);
+  }));
+  const mkeys = [...months.keys()].sort().slice(-8);
+  const mmax = mkeys.reduce((mx,k) => Math.max(mx, months.get(k).m + months.get(k).d), 1);
+  document.getElementById('ptsMonthlyTrend').innerHTML = mkeys.length
+    ? mkeys.map(k => {
+        const o = months.get(k);
+        const gw = Math.round(o.m/mmax*100), rw = Math.round(o.d/mmax*100);
+        const [y,mo] = k.split('-');
+        return `<div class="pts-bar-row">
+          <span class="pts-bar-label">${y.slice(2)}.${mo}</span>
+          <span class="pts-bar-track dual">
+            <span class="pts-bar-fill green" style="width:${gw}%;"></span>
+            <span class="pts-bar-fill red" style="width:${rw}%;"></span>
+          </span>
+          <span class="pts-bar-val">⭐${o.m} 🚫${o.d}</span>
+        </div>`;
+      }).join('')
+    : '<div class="pts-stat-empty">날짜 기록이 없습니다.</div>';
+}
+
+function renderPtsRoomRank(){
+  const arr = ptsStatStudents();
+  const rooms = [...new Set(arr.map(s => `${s.grade}-${s.room}`))];
+  const data = rooms.map(key => {
+    const [g,r] = key.split('-');
+    const rs = arr.filter(s => String(s.grade)===g && String(s.room)===r);
+    const cnt = rs.length;
+    let val;
+    if (ptsRoomMetric === 'net')       val = cnt ? rs.reduce((a,s)=>a+(s.total||0),0)/cnt : 0;
+    else if (ptsRoomMetric === 'demerit') val = rs.reduce((a,s)=>a+Math.abs(s.demerit||0),0);
+    else                               val = rs.reduce((a,s)=>a+(s.merit||0),0);
+    return { key, g, r, val, cnt };
+  }).sort((a,b) => b.val - a.val);
+
+  const vals = data.map(d => d.val);
+  let ratioOf;
+  if (ptsRoomMetric === 'net') {
+    const min = Math.min(0, ...vals), max = Math.max(0, ...vals), range = (max-min)||1;
+    ratioOf = v => (v - min) / range;
+  } else {
+    const max = Math.max(1, ...vals);
+    ratioOf = v => v / max;
+  }
+  const cls = ptsRoomMetric === 'merit' ? 'green' : ptsRoomMetric === 'demerit' ? 'red' : 'blue';
+  const fmt = d => ptsRoomMetric === 'net'
+    ? (d.val>0?'+':'') + d.val.toFixed(1)
+    : (ptsRoomMetric==='merit' ? '+' : '−') + Math.round(d.val);
+
+  document.getElementById('ptsRoomRank').innerHTML = data.length
+    ? data.map(d => ptsBarRow(
+        `${d.g}-${d.r} <span class="pts-bar-sub">${d.cnt}명</span>`,
+        fmt(d), ratioOf(d.val), cls, `ptsJumpRoom('${d.key}')`)).join('')
+    : '<div class="pts-stat-empty">데이터가 없습니다.</div>';
+}
+
+function showPtsStatStudent(i){
+  const s = _ptsStatDemeritTop[i];
+  if (s) showPtsDetail(0, encodeURIComponent(JSON.stringify(s)));
+}
+function ptsJumpRoom(key){
+  switchPointsMode('view');
+  selectPtsRoom(key);
+}
+
+window.selectPtsStatsGrade = selectPtsStatsGrade;
+window.setPtsRoomMetric    = setPtsRoomMetric;
+window.showPtsStatStudent  = showPtsStatStudent;
+window.ptsJumpRoom         = ptsJumpRoom;
+
 // 학사일정 미리 로딩 (업무 캘린더용)
 async function preloadScheduleData() {
   try {
