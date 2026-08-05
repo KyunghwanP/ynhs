@@ -598,8 +598,11 @@
                 <div id="empty-state">
                     <div class="circle">🔍</div>
                     <h3>검색 결과가 없습니다</h3>
-                    <p>현재 설정된 범위(<span id="empty-range">±0.10</span>) 내에<br>일치하는 대학이 없습니다.</p>
-                    <button class="expand-btn" onclick="setRange(0.3)">검색 범위 ±0.3으로 확대하기</button>
+                    <div id="empty-kind-hint" style="display:none;margin:0 auto 4px;max-width:320px;font-size:13.5px;line-height:1.6;color:#334155;background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 16px;"></div>
+                    <div id="empty-range-hint">
+                        <p>현재 설정된 범위(<span id="empty-range">±0.10</span>) 내에<br>일치하는 대학이 없습니다.</p>
+                        <button class="expand-btn" onclick="setRange(0.3)">검색 범위 ±0.3으로 확대하기</button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -873,15 +876,26 @@
             const upper = target + searchRange;
             return { lower, upper };
         }
+        // 흔한 약칭 → 정식명칭 일부로 변환 (부분일치 검색이 놓치는 케이스 보정)
+        //   예: "한국외대/외대" → 한국외국어대학교,  "대구교대" → 대구교육대학교
+        function uniAlias(t) {
+            t = (t || '').trim();
+            const A = { '한국외대':'한국외국어', '외대':'한국외국어', '포항공대':'포항공과', '포스텍':'포항공과',
+                        '유니스트':'울산과학기술', '카이스트':'한국과학기술', '지스트':'광주과학기술', '디지스트':'대구경북과학기술' };
+            if (A[t]) return A[t];
+            const m = t.match(/^(.+?)교대$/); if (m) return m[1] + '교육대';   // OO교대 → OO교육대(학교)
+            return t;
+        }
         function baseFilter(record, bounds) {
             const gradeMatch = record.averageGrade >= bounds.lower && record.averageGrade <= bounds.upper;
             const kindMatch = record.kind === '기타' || record.kind === admissionKind;
-            const uq = selectedUniversity.trim().toLowerCase();
-            const uniMatch = !uq || record.university.toLowerCase().includes(uq);
-            const q = searchQuery.toLowerCase();
-            const searchMatch = record.university.toLowerCase().includes(q) ||
-                                record.department.toLowerCase().includes(q) ||
-                                record.admissionName.toLowerCase().includes(q);
+            const uni = record.university.toLowerCase();
+            const uqRaw = selectedUniversity.trim().toLowerCase();
+            const uniMatch = !uqRaw || uni.includes(uqRaw) || uni.includes(uniAlias(uqRaw).toLowerCase());
+            const qRaw = searchQuery.trim().toLowerCase();
+            const searchMatch = uni.includes(qRaw) || uni.includes(uniAlias(qRaw).toLowerCase()) ||
+                                record.department.toLowerCase().includes(qRaw) ||
+                                record.admissionName.toLowerCase().includes(qRaw);
             return gradeMatch && kindMatch && uniMatch && searchMatch;
         }
         // 대학 70% 컷과 내 등급의 차이 (주식 표시 스타일)
@@ -1032,6 +1046,7 @@
         function setCategory(cat) { selectedCategory = cat; render(); }
         function setRange(r) { searchRange = r; render(); }
         function toggleKind() { admissionKind = admissionKind === '교과' ? '종합' : '교과'; render(); }
+        function setAdmissionKind(k) { admissionKind = k; render(); }
         function resetFilters() {
             selectedUniversity = ''; selectedCategory = '전체'; searchQuery = '';
             searchRange = 0.3; showAmbitious = true; admissionKind = '교과';
@@ -1128,6 +1143,29 @@
                 .filter(r => selectedCategory === '전체' || r.category === selectedCategory)
                 .sort((a, b) => b.averageGrade - a.averageGrade);
             document.getElementById('result-count').textContent = currentFiltered.length.toLocaleString();
+
+            // 결과 0건인데 검색어가 있으면, 반대 전형종류(교과↔종합)에 있는지 안내
+            // (서울대·한국외대·교대 등은 종합 전형만 입결이 있어 교과 모드에선 안 보임)
+            const kindHint = document.getElementById('empty-kind-hint');
+            const rangeHint = document.getElementById('empty-range-hint');
+            const term = (selectedUniversity || searchQuery).trim();
+            let showKindHint = false;
+            if (!currentFiltered.length && term) {
+                const other = admissionKind === '교과' ? '종합' : '교과';
+                const alias = uniAlias(term).toLowerCase(), raw = term.toLowerCase();
+                const hits = allRecords.filter(r => r.kind === other &&
+                    (r.university.toLowerCase().includes(raw) || r.university.toLowerCase().includes(alias) ||
+                     r.department.toLowerCase().includes(raw) || r.admissionName.toLowerCase().includes(raw)) &&
+                    r.averageGrade >= bounds.lower && r.averageGrade <= bounds.upper).length;
+                if (hits) {
+                    showKindHint = true;
+                    kindHint.innerHTML = `“${term}”은(는) <b>${other} 전형</b>에 <b>${hits}건</b> 있어요.<br>지금은 <b>${admissionKind} 전형</b>만 보는 중입니다.
+                        <button class="expand-btn" style="margin-top:10px;" onclick="setAdmissionKind('${other}')">${other} 전형으로 보기</button>`;
+                }
+            }
+            if (kindHint) kindHint.style.display = showKindHint ? 'block' : 'none';
+            if (rangeHint) rangeHint.style.display = showKindHint ? 'none' : 'block';
+
             visibleCount = PAGE_SIZE;
             renderList(target);
         }
@@ -1246,12 +1284,18 @@
             const m = String(rule['원문'] || '').match(/(?:합|각|단일)\s*(\d+)|(\d+)\s*이내/);
             return m ? parseInt(m[1] || m[2], 10) : null;
         }
+        // 택N(과목 수)이 비어있으면 원문에서 복구 (소스 오타 '중 2개개 합7' 등으로 추출 실패한 케이스)
+        function mincutN(rule) {
+            if (rule['택N']) return rule['택N'];
+            const m = String(rule['원문'] || '').match(/(\d+)\s*개|(\d+)\s*과목/);
+            return m ? parseInt(m[1] || m[2], 10) : null;
+        }
         function critText(rule) {
             if (rule['최저있음'] !== 'Y') return '수능최저 미적용';
             const m = rule['방식']==='sum'?'합':rule['방식']==='each'?'각':rule['방식']==='single'?'단일':'';
             const area = (rule['반영영역']||[]).join('·');
             const v = mincutVal(rule);
-            return `${area} ${rule['택N']||''}개 ${m}${v!=null?' '+v:''}${typeof rule['한국사']==='number'?' · 한'+rule['한국사']:''}`;
+            return `${area} ${mincutN(rule)||''}개 ${m}${v!=null?' '+v:''}${typeof rule['한국사']==='number'?' · 한'+rule['한국사']:''}`;
         }
         // 전형유형 일치도: 2=구체매칭, 1=전 전형(모든전형 적용), 0=불일치(정시 포함)
         function typeMatch(rule, r) {
@@ -1276,10 +1320,12 @@
             '특성화고','특성화','특수교육','특기자','기초생활','국가보훈','만학','성인','재직자','서해5도',
             '다문화','장애','학교장추천','고교추천','고교연계','추천','논술','실기','면접',
             '교과성적우수자','교과우수자','학생부우수자','학교생활우수자','창의인재','모바일과학인재','영농창업'];
+        // 학교장추천·고교추천·(단순)추천은 같은 '추천' 전형군으로 취급 (대학마다 명칭만 다름)
+        const REC_FAM = new Set(['학교장추천', '고교추천', '추천']);
         function canonName(s) {
             s = s || '';
             const m = s.match(/\(([^)]*)\)/); if (m) s = m[1];   // "학생부교과(지역인재전형)" → 괄호 안 우선
-            for (const k of NAME_KW) if (s.includes(k)) return k;
+            for (const k of NAME_KW) if (s.includes(k)) return REC_FAM.has(k) ? '추천' : k;
             if (s.includes('일반')) return '일반';
             return '';                                           // 미상
         }
@@ -1322,6 +1368,8 @@
                 if (kw.some(k => u.includes(k))) return 2;
             }
             if (/전체|전 ?모집|전 ?학과|전 ?학부|전 ?계열|모든|해당 ?모집단위|자율전공|자유전공/.test(u)) return 1;
+            // 모집단위가 학과가 아니라 전형명(지역균형 등)을 그대로 반복 → 해당 전형 전체 적용(와일드카드)
+            if (canonName(u) && canonName(u) === canonName(rule['전형명'])) return 1;
             return 0;
         }
         // ── 수능최저 충족 판정 (학생 모의고사 등급 vs 규칙) ──
@@ -1329,7 +1377,7 @@
         function gnum(v) { const n = parseFloat(v); return isNaN(n) ? null : n; }
         function evalMincut(rule, csat) {
             if (!csat || rule['최저있음'] !== 'Y') return null;
-            const method = rule['방식'], N = rule['택N'];
+            const method = rule['방식'], N = mincutN(rule);
             const val = mincutVal(rule);
             if (!['sum', 'each', 'single'].includes(method) || val == null || !N)
                 return { cls: 'unknown', label: '미판정', detail: '규칙이 복잡해 자동 판정을 생략했습니다. 원문(요강)을 확인하세요.' };
@@ -1416,7 +1464,7 @@
                 } else {
                     const _seen = new Set();
                     picked.filter(p => p['최저있음']==='Y').filter(p => {   // 같은 값 규칙은 한 줄로
-                        const k = `${p['전형유형']}|${p['택N']}|${p['방식']}|${p['값']}|${p['수학포함']}`;
+                        const k = `${p['전형유형']}|${mincutN(p)}|${p['방식']}|${mincutVal(p)}|${p['수학포함']}`;
                         if (_seen.has(k)) return false; _seen.add(k); return true;
                     }).forEach(rule => {
                         const ev = evalMincut(rule, cs);
