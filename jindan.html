@@ -1144,27 +1144,39 @@
                 .sort((a, b) => b.averageGrade - a.averageGrade);
             document.getElementById('result-count').textContent = currentFiltered.length.toLocaleString();
 
-            // 결과 0건인데 검색어가 있으면, 반대 전형종류(교과↔종합)에 있는지 안내
-            // (서울대·한국외대·교대 등은 종합 전형만 입결이 있어 교과 모드에선 안 보임)
+            // 결과 0건인데 검색어가 있으면 원인별로 안내:
+            //  ① 현재 전형종류엔 학과가 있으나 성적 범위 밖 → 범위 확대 유도 (예: 서강대 교과 21건, 컷 1.5대)
+            //  ② 현재 전형종류엔 아예 없고 반대 종류에만 있음 → 전형 전환 유도 (예: 한국외대·서울대·교대 = 종합만)
             const kindHint = document.getElementById('empty-kind-hint');
             const rangeHint = document.getElementById('empty-range-hint');
             const term = (selectedUniversity || searchQuery).trim();
-            let showKindHint = false;
+            let hintHtml = null;
             if (!currentFiltered.length && term) {
+                const raw = term.toLowerCase(), alias = uniAlias(term).toLowerCase();
+                const matchTerm = r => { const u = r.university.toLowerCase();
+                    return u.includes(raw) || u.includes(alias) ||
+                           r.department.toLowerCase().includes(raw) || r.admissionName.toLowerCase().includes(raw); };
+                const inB = r => r.averageGrade >= bounds.lower && r.averageGrade <= bounds.upper;
                 const other = admissionKind === '교과' ? '종합' : '교과';
-                const alias = uniAlias(term).toLowerCase(), raw = term.toLowerCase();
-                const hits = allRecords.filter(r => r.kind === other &&
-                    (r.university.toLowerCase().includes(raw) || r.university.toLowerCase().includes(alias) ||
-                     r.department.toLowerCase().includes(raw) || r.admissionName.toLowerCase().includes(raw)) &&
-                    r.averageGrade >= bounds.lower && r.averageGrade <= bounds.upper).length;
-                if (hits) {
-                    showKindHint = true;
-                    kindHint.innerHTML = `“${term}”은(는) <b>${other} 전형</b>에 <b>${hits}건</b> 있어요.<br>지금은 <b>${admissionKind} 전형</b>만 보는 중입니다.
+                const termRecs = allRecords.filter(matchTerm);
+                const curAll = termRecs.filter(r => r.kind === '기타' || r.kind === admissionKind);
+                const curInB = curAll.filter(inB);
+                const otherAll = termRecs.filter(r => r.kind === other);
+                const otherInB = otherAll.filter(inB);
+                if (curAll.length && !curInB.length && searchRange !== 'all') {
+                    // 현재 전형종류에 학과가 있으나 성적 범위 밖 → 범위 확대
+                    hintHtml = `“${term}” <b>${admissionKind} 전형</b>은 <b>${curAll.length}건</b> 있지만, 지금 성적 범위(${bounds.lower.toFixed(2)}~${bounds.upper.toFixed(2)}) 밖이라 가려졌어요.
+                        <button class="expand-btn" style="margin-top:10px;" onclick="setRange('all')">성적 범위 전체로 보기</button>`;
+                } else if (!curAll.length && otherAll.length) {
+                    // 현재 전형종류엔 없고 반대 종류에만 있음 → 전형 전환
+                    const n = otherInB.length || otherAll.length;
+                    const rangeNote = otherInB.length ? '' : ' <span style="color:#64748b;">(성적 범위도 넓혀야 보일 수 있어요)</span>';
+                    hintHtml = `“${term}”은(는) <b>${other} 전형</b>에만 <b>${n}건</b> 있어요. 지금은 <b>${admissionKind} 전형</b>만 보는 중입니다.${rangeNote}
                         <button class="expand-btn" style="margin-top:10px;" onclick="setAdmissionKind('${other}')">${other} 전형으로 보기</button>`;
                 }
             }
-            if (kindHint) kindHint.style.display = showKindHint ? 'block' : 'none';
-            if (rangeHint) rangeHint.style.display = showKindHint ? 'none' : 'block';
+            if (kindHint) { kindHint.style.display = hintHtml ? 'block' : 'none'; if (hintHtml) kindHint.innerHTML = hintHtml; }
+            if (rangeHint) rangeHint.style.display = hintHtml ? 'none' : 'block';
 
             visibleCount = PAGE_SIZE;
             renderList(target);
