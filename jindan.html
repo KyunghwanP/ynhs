@@ -887,7 +887,6 @@
             return t;
         }
         function baseFilter(record, bounds) {
-            const gradeMatch = record.averageGrade >= bounds.lower && record.averageGrade <= bounds.upper;
             const kindMatch = record.kind === '기타' || record.kind === admissionKind;
             const uni = record.university.toLowerCase();
             const uqRaw = selectedUniversity.trim().toLowerCase();
@@ -896,6 +895,9 @@
             const searchMatch = uni.includes(qRaw) || uni.includes(uniAlias(qRaw).toLowerCase()) ||
                                 record.department.toLowerCase().includes(qRaw) ||
                                 record.admissionName.toLowerCase().includes(qRaw);
+            // 대학명을 지정해 검색하면('대학 지정' 모드) 성적 범위 필터를 풀어 그 대학 전체를 노출.
+            // (성적 대비 위치는 카드의 격차 화살표로 표시 — 범위는 '둘러보기'용이라 지정검색엔 부적절)
+            const gradeMatch = uqRaw ? true : (record.averageGrade >= bounds.lower && record.averageGrade <= bounds.upper);
             return gradeMatch && kindMatch && uniMatch && searchMatch;
         }
         // 대학 70% 컷과 내 등급의 차이 (주식 표시 스타일)
@@ -1130,7 +1132,9 @@
                 `<button class="range-tab ${searchRange === r ? 'active' : ''}" onclick="setRange(${typeof r === 'number' ? r : `'${r}'`})">${r === 'all' ? '전체' : '±' + r}</button>`
             ).join('');
             document.getElementById('target-label').textContent = target.toFixed(2);
-            document.getElementById('bounds-label').textContent = searchRange === 'all' ? '전체 등급' : `${bounds.lower.toFixed(2)} ~ ${bounds.upper.toFixed(2)}`;
+            document.getElementById('bounds-label').textContent = selectedUniversity.trim()
+                ? '대학 지정 · 범위 무시'
+                : (searchRange === 'all' ? '전체 등급' : `${bounds.lower.toFixed(2)} ~ ${bounds.upper.toFixed(2)}`);
             document.getElementById('ambitious-track').classList.toggle('on', showAmbitious);
             document.getElementById('ambitious-label').classList.toggle('on', showAmbitious);
             document.getElementById('kind-switch').classList.toggle('jonghap', admissionKind === '종합');
