@@ -6440,6 +6440,7 @@ function initAppUI(){
   // 마지막으로 보던 화면 복원 (시간표 데이터 미리 준비)
   restoreLastView();
   applyConsultTabVisibility();
+  initSemEasterEgg();
   // 바탕화면 위젯 클릭 딥링크: 지정된 탭으로 이동 (마지막 화면 복원보다 우선)
   const _gotoTarget = launchGotoTarget();
   if (_gotoTarget) navigateTo(_gotoTarget);
@@ -6448,6 +6449,35 @@ function initAppUI(){
     navigateTo('timetable');
     autoLoadMyTimetable();
   }
+}
+
+// 🥚 시간표 학기 라벨: 현재 모드(2학기/1학기 아카이브)를 반영
+function applySemLabel(){
+  const el = document.querySelector('#timetablePage .school');
+  if(!el) return;
+  let sem1 = false; try { sem1 = !!sessionStorage.getItem('ttSem1'); } catch(e){}
+  el.textContent = sem1 ? '영남고등학교 · 2026학년도 1학기 🕰️' : '영남고등학교 · 2026학년도 2학기';
+}
+// 🥚 학기 라벨을 빠르게 5번 클릭하면 1학기 아카이브 ↔ 2학기 토글 (숨겨진 기능)
+let _semClicks = 0, _semTimer = null;
+function initSemEasterEgg(){
+  const el = document.querySelector('#timetablePage .school');
+  applySemLabel();
+  if(!el || el._semBound) return;
+  el._semBound = true;
+  el.addEventListener('click', () => {
+    _semClicks++;
+    clearTimeout(_semTimer);
+    _semTimer = setTimeout(() => { _semClicks = 0; }, 1500);
+    if(_semClicks >= 5){
+      _semClicks = 0;
+      try {
+        if(sessionStorage.getItem('ttSem1')) sessionStorage.removeItem('ttSem1');
+        else sessionStorage.setItem('ttSem1', '1');
+      } catch(e){}
+      location.reload();
+    }
+  });
 }
 
 // 위젯 클릭 등으로 특정 탭을 열도록 요청받았는지 확인
@@ -6690,14 +6720,28 @@ function applyAppData(data){
   }
 }
 
+// 🥚 학기 아카이브: 기본은 2학기(appdata/main). 세션에 ttSem1 플래그가 있으면
+//    1학기 아카이브 문서(appdata/main-2026-1)를 대신 읽는다. (관리자가 1학기 편성 파일로 별도 생성)
+const SEM1_DOC = 'main-2026-1';
+function currentAppdataDoc(){ try { return sessionStorage.getItem('ttSem1') ? SEM1_DOC : 'main'; } catch(e){ return 'main'; } }
+
 async function loadDataFromFirestore(){
-  const fetchPromise = getDoc(doc(fbDb, 'appdata', 'main'));
+  const docId = currentAppdataDoc();
+  const fetchPromise = getDoc(doc(fbDb, 'appdata', docId));
   const timeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('데이터 로딩 시간 초과 (네트워크 확인)')), 10000)
   );
   try {
     const snap = await Promise.race([fetchPromise, timeout]);
-    if(!snap.exists()) throw new Error('데이터를 찾을 수 없습니다.');
+    if(!snap.exists()){
+      // 1학기 아카이브가 없으면 조용히 2학기로 폴백 (앱이 먹통 되지 않게)
+      if(docId !== 'main'){
+        try { sessionStorage.removeItem('ttSem1'); } catch(e){}
+        const ms = await getDoc(doc(fbDb, 'appdata', 'main'));
+        if(ms.exists()){ applyAppData(ms.data()); alert('1학기 아카이브 데이터가 아직 없어 2학기로 표시합니다.'); return; }
+      }
+      throw new Error('데이터를 찾을 수 없습니다.');
+    }
     applyAppData(snap.data());
   } catch(e) {
     // 타임아웃이어도 원 요청은 백그라운드에서 계속 진행 중 —
