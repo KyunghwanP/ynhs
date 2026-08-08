@@ -6458,6 +6458,49 @@ function applySemLabel(){
   let sem1 = false; try { sem1 = !!sessionStorage.getItem('ttSem1'); } catch(e){}
   el.textContent = sem1 ? '영남고등학교 · 2026학년도 1학기 🕰️' : '영남고등학교 · 2026학년도 2학기';
 }
+// 현재 표시 중인 시간표(교사/학급)를 새 데이터로 그 자리에서 다시 그린다
+function reRenderTimetable(savedMode, savedKey){
+  mode = savedMode;
+  try {
+    if(mode === 'class'){
+      if(savedKey){ selectedKey = savedKey; renderClass(savedKey); return; }
+    } else {
+      const t = TEACHERS.find(x => x.name === savedKey) || effTeacher();
+      if(t){ selectedKey = t.name; renderTeacher(t); return; }
+    }
+  } catch(e){ /* 아래 자동로드로 폴백 */ }
+  autoLoadMyTimetable();
+}
+// 🥚 학기 전환: 새로고침 없이 데이터만 교체하고 시간표만 다시 그린다 (홈으로 안 튕김)
+let _semBusy = false;
+async function toggleSemester(){
+  if(_semBusy) return;
+  _semBusy = true;
+  const el = document.querySelector('#timetablePage .school');
+  const savedMode = mode, savedKey = selectedKey;
+  try {
+    const toArchive = !sessionStorage.getItem('ttSem1');
+    const docId = toArchive ? SEM1_DOC : 'main';
+    if(el) el.textContent = '⏳ ' + (toArchive ? '1학기' : '2학기') + ' 불러오는 중…';
+    const snap = await getDoc(doc(fbDb, 'appdata', docId));
+    if(!snap.exists()){
+      if(toArchive){ alert('1학기 아카이브 데이터가 아직 없습니다.\nupload.html에서 「1학기 아카이브」로 업로드해주세요.'); return; }
+      throw new Error('appdata/main 문서를 찾을 수 없습니다.');
+    }
+    try { if(toArchive) sessionStorage.setItem('ttSem1','1'); else sessionStorage.removeItem('ttSem1'); } catch(e){}
+    applyAppData(snap.data());     // TEACHERS·시정표·선택과목 교체
+    rebuildFromTeachers();
+    refreshGradeDropdown();         // (selectedKey를 null로 만들 수 있어 아래서 복원)
+    renderSubjectSelectors();
+    refreshLists();
+    reRenderTimetable(savedMode, savedKey);
+  } catch(e){
+    alert('학기 전환 실패: ' + (e.message || e));
+  } finally {
+    applySemLabel();
+    _semBusy = false;
+  }
+}
 // 🥚 학기 라벨을 빠르게 5번 클릭하면 1학기 아카이브 ↔ 2학기 토글 (숨겨진 기능)
 let _semClicks = 0, _semTimer = null;
 function initSemEasterEgg(){
@@ -6471,11 +6514,7 @@ function initSemEasterEgg(){
     _semTimer = setTimeout(() => { _semClicks = 0; }, 1500);
     if(_semClicks >= 5){
       _semClicks = 0;
-      try {
-        if(sessionStorage.getItem('ttSem1')) sessionStorage.removeItem('ttSem1');
-        else sessionStorage.setItem('ttSem1', '1');
-      } catch(e){}
-      location.reload();
+      toggleSemester();
     }
   });
 }
