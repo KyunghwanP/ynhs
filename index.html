@@ -1703,6 +1703,10 @@
   /* 페이지 뷰 */
   .page-view{display:none;flex:1;overflow:auto;}
   .page-view.active{display:flex;flex-direction:column;}
+  /* 시간표 그리드 행 높이가 컨테이너 폭 단위(cqw)에 묶여 있어, 세로 스크롤바가 뜨락말락 하면
+     폭→높이→스크롤바 필요여부가 서로를 바꿔 최하단에서 '덜덜' 진동함. 스크롤바 자리를 항상
+     예약해 폭을 고정 → cqw 고정 → 진동 제거. */
+  #timetablePage{scrollbar-gutter:stable;}
 
   /* 시간표 페이지: 기존 .wrap */
   #timetablePage .wrap{
@@ -6471,7 +6475,26 @@ function reRenderTimetable(savedMode, savedKey){
   } catch(e){ /* 아래 자동로드로 폴백 */ }
   autoLoadMyTimetable();
 }
-// 🥚 학기 전환: 새로고침 없이 데이터만 교체하고 시간표만 다시 그린다 (홈으로 안 튕김)
+// 🥚 학기 격리: 전역 데이터(TEACHERS·시정표·선택과목)를 2학기↔1학기로 통째 교체.
+//    평소엔 항상 2학기('2')를 유지하고, 시간표 페이지에 있을 때만 '1'로 스왑한다.
+//    (navigateTo 게이트가 다른 탭으로 나갈 때 자동으로 '2'로 복원 → 다른 기능은 2학기 유지)
+function swapGlobals(which){
+  if(_globalsSem === which) return true;
+  const data = which === '1' ? _sem1Data : _sem2Data;
+  if(!data) return false;
+  applyAppData(data);
+  rebuildFromTeachers();
+  _globalsSem = which;
+  return true;
+}
+async function ensureSem1Data(){
+  if(_sem1Data) return _sem1Data;
+  const snap = await getDoc(doc(fbDb, 'appdata', SEM1_DOC));
+  if(!snap.exists()) return null;
+  _sem1Data = snap.data();
+  return _sem1Data;
+}
+// 🥚 학기 전환(라벨 5연타): 새로고침 없이 시간표만 1학기↔2학기. 시간표 외 다른 기능엔 영향 없음.
 let _semBusy = false;
 async function toggleSemester(){
   if(_semBusy) return;
@@ -6480,20 +6503,21 @@ async function toggleSemester(){
   const savedMode = mode, savedKey = selectedKey;
   try {
     const toArchive = !sessionStorage.getItem('ttSem1');
-    const docId = toArchive ? SEM1_DOC : 'main';
-    if(el) el.textContent = '⏳ ' + (toArchive ? '1학기' : '2학기') + ' 불러오는 중…';
-    const snap = await getDoc(doc(fbDb, 'appdata', docId));
-    if(!snap.exists()){
-      if(toArchive){ alert('1학기 아카이브 데이터가 아직 없습니다.\nupload.html에서 「1학기 아카이브」로 업로드해주세요.'); return; }
-      throw new Error('appdata/main 문서를 찾을 수 없습니다.');
+    if(toArchive){
+      if(el) el.textContent = '⏳ 1학기 불러오는 중…';
+      const d = await ensureSem1Data();
+      if(!d){ alert('1학기 아카이브 데이터가 아직 없습니다.\nupload.html에서 「1학기 아카이브」로 업로드해주세요.'); return; }
+      try { sessionStorage.setItem('ttSem1','1'); } catch(e){}
+      swapGlobals('1');
+    } else {
+      try { sessionStorage.removeItem('ttSem1'); } catch(e){}
+      swapGlobals('2');
     }
-    try { if(toArchive) sessionStorage.setItem('ttSem1','1'); else sessionStorage.removeItem('ttSem1'); } catch(e){}
-    applyAppData(snap.data());     // TEACHERS·시정표·선택과목 교체
-    rebuildFromTeachers();
-    refreshGradeDropdown();         // (selectedKey를 null로 만들 수 있어 아래서 복원)
+    // 시간표 페이지 사이드바/드롭다운도 새 데이터로 갱신 후, 보던 선택 복원해 재렌더
+    refreshGradeDropdown();
     renderSubjectSelectors();
-    refreshLists();
     reRenderTimetable(savedMode, savedKey);
+    refreshLists();
   } catch(e){
     alert('학기 전환 실패: ' + (e.message || e));
   } finally {
@@ -6759,35 +6783,30 @@ function applyAppData(data){
   }
 }
 
-// 🥚 학기 아카이브: 기본은 2학기(appdata/main). 세션에 ttSem1 플래그가 있으면
-//    1학기 아카이브 문서(appdata/main-2026-1)를 대신 읽는다. (관리자가 1학기 편성 파일로 별도 생성)
+// 🥚 학기 격리: 앱 전역 데이터는 항상 2학기(appdata/main)로 로드·유지한다.
+//    1학기(appdata/main-2026-1)는 시간표 페이지에서만 잠깐 스왑해 보여주는 격리 오버레이
+//    (swapGlobals / navigateTo 게이트 참고). 새로고침하면 언제나 2학기부터 시작.
 const SEM1_DOC = 'main-2026-1';
-function currentAppdataDoc(){ try { return sessionStorage.getItem('ttSem1') ? SEM1_DOC : 'main'; } catch(e){ return 'main'; } }
+let _sem2Data = null, _sem1Data = null, _globalsSem = '2';
+try { sessionStorage.removeItem('ttSem1'); } catch(e){}
 
 async function loadDataFromFirestore(){
-  const docId = currentAppdataDoc();
-  const fetchPromise = getDoc(doc(fbDb, 'appdata', docId));
+  const fetchPromise = getDoc(doc(fbDb, 'appdata', 'main'));
   const timeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('데이터 로딩 시간 초과 (네트워크 확인)')), 10000)
   );
   try {
     const snap = await Promise.race([fetchPromise, timeout]);
-    if(!snap.exists()){
-      // 1학기 아카이브가 없으면 조용히 2학기로 폴백 (앱이 먹통 되지 않게)
-      if(docId !== 'main'){
-        try { sessionStorage.removeItem('ttSem1'); } catch(e){}
-        const ms = await getDoc(doc(fbDb, 'appdata', 'main'));
-        if(ms.exists()){ applyAppData(ms.data()); alert('1학기 아카이브 데이터가 아직 없어 2학기로 표시합니다.'); return; }
-      }
-      throw new Error('데이터를 찾을 수 없습니다.');
-    }
-    applyAppData(snap.data());
+    if(!snap.exists()) throw new Error('데이터를 찾을 수 없습니다.');
+    _sem2Data = snap.data();
+    applyAppData(_sem2Data);
   } catch(e) {
     // 타임아웃이어도 원 요청은 백그라운드에서 계속 진행 중 —
     // 늦게라도 도착하면 데이터 반영 + 의존 UI 재렌더 (느린 회선 대응)
     fetchPromise.then(snap => {
       if(!snap.exists() || TEACHERS.length) return;
-      applyAppData(snap.data());
+      _sem2Data = snap.data();
+      applyAppData(_sem2Data);
       rebuildFromTeachers();
       refreshGradeDropdown();
       renderSubjectSelectors();
@@ -11552,6 +11571,9 @@ function resetPageView(page){
 }
 
 function navigateTo(page) {
+  // 🥚 학기 격리: 시간표 페이지에 있을 때만 전역을 1학기로, 그 외 모든 탭은 2학기로 복원.
+  //    (라벨 5연타로 ttSem1을 켠 상태에서만 시간표가 1학기로 보이고, 다른 기능은 항상 2학기)
+  try { swapGlobals(page === 'timetable' && sessionStorage.getItem('ttSem1') ? '1' : '2'); } catch(e){}
   const currentPage = document.querySelector('.page-view.active')?.id?.replace('Page','') || 'home';
   if (currentPage === page) { resetPageView(page); return; } // 같은 탭 재클릭 → 첫 화면
   history.pushState({ page }, '');
