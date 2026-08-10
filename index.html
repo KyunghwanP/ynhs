@@ -2031,6 +2031,10 @@
   .tt-wk-label b{color:var(--mon);font-weight:800;margin-left:3px;}
   .tt-wk-dev{font-style:normal;font-size:11px;font-weight:800;color:#b45309;background:#fde9c8;border-radius:6px;padding:1px 6px;margin-left:5px;}
   .tt-wk-today{font-size:14px;}
+  .tt-wk-today.hide{visibility:hidden;}
+  .tt-wk-label{display:inline-block;text-align:right;}
+  /* 요일 헤더에 '무슨 요일로 운영'되는지 표시 (예: 화→목) */
+  .gt-op-note{display:inline-block;font-size:10px;font-weight:800;background:rgba(255,255,255,.28);border-radius:5px;padding:0 4px;margin-left:3px;vertical-align:middle;}
 
   /* ---------- week grid: rounded tile system (fully fluid via container queries + viewport height) ---------- */
   :root{
@@ -5737,14 +5741,15 @@ function cellInner(p, secondLineKey){
   return `${sub}${second}`;
 }
 
-function buildWeekGrid(getPeriod, secondLineKey, enableSwap, teacherName, highlightMap, suppressTodayNow){
+function buildWeekGrid(getPeriod, secondLineKey, enableSwap, teacherName, highlightMap, suppressTodayNow, dayNote){
   highlightMap = highlightMap || {};
   const cells = [];
 
   cells.push(`<div class="gt-corner">시간 / 요일</div>`);
   DAYS.forEach(day=>{
     const isToday = !suppressTodayNow && day===todayDay;
-    cells.push(`<div class="gt-head" data-day="${day}">${day}${isToday?'<span class="today-tag">오늘</span>':''}</div>`);
+    const note = (dayNote && dayNote[day]) ? `<span class="gt-op-note">→${dayNote[day]}</span>` : '';
+    cells.push(`<div class="gt-head" data-day="${day}">${day}${note}${isToday?'<span class="today-tag">오늘</span>':''}</div>`);
   });
 
   PERIODS.forEach(p=>{
@@ -5810,7 +5815,7 @@ function ttResolveCellOp(op, csched, grade, day, p){
   if(!op) return reg();
   const cell = (op.cells && op.cells[p]) ? op.cells[p][grade-1] : undefined;
   if(cell===undefined) return reg();
-  if(!cell) return null;                                     // 공강/빈칸 → 제거
+  if(!cell || cell.indexOf('공강')>=0) return null;          // 공강/빈칸 → 수업 없음(변경 아님)
   const m=/^([월화수목금])([1-7])$/.exec(cell);
   if(m){
     const src=(csched[m[1]]||[]).find(x=>x.period===+m[2]) || null;
@@ -5844,6 +5849,12 @@ function ttCrossDayOf(op){
   for(const p in op.cells){ for(const v of op.cells[p]){ if(!v) continue; const m=/^([월화수목금])([1-7])$/.exec(v); if(m&&m[1]!==op.day){ cnt[m[1]]=(cnt[m[1]]||0)+1; } } }
   let best=null,bc=0; for(const k in cnt){ if(cnt[k]>bc){bc=cnt[k];best=k;} } return best;
 }
+// 선택 주에서 요일 대체가 있는 열의 '무슨 요일로 운영' 표시 맵 {열요일: 운영요일}
+function ttDayNoteMap(){
+  const m={};
+  DAYS.forEach(d=>{ const op=ttOpFor(d); if(ttDayCross(op)){ const cd=ttCrossDayOf(op); if(cd) m[d]=cd; } });
+  return m;
+}
 // 교사별 뷰: dev(요일대체) 날짜만 학급 운영표에서 역산해 교사 슬롯 구성
 function ttTeacherOp(){
   const top={};
@@ -5873,10 +5884,10 @@ function ttWeekNavHtml(){
     const mon=new Date(ttWeekMon), fri=new Date(ttWeekMon); fri.setDate(fri.getDate()+4);
     const f=d=>`${d.getMonth()+1}/${d.getDate()}`;
     const cur=ttIsCurrentWeek(), dev=ttWeekHasDev();
-    dateNav = `<button type="button" class="tt-wk-btn" id="ttWkPrev" title="이전 주">‹</button>
-      <span class="tt-wk-label">${f(mon)}~${f(fri)}${cur?' <b>이번주</b>':''}${dev?' <i class="tt-wk-dev">운영변경</i>':''}</span>
+    dateNav = `<span class="tt-wk-label">${f(mon)}~${f(fri)}${cur?' <b>이번주</b>':''}${dev?' <i class="tt-wk-dev">운영변경</i>':''}</span>
+      <button type="button" class="tt-wk-btn" id="ttWkPrev" title="이전 주">‹</button>
       <button type="button" class="tt-wk-btn" id="ttWkNext" title="다음 주">›</button>
-      ${cur?'':'<button type="button" class="tt-wk-btn tt-wk-today" id="ttWkToday" title="이번주로">↺</button>'}`;
+      <button type="button" class="tt-wk-btn tt-wk-today${cur?' hide':''}" id="ttWkToday" title="이번주로">↺</button>`;
   }
   return `<span class="tt-week">
     <span class="tt-seg">
@@ -5916,7 +5927,7 @@ function renderTeacher(t){
       ${ttWeekNavHtml()}
       <button class="print-btn" id="printBtn" title="인쇄">🖨 인쇄</button>
     </div>
-    ${buildWeekGrid(getPeriod, 'class', _ttWk ? !ttWeekHasDev() : true, t.name, undefined, _ttWk ? !ttIsCurrentWeek() : false)}
+    ${buildWeekGrid(getPeriod, 'class', _ttWk ? !ttWeekHasDev() : true, t.name, undefined, _ttWk ? !ttIsCurrentWeek() : false, _ttWk ? ttDayNoteMap() : null)}
     <div class="swap-hint">수업 칸을 클릭하면 교체·보강 가능한 시간을 찾아드려요 (🔒 묶음 선택과목·자율/동아리는 교체만 제한되고 보강은 가능해요)</div>
   `;
   document.getElementById('printBtn').addEventListener('click', ()=> window.print());
@@ -5937,7 +5948,7 @@ function renderClass(cls){
       ${ttWeekNavHtml()}
       <button class="print-btn" id="printBtn" title="인쇄">🖨 인쇄</button>
     </div>
-    ${buildWeekGrid(getPeriod, 'teacher', false, null, undefined, _ttWk ? !ttIsCurrentWeek() : false)}
+    ${buildWeekGrid(getPeriod, 'teacher', false, null, undefined, _ttWk ? !ttIsCurrentWeek() : false, _ttWk ? ttDayNoteMap() : null)}
   `;
   document.getElementById('printBtn').addEventListener('click', ()=> window.print());
   ttBindWeekNav();
