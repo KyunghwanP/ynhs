@@ -2031,6 +2031,8 @@
   .tt-wk-label b{color:var(--mon);font-weight:800;margin-left:3px;}
   .tt-wk-dev{font-style:normal;font-size:11px;font-weight:800;color:#b45309;background:#fde9c8;border-radius:6px;padding:1px 6px;margin-left:5px;}
   .tt-wk-today{font-size:14px;}
+  .tt-wk-today.hide{visibility:hidden;}
+  .tt-wk-label{display:inline-block;text-align:right;}
 
   /* ---------- week grid: rounded tile system (fully fluid via container queries + viewport height) ---------- */
   :root{
@@ -5810,7 +5812,7 @@ function ttResolveCellOp(op, csched, grade, day, p){
   if(!op) return reg();
   const cell = (op.cells && op.cells[p]) ? op.cells[p][grade-1] : undefined;
   if(cell===undefined) return reg();
-  if(!cell) return null;                                     // 공강/빈칸 → 제거
+  if(!cell || cell.indexOf('공강')>=0) return null;          // 공강/빈칸 → 수업 없음(변경 아님)
   const m=/^([월화수목금])([1-7])$/.exec(cell);
   if(m){
     const src=(csched[m[1]]||[]).find(x=>x.period===+m[2]) || null;
@@ -5873,10 +5875,10 @@ function ttWeekNavHtml(){
     const mon=new Date(ttWeekMon), fri=new Date(ttWeekMon); fri.setDate(fri.getDate()+4);
     const f=d=>`${d.getMonth()+1}/${d.getDate()}`;
     const cur=ttIsCurrentWeek(), dev=ttWeekHasDev();
-    dateNav = `<button type="button" class="tt-wk-btn" id="ttWkPrev" title="이전 주">‹</button>
-      <span class="tt-wk-label">${f(mon)}~${f(fri)}${cur?' <b>이번주</b>':''}${dev?' <i class="tt-wk-dev">운영변경</i>':''}</span>
+    dateNav = `<span class="tt-wk-label">${f(mon)}~${f(fri)}${cur?' <b>이번주</b>':''}${dev?' <i class="tt-wk-dev">운영변경</i>':''}</span>
+      <button type="button" class="tt-wk-btn" id="ttWkPrev" title="이전 주">‹</button>
       <button type="button" class="tt-wk-btn" id="ttWkNext" title="다음 주">›</button>
-      ${cur?'':'<button type="button" class="tt-wk-btn tt-wk-today" id="ttWkToday" title="이번주로">↺</button>'}`;
+      <button type="button" class="tt-wk-btn tt-wk-today${cur?' hide':''}" id="ttWkToday" title="이번주로">↺</button>`;
   }
   return `<span class="tt-week">
     <span class="tt-seg">
