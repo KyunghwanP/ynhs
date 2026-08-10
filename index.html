@@ -5934,12 +5934,14 @@ function renderTeacher(t){
   currentTeacherObj = t;
   const _ttWk = ttViewMode === 'week';
   const _tOp = _ttWk ? ttTeacherOp() : null;
-  // 이 교사 본인 수업이 실제로 바뀐 칸(_sub)만 운영표로 치환. 나머지는 항상 기초.
+  // 안내/틴트는 본인 실제 변동(_sub) 기준. 칸 내용은 요일대체일엔 운영 실제 기준(없으면 빈칸).
   const _tNote = _ttWk ? ttTeacherNoteMap(_tOp, t.name) : null;
   const _tDev  = _ttWk ? ttTeacherHasDev(_tOp, t.name) : false;
   const getPeriod = (day,p)=>{
-    if(_ttWk){ const inv=_tOp[t.name]&&_tOp[t.name][day]&&_tOp[t.name][day][p]; if(inv&&inv._sub) return inv; }
-    return (t.schedule[day]||[]).find(x=>x.period===p);
+    if(_ttWk && ttDayCross(ttOpFor(day), day)){   // 요일대체일 → 그 교사가 실제 운영하는 것만(없으면 빈칸)
+      return (_tOp[t.name] && _tOp[t.name][day] && _tOp[t.name][day][p]) || null;
+    }
+    return (t.schedule[day]||[]).find(x=>x.period===p);   // 대체 없는 날 → 기초
   };
   card.innerHTML = `
     <div class="info-row">
@@ -9757,9 +9759,8 @@ async function initHomePage() {
         if(_myCells){ const cnt={}; for(const p in _myCells){ const c=_myCells[p]; if(c&&c._sub&&c._src) cnt[c._src]=(cnt[c._src]||0)+1; }
           let bc=0; for(const k in cnt){ if(cnt[k]>bc){bc=cnt[k];_mySrc=k;} } }
         const ttHtml = periods.map(b => {
-          const _inv = _myCells && _myCells[b.period];
-          const found = (_inv && _inv._sub)
-            ? _inv
+          const found = _cross
+            ? ((_myCells && _myCells[b.period]) || null)   // 요일대체일 → 운영 실제(없으면 빈칸)
             : (myTeacher.schedule[todayDay2]||[]).find(x => x.period === b.period);
           const isNow = nowMin2 >= toMinutes(b.start)-5 && nowMin2 <= toMinutes(b.end)+5;
           const cls = ['home-tt-cell', isNow?'now':'', !found?'empty':'', (found&&found._sub)?'tt-sub':''].filter(Boolean).join(' ');
