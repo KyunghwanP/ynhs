@@ -2006,6 +2006,22 @@
     padding:var(--print-btn-pad-v) var(--print-btn-pad-h);border-radius:20px;cursor:pointer;
   }
   .print-btn:hover{background:var(--rule);color:var(--ink);}
+  /* 주간 선택기 (인쇄 버튼 옆) */
+  .info-row .tt-week{
+    margin-left:auto;display:inline-flex;align-items:center;gap:2px;
+    background:var(--paper-soft);border:1px solid var(--rule);border-radius:20px;
+    padding:2px 4px;font-family:'Noto Sans KR';font-size:13px;font-weight:700;color:var(--ink);align-self:center;
+  }
+  .info-row .print-btn{margin-left:8px;align-self:center;}
+  .tt-wk-btn{
+    border:none;background:transparent;cursor:pointer;font-size:17px;line-height:1;
+    color:var(--ink-soft);padding:1px 7px;border-radius:14px;font-family:inherit;
+  }
+  .tt-wk-btn:hover{background:var(--paper);color:var(--ink);}
+  .tt-wk-label{font-variant-numeric:tabular-nums;padding:0 3px;white-space:nowrap;}
+  .tt-wk-label b{color:var(--mon);font-weight:800;margin-left:3px;}
+  .tt-wk-dev{font-style:normal;font-size:11px;font-weight:800;color:#b45309;background:#fde9c8;border-radius:6px;padding:1px 6px;margin-left:5px;}
+  .tt-wk-today{font-size:14px;}
 
   /* ---------- week grid: rounded tile system (fully fluid via container queries + viewport height) ---------- */
   :root{
@@ -5756,37 +5772,113 @@ function buildWeekGrid(getPeriod, secondLineKey, enableSwap, teacherName, highli
   return `<div class="table-wrap"><div class="grid-table">${cells.join('')}</div></div>`;
 }
 
+// ── 주간 선택 + 학사 운영표(요일 대체) 치환 ─────────────────────────
+let OPERATING = null;          // appdata/operating (없으면 정규표 그대로)
+let ttWeekMon = null;          // 현재 보고 있는 주의 월요일(Date)
+const TT_ACT = { '진로활동':'진로','자율활동':'자율','동아리활동':'동아리','봉사활동':'봉사' };
+function ttMondayOf(d){ const x=new Date(d); x.setHours(0,0,0,0); const w=x.getDay(); x.setDate(x.getDate()+(w===0?-6:1-w)); return x; }
+function ttISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function ttEnsureWeek(){ if(!ttWeekMon) ttWeekMon = ttMondayOf(new Date()); }
+function ttDateOf(day){ ttEnsureWeek(); const i=DAYS.indexOf(day); if(i<0) return null; const x=new Date(ttWeekMon); x.setDate(x.getDate()+i); return ttISO(x); }
+function ttOpFor(day){ if(!OPERATING||!OPERATING.dates) return null; const iso=ttDateOf(day); return iso?OPERATING.dates[iso]:null; }
+function ttWeekHasDev(){ return DAYS.some(d=>{ const op=ttOpFor(d); return !!(op&&op.dev); }); }
+function ttIsCurrentWeek(){ ttEnsureWeek(); return ttISO(ttWeekMon)===ttISO(ttMondayOf(new Date())); }
+function ttGradeOf(cls){ const m=String(cls||'').match(/(\d)/); return m?+m[1]:0; }
+// 운영표 칸 → 표시할 정규 슬롯(또는 창체/빈칸). placeholder(목3 등)는 정규표에서 당겨옴.
+function ttResolveClass(csched, grade, day, p){
+  const op=ttOpFor(day);
+  const reg=()=> (csched[day]||[]).find(x=>x.period===p) || null;
+  if(!op) return reg();
+  const cell = (op.cells && op.cells[p]) ? op.cells[p][grade-1] : undefined;
+  if(cell===undefined) return reg();
+  if(!cell) return null;                                     // 공강/빈칸 → 제거
+  const m=/^([월화수목금])([1-7])$/.exec(cell);
+  if(m) return (csched[m[1]]||[]).find(x=>x.period===+m[2]) || null;   // 다른 요일 정규표
+  if(TT_ACT[cell]) return {period:p, subject:TT_ACT[cell], class:'', teacher:'', activity:true};
+  if(cell.indexOf('시험')>=0) return {period:p, subject:'시험', class:'', teacher:'', activity:true};
+  return {period:p, subject:cell, class:'', teacher:'', activity:true};
+}
+// 교사별 뷰: dev(요일대체) 날짜만 학급 운영표에서 역산해 교사 슬롯 구성
+function ttTeacherOp(){
+  const top={};
+  DAYS.forEach(day=>{
+    const op=ttOpFor(day); if(!op||!op.dev) return;
+    classList.forEach(cls=>{
+      const g=ttGradeOf(cls); if(!g) return;
+      const cs=classSchedule[cls]||{};
+      for(let p=1;p<=7;p++){
+        const slot=ttResolveClass(cs,g,day,p);
+        if(slot&&slot.teacher){
+          (top[slot.teacher]||(top[slot.teacher]={}));
+          (top[slot.teacher][day]||(top[slot.teacher][day]={}));
+          top[slot.teacher][day][p]={period:p, subject:slot.subject, class:cls};
+        }
+      }
+    });
+  });
+  return top;
+}
+function ttWeekNavHtml(){
+  ttEnsureWeek();
+  const mon=new Date(ttWeekMon), fri=new Date(ttWeekMon); fri.setDate(fri.getDate()+4);
+  const f=d=>`${d.getMonth()+1}/${d.getDate()}`;
+  const cur=ttIsCurrentWeek(), dev=ttWeekHasDev();
+  return `<span class="tt-week">
+    <button type="button" class="tt-wk-btn" id="ttWkPrev" title="이전 주">‹</button>
+    <span class="tt-wk-label">${f(mon)}~${f(fri)}${cur?' <b>이번주</b>':''}${dev?' <i class="tt-wk-dev">운영변경</i>':''}</span>
+    <button type="button" class="tt-wk-btn" id="ttWkNext" title="다음 주">›</button>
+    ${cur?'':'<button type="button" class="tt-wk-btn tt-wk-today" id="ttWkToday" title="이번주로">↺</button>'}
+  </span>`;
+}
+function ttBindWeekNav(){
+  const go=days=>{ ttEnsureWeek(); const d=new Date(ttWeekMon); d.setDate(d.getDate()+days); ttWeekMon=d; reRenderTimetable(mode, selectedKey); };
+  const pv=document.getElementById('ttWkPrev'), nx=document.getElementById('ttWkNext'), td=document.getElementById('ttWkToday');
+  if(pv) pv.onclick=()=>go(-7);
+  if(nx) nx.onclick=()=>go(7);
+  if(td) td.onclick=()=>{ ttWeekMon=ttMondayOf(new Date()); reRenderTimetable(mode, selectedKey); };
+}
+
 function renderTeacher(t){
   currentTeacherObj = t;
-  const getPeriod = (day,p)=> (t.schedule[day]||[]).find(x=>x.period===p);
+  const _tOp = ttTeacherOp();
+  const getPeriod = (day,p)=>{
+    const op=ttOpFor(day);
+    if(!op||!op.dev) return (t.schedule[day]||[]).find(x=>x.period===p);
+    return (_tOp[t.name]&&_tOp[t.name][day]&&_tOp[t.name][day][p]) || null;
+  };
   card.innerHTML = `
     <div class="info-row">
       <span class="info-name">${escapeHtml(t.name)} 선생님</span>
       ${EXT_MAP[t.name]?`<span class="chip ext-chip">☎ ${EXT_MAP[t.name]}</span>`:''}
       ${t.homeroom?`<span class="chip accent">${t.homeroom} 담임</span>`:''}
       ${t.remarks?`<span class="chip">${t.remarks}</span>`:''}
+      ${ttWeekNavHtml()}
       <button class="print-btn" id="printBtn" title="인쇄">🖨 인쇄</button>
     </div>
-    ${buildWeekGrid(getPeriod, 'class', true, t.name)}
+    ${buildWeekGrid(getPeriod, 'class', !ttWeekHasDev(), t.name, undefined, !ttIsCurrentWeek())}
     <div class="swap-hint">수업 칸을 클릭하면 교체·보강 가능한 시간을 찾아드려요 (🔒 묶음 선택과목·자율/동아리는 교체만 제한되고 보강은 가능해요)</div>
   `;
   document.getElementById('printBtn').addEventListener('click', ()=> window.print());
+  ttBindWeekNav();
   saveLastView();
 }
 
 function renderClass(cls){
   currentTeacherObj = null;
   const sched = classSchedule[cls] || {};
-  const getPeriod = (day,p)=> (sched[day]||[]).find(x=>x.period===p);
+  const grade = ttGradeOf(cls);
+  const getPeriod = (day,p)=> ttResolveClass(sched, grade, day, p);
   card.innerHTML = `
     <div class="info-row">
       <span class="info-name">${cls}</span>
       ${classHomeroom[cls] ? `<span class="chip accent">${classHomeroom[cls]} 담임</span>` : ''}
+      ${ttWeekNavHtml()}
       <button class="print-btn" id="printBtn" title="인쇄">🖨 인쇄</button>
     </div>
-    ${buildWeekGrid(getPeriod, 'teacher', false, null)}
+    ${buildWeekGrid(getPeriod, 'teacher', false, null, undefined, !ttIsCurrentWeek())}
   `;
   document.getElementById('printBtn').addEventListener('click', ()=> window.print());
+  ttBindWeekNav();
   saveLastView();
 }
 
@@ -6800,6 +6892,13 @@ async function loadDataFromFirestore(){
     if(!snap.exists()) throw new Error('데이터를 찾을 수 없습니다.');
     _sem2Data = snap.data();
     applyAppData(_sem2Data);
+    // 학사 운영표(요일 대체) — 있으면 시간표 주간선택에서 치환에 사용 (없어도 정규표로 동작)
+    getDoc(doc(fbDb, 'appdata', 'operating')).then(s => {
+      if(s.exists()){ OPERATING = s.data();
+        const tp=document.getElementById('timetablePage');
+        if(tp && tp.classList.contains('active')) reRenderTimetable(mode, selectedKey);
+      }
+    }).catch(()=>{});
   } catch(e) {
     // 타임아웃이어도 원 요청은 백그라운드에서 계속 진행 중 —
     // 늦게라도 도착하면 데이터 반영 + 의존 UI 재렌더 (느린 회선 대응)
