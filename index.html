@@ -2091,8 +2091,14 @@
   .gt-head{
     border-radius:8px;
     color:#fff;font-family:'Pretendard','Noto Sans KR';font-weight:700;font-size:var(--gt-font-head);
-    display:flex;align-items:center;justify-content:center;
-    min-height:var(--gt-head-h);position:relative;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    min-height:var(--gt-head-h);position:relative;padding:2px;
+  }
+  .gt-head .gt-hd-main{display:flex;align-items:center;justify-content:center;gap:4px;}
+  .gt-head .gt-hd-note{
+    font-size:10px;font-weight:800;line-height:1.4;
+    background:rgba(0,0,0,.18);border-radius:6px;padding:0 6px;
+    max-width:96%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
   .gt-head[data-day="월"]{background:var(--mon);}
   .gt-head[data-day="화"]{background:var(--tue);}
@@ -5749,9 +5755,9 @@ function buildWeekGrid(getPeriod, secondLineKey, enableSwap, teacherName, highli
   cells.push(`<div class="gt-corner">시간 / 요일</div>`);
   DAYS.forEach(day=>{
     const isToday = !suppressTodayNow && day===todayDay;
-    const note = (dayNote && dayNote[day]) ? `<span class="gt-op-note">→${dayNote[day]}</span>` : '';
+    const note = (dayNote && dayNote[day]) ? `<span class="gt-hd-note">${dayNote[day]}</span>` : '';
     const dstr = (dateMap && dateMap[day]) ? `<span class="gt-date">${dateMap[day]}</span>` : '';
-    cells.push(`<div class="gt-head" data-day="${day}">${day}${dstr}${note}${isToday?'<span class="today-tag">오늘</span>':''}</div>`);
+    cells.push(`<div class="gt-head" data-day="${day}"><span class="gt-hd-main">${day}${dstr}</span>${note}${isToday?'<span class="today-tag">오늘</span>':''}</div>`);
   });
 
   PERIODS.forEach(p=>{
@@ -5793,6 +5799,8 @@ let OPERATING = null;          // appdata/operating (없으면 정규표 그대�
 let ttWeekMon = null;          // 현재 보고 있는 주의 월요일(Date)
 let ttViewMode = 'base';       // 'base'(정규 기본 시간표, 기본값) | 'week'(운영표 주간 반영)
 const TT_ACT = { '진로활동':'진로','자율활동':'자율','동아리활동':'동아리','봉사활동':'봉사' };
+const TT_NOCLASS = /추석|설날|설연휴|명절|방학|휴업|공휴|개교기념|대체공?휴일|재량휴업|연휴/;   // 휴일·추석 등 → 수업 없음
+const TT_EXAM = /지필|시험|고사/;                                                          // 중간·정기시험 → 시험
 function ttMondayOf(d){ const x=new Date(d); x.setHours(0,0,0,0); const w=x.getDay(); x.setDate(x.getDate()+(w===0?-6:1-w)); return x; }
 function ttISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function ttEnsureWeek(){ if(!ttWeekMon) ttWeekMon = ttMondayOf(new Date()); }
@@ -5819,19 +5827,45 @@ function ttResolveCellOp(op, csched, grade, day, p){
   if(!op) return reg();
   const cell = (op.cells && op.cells[p]) ? op.cells[p][grade-1] : undefined;
   if(cell===undefined) return reg();
-  if(!cell || cell.indexOf('공강')>=0) return null;          // 공강/빈칸 → 수업 없음(변경 아님)
-  const m=/^([월화수목금])([1-7])$/.exec(cell);
+  const s = String(cell||'').trim();
+  if(!s || s.indexOf('공강')>=0 || TT_NOCLASS.test(s) || TT_EXAM.test(s)) return null;   // 빈칸/공강/휴일/시험 → 수업 없음(헤더 꼬리표로 안내)
+  const m=/^([월화수목금])([1-7])$/.exec(s);
   if(m){
     const src=(csched[m[1]]||[]).find(x=>x.period===+m[2]) || null;
     if(m[1]===day) return src;                              // 같은 요일 → 정규 그대로
     return src ? { period:src.period, subject:src.subject, class:src.class, teacher:src.teacher, _sub:true, _src:m[1] } : null;  // 다른 요일 당겨옴 → 치환 표시
   }
-  const label = TT_ACT[cell] || (cell.indexOf('시험')>=0 ? '시험' : cell);
+  const label = TT_ACT[s] || s;
   const base = reg();
   const same = !!(base && base.subject === label);
   return { period:p, subject:label, class:'', teacher: same ? (base.teacher||'') : '', activity:true, _sub: !same };
 }
 function ttResolveClass(csched, grade, day, p){ return ttResolveCellOp(ttOpFor(day), csched, grade, day, p); }
+// 그 날 특이 편성 라벨(시험·휴일 등)을 헤더 꼬리표용으로 추출. gi(학년-1) 지정 시 그 학년만.
+function ttDayReasonLabel(op, gi){
+  if(!op || !op.cells) return null; const cnt={};
+  for(const p in op.cells){ const arr=op.cells[p]; if(!arr) continue; const vs=(gi==null)?arr:[arr[gi]];
+    for(const v of vs){ const s=String(v==null?'':v).trim();
+      if(!s || /^[월화수목금][1-7]$/.test(s) || s.indexOf('공강')>=0) continue;
+      const lbl = (TT_EXAM.test(s) || TT_NOCLASS.test(s)) ? s : null;   // 시험·휴일만(활동은 칸에 표시)
+      if(lbl) cnt[lbl]=(cnt[lbl]||0)+1; } }
+  let best=null,bc=0; for(const k in cnt){ if(cnt[k]>bc){bc=cnt[k];best=k;} } return best;
+}
+// 교사 한 칸 해석(교사·현황판 공용): 당겨온 본인수업 → 본인 기초칸을 운영표로 마스킹.
+function ttMaskTeacherSlot(op, baseSlot, pull, day, p){
+  if(!op) return baseSlot;
+  if(pull && pull._sub) return pull;                         // 다른 요일에서 당겨온 본인 수업
+  if(baseSlot){
+    const g = ttGradeOf(baseSlot.class);
+    if(g){
+      const r = ttResolveCellOp(op, classSchedule[baseSlot.class]||{}, g, day, p);
+      if(r && r.activity) return r;                          // 활동 표시(시험·휴일은 null → 빈칸)
+      if(r && !r._src) return baseSlot;                      // 정규(같은 요일) → 기초 그대로
+      return null;                                            // 휴일/시험/공강/다른요일로 당겨감 → 빈칸
+    }
+  }
+  return baseSlot;
+}
 function ttOpForDate(iso){ return (OPERATING && OPERATING.dates) ? (OPERATING.dates[iso]||null) : null; }
 // 특정 날짜(op)의 교사별 역산 (요일 대체 날만) — 홈 '오늘 시간표'용
 function ttTeacherDay(op, day){
@@ -5857,16 +5891,25 @@ function ttCrossDayOf(op, wd, gi){
 // 선택 주 열별 '무슨 요일로 운영' 표시 맵 {열요일: 운영요일}. gi(학년-1) 지정 시 그 학년만.
 function ttDayNoteMap(gi){
   const m={};
-  DAYS.forEach(d=>{ const op=ttOpFor(d); if(ttDayCross(op, d, gi)){ const cd=ttCrossDayOf(op, d, gi); if(cd) m[d]=cd; } });
+  DAYS.forEach(d=>{ const op=ttOpFor(d);
+    if(ttDayCross(op, d, gi)){ const cd=ttCrossDayOf(op, d, gi); if(cd){ m[d]='→'+cd; return; } }
+    const lbl=ttDayReasonLabel(op, gi); if(lbl) m[d]=lbl;   // 시험·휴일 꼬리표
+  });
   return m;
 }
 function ttWeekHasDevGrade(gi){ return DAYS.some(d=>ttDayCross(ttOpFor(d), d, gi)); }
-// 교사 본인의 실제 변동 기준: 안내맵 {열요일: 운영요일}, 변동여부
+// 교사 본인의 실제 변동 기준 안내맵 {열요일: 표시문구}. 당겨온 수업의 대표 학년 → 이 요일.
+// (예: 금 5·6·7이 3학년 수업으로 당겨지면 '3학년→금')
 function ttTeacherNoteMap(tOp, name){
-  const m={}; if(!tOp||!tOp[name]) return m;
-  DAYS.forEach(d=>{ const cells=tOp[name][d]; if(!cells) return; const cnt={};
-    for(const p in cells){ const c=cells[p]; if(c&&c._sub&&c._src) cnt[c._src]=(cnt[c._src]||0)+1; }
-    let best=null,bc=0; for(const k in cnt){ if(cnt[k]>bc){bc=cnt[k];best=k;} } if(best) m[d]=best; });
+  const m={};
+  DAYS.forEach(d=>{
+    const cells = tOp && tOp[name] && tOp[name][d];
+    if(cells){ const gcnt={};
+      for(const p in cells){ const c=cells[p]; if(c&&c._sub){ const g=ttGradeOf(c.class); if(g) gcnt[g]=(gcnt[g]||0)+1; } }
+      let bg=null,bc=0; for(const k in gcnt){ if(gcnt[k]>bc){bc=gcnt[k];bg=k;} }
+      if(bg){ m[d]=`${bg}학년→${d}요일`; return; } }               // 당겨온 수업 학년 → 이 요일
+    const lbl=ttDayReasonLabel(ttOpFor(d), null); if(lbl) m[d]=lbl;  // 시험·휴일 꼬리표
+  });
   return m;
 }
 function ttTeacherHasDev(tOp, name){ if(!tOp||!tOp[name]) return false; for(const d in tOp[name]){ const cells=tOp[name][d]; for(const p in cells){ if(cells[p]&&cells[p]._sub) return true; } } return false; }
@@ -5938,10 +5981,11 @@ function renderTeacher(t){
   const _tNote = _ttWk ? ttTeacherNoteMap(_tOp, t.name) : null;
   const _tDev  = _ttWk ? ttTeacherHasDev(_tOp, t.name) : false;
   const getPeriod = (day,p)=>{
-    if(_ttWk && ttDayCross(ttOpFor(day), day)){   // 요일대체일 → 그 교사가 실제 운영하는 것만(없으면 빈칸)
-      return (_tOp[t.name] && _tOp[t.name][day] && _tOp[t.name][day][p]) || null;
-    }
-    return (t.schedule[day]||[]).find(x=>x.period===p);   // 대체 없는 날 → 기초
+    const baseSlot = (t.schedule[day]||[]).find(x=>x.period===p) || null;
+    if(!_ttWk) return baseSlot;
+    const op = ttOpFor(day);
+    const pull = _tOp[t.name] && _tOp[t.name][day] && _tOp[t.name][day][p];
+    return ttMaskTeacherSlot(op, baseSlot, pull, day, p);
   };
   card.innerHTML = `
     <div class="info-row">
@@ -9751,17 +9795,15 @@ async function initHomePage() {
         const nowMin2 = nowDate.getHours()*60 + nowDate.getMinutes();
         // 오늘이 요일 대체일이면 운영표 기준으로 (교사별 역산)
         const _op = ttOpForDate(ttISO(nowDate));
-        const _cross = ttDayCross(_op, todayDay2);
-        const _tday = _cross ? ttTeacherDay(_op, todayDay2) : null;
-        const _myCells = _tday ? _tday[myTeacher.name] : null;
-        // 본인 수업이 실제로 바뀐 칸(_sub)만 운영표로 치환. 대표 운영요일 계산.
+        const _myCells = _op ? (ttTeacherDay(_op, todayDay2)[myTeacher.name] || null) : null;  // 다른요일에서 당겨온 본인 수업
+        // 본인이 실제로 당겨온 수업(_sub) 기준 대표 운영요일.
         let _mySrc = null;
         if(_myCells){ const cnt={}; for(const p in _myCells){ const c=_myCells[p]; if(c&&c._sub&&c._src) cnt[c._src]=(cnt[c._src]||0)+1; }
           let bc=0; for(const k in cnt){ if(cnt[k]>bc){bc=cnt[k];_mySrc=k;} } }
         const ttHtml = periods.map(b => {
-          const found = _cross
-            ? ((_myCells && _myCells[b.period]) || null)   // 요일대체일 → 운영 실제(없으면 빈칸)
-            : (myTeacher.schedule[todayDay2]||[]).find(x => x.period === b.period);
+          const baseSlot = (myTeacher.schedule[todayDay2]||[]).find(x => x.period === b.period) || null;
+          const pull = _myCells && _myCells[b.period];
+          const found = _op ? ttMaskTeacherSlot(_op, baseSlot, pull, todayDay2, b.period) : baseSlot;
           const isNow = nowMin2 >= toMinutes(b.start)-5 && nowMin2 <= toMinutes(b.end)+5;
           const cls = ['home-tt-cell', isNow?'now':'', !found?'empty':'', (found&&found._sub)?'tt-sub':''].filter(Boolean).join(' ');
           return `<div class="${cls}">
