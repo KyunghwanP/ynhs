@@ -2013,6 +2013,9 @@
     padding:2px 4px;font-family:'Noto Sans KR';font-size:13px;font-weight:700;color:var(--ink);align-self:center;
   }
   .info-row .print-btn{margin-left:8px;align-self:center;}
+  .tt-seg{display:inline-flex;background:var(--paper);border:1px solid var(--rule);border-radius:14px;overflow:hidden;margin-right:2px;}
+  .tt-seg-btn{border:none;background:transparent;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:800;color:var(--ink-soft);padding:3px 11px;line-height:1.6;}
+  .tt-seg-btn.on{background:var(--mon);color:#fff;}
   .tt-wk-btn{
     border:none;background:transparent;cursor:pointer;font-size:17px;line-height:1;
     color:var(--ink-soft);padding:1px 7px;border-radius:14px;font-family:inherit;
@@ -5775,6 +5778,7 @@ function buildWeekGrid(getPeriod, secondLineKey, enableSwap, teacherName, highli
 // ── 주간 선택 + 학사 운영표(요일 대체) 치환 ─────────────────────────
 let OPERATING = null;          // appdata/operating (없으면 정규표 그대로)
 let ttWeekMon = null;          // 현재 보고 있는 주의 월요일(Date)
+let ttViewMode = 'base';       // 'base'(정규 기본 시간표, 기본값) | 'week'(운영표 주간 반영)
 const TT_ACT = { '진로활동':'진로','자율활동':'자율','동아리활동':'동아리','봉사활동':'봉사' };
 function ttMondayOf(d){ const x=new Date(d); x.setHours(0,0,0,0); const w=x.getDay(); x.setDate(x.getDate()+(w===0?-6:1-w)); return x; }
 function ttISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
@@ -5819,29 +5823,45 @@ function ttTeacherOp(){
   return top;
 }
 function ttWeekNavHtml(){
-  ttEnsureWeek();
-  const mon=new Date(ttWeekMon), fri=new Date(ttWeekMon); fri.setDate(fri.getDate()+4);
-  const f=d=>`${d.getMonth()+1}/${d.getDate()}`;
-  const cur=ttIsCurrentWeek(), dev=ttWeekHasDev();
+  if(!OPERATING || !OPERATING.dates) return '';   // 운영표 데이터 없으면 토글 자체를 숨김(정규표만)
+  const base = ttViewMode !== 'week';
+  let dateNav = '';
+  if(!base){
+    ttEnsureWeek();
+    const mon=new Date(ttWeekMon), fri=new Date(ttWeekMon); fri.setDate(fri.getDate()+4);
+    const f=d=>`${d.getMonth()+1}/${d.getDate()}`;
+    const cur=ttIsCurrentWeek(), dev=ttWeekHasDev();
+    dateNav = `<button type="button" class="tt-wk-btn" id="ttWkPrev" title="이전 주">‹</button>
+      <span class="tt-wk-label">${f(mon)}~${f(fri)}${cur?' <b>이번주</b>':''}${dev?' <i class="tt-wk-dev">운영변경</i>':''}</span>
+      <button type="button" class="tt-wk-btn" id="ttWkNext" title="다음 주">›</button>
+      ${cur?'':'<button type="button" class="tt-wk-btn tt-wk-today" id="ttWkToday" title="이번주로">↺</button>'}`;
+  }
   return `<span class="tt-week">
-    <button type="button" class="tt-wk-btn" id="ttWkPrev" title="이전 주">‹</button>
-    <span class="tt-wk-label">${f(mon)}~${f(fri)}${cur?' <b>이번주</b>':''}${dev?' <i class="tt-wk-dev">운영변경</i>':''}</span>
-    <button type="button" class="tt-wk-btn" id="ttWkNext" title="다음 주">›</button>
-    ${cur?'':'<button type="button" class="tt-wk-btn tt-wk-today" id="ttWkToday" title="이번주로">↺</button>'}
+    <span class="tt-seg">
+      <button type="button" class="tt-seg-btn${base?' on':''}" id="ttSegBase" title="정규(기본) 시간표">정규</button>
+      <button type="button" class="tt-seg-btn${base?'':' on'}" id="ttSegWeek" title="선택 주의 실제 운영 시간표">운영표</button>
+    </span>
+    ${dateNav}
   </span>`;
 }
 function ttBindWeekNav(){
-  const go=days=>{ ttEnsureWeek(); const d=new Date(ttWeekMon); d.setDate(d.getDate()+days); ttWeekMon=d; reRenderTimetable(mode, selectedKey); };
+  const rerender=()=>reRenderTimetable(mode, selectedKey);
+  const sb=document.getElementById('ttSegBase'), sw=document.getElementById('ttSegWeek');
+  if(sb) sb.onclick=()=>{ ttViewMode='base'; rerender(); };
+  if(sw) sw.onclick=()=>{ ttViewMode='week'; ttEnsureWeek(); rerender(); };
+  const go=days=>{ ttEnsureWeek(); const d=new Date(ttWeekMon); d.setDate(d.getDate()+days); ttWeekMon=d; rerender(); };
   const pv=document.getElementById('ttWkPrev'), nx=document.getElementById('ttWkNext'), td=document.getElementById('ttWkToday');
   if(pv) pv.onclick=()=>go(-7);
   if(nx) nx.onclick=()=>go(7);
-  if(td) td.onclick=()=>{ ttWeekMon=ttMondayOf(new Date()); reRenderTimetable(mode, selectedKey); };
+  if(td) td.onclick=()=>{ ttWeekMon=ttMondayOf(new Date()); rerender(); };
 }
 
 function renderTeacher(t){
   currentTeacherObj = t;
-  const _tOp = ttTeacherOp();
+  const _ttWk = ttViewMode === 'week';
+  const _tOp = _ttWk ? ttTeacherOp() : null;
   const getPeriod = (day,p)=>{
+    if(!_ttWk) return (t.schedule[day]||[]).find(x=>x.period===p);   // 정규(기본) 시간표
     const op=ttOpFor(day);
     if(!op||!op.dev) return (t.schedule[day]||[]).find(x=>x.period===p);
     return (_tOp[t.name]&&_tOp[t.name][day]&&_tOp[t.name][day][p]) || null;
@@ -5855,7 +5875,7 @@ function renderTeacher(t){
       ${ttWeekNavHtml()}
       <button class="print-btn" id="printBtn" title="인쇄">🖨 인쇄</button>
     </div>
-    ${buildWeekGrid(getPeriod, 'class', !ttWeekHasDev(), t.name, undefined, !ttIsCurrentWeek())}
+    ${buildWeekGrid(getPeriod, 'class', _ttWk ? !ttWeekHasDev() : true, t.name, undefined, _ttWk ? !ttIsCurrentWeek() : false)}
     <div class="swap-hint">수업 칸을 클릭하면 교체·보강 가능한 시간을 찾아드려요 (🔒 묶음 선택과목·자율/동아리는 교체만 제한되고 보강은 가능해요)</div>
   `;
   document.getElementById('printBtn').addEventListener('click', ()=> window.print());
@@ -5867,7 +5887,8 @@ function renderClass(cls){
   currentTeacherObj = null;
   const sched = classSchedule[cls] || {};
   const grade = ttGradeOf(cls);
-  const getPeriod = (day,p)=> ttResolveClass(sched, grade, day, p);
+  const _ttWk = ttViewMode === 'week';
+  const getPeriod = (day,p)=> _ttWk ? ttResolveClass(sched, grade, day, p) : ((sched[day]||[]).find(x=>x.period===p)||null);
   card.innerHTML = `
     <div class="info-row">
       <span class="info-name">${cls}</span>
@@ -5875,7 +5896,7 @@ function renderClass(cls){
       ${ttWeekNavHtml()}
       <button class="print-btn" id="printBtn" title="인쇄">🖨 인쇄</button>
     </div>
-    ${buildWeekGrid(getPeriod, 'teacher', false, null, undefined, !ttIsCurrentWeek())}
+    ${buildWeekGrid(getPeriod, 'teacher', false, null, undefined, _ttWk ? !ttIsCurrentWeek() : false)}
   `;
   document.getElementById('printBtn').addEventListener('click', ()=> window.print());
   ttBindWeekNav();
