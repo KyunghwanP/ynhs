@@ -9651,13 +9651,16 @@ function renderClassOrgModal(){
       const t = TEACHERS.find(tt => tt.homeroom === `${x.g}-${r}`);
       return `<td class="co-tname" data-g="${x.g}" data-r="${r}">${t?escapeHtml(t.name):'-'}</td>`;
     }).join('');
-    // 부담임: 순서대로 2개 반씩 담당 (마지막 홀수 반은 1개)
+    // 부담임: 순서대로 담당. 기본 2개 반, 이름 뒤 '(n)'이면 n개 반 (예: 홍길동(1) → 1개 반)
     const subs = (classOrgMeta.subs || {})[String(x.g)] || [];
     let subRow = '';
     if (subs.length) {
       let cells = '', ri = 0;
-      subs.forEach(name => {
-        const span = Math.min(2, x.rooms.length - ri);
+      subs.forEach(entry => {
+        const mm = String(entry).match(/^(.*?)\s*\((\d+)\)\s*$/);
+        const name = mm ? mm[1].trim() : String(entry).trim();
+        const want = mm ? parseInt(mm[2], 10) : 2;
+        const span = Math.min(want, x.rooms.length - ri);
         if (span <= 0) return;
         cells += `<td class="co-subt" colspan="${span}">${escapeHtml(name)}</td>`;
         ri += span;
@@ -9719,7 +9722,7 @@ document.getElementById('classOrgEditBtn').addEventListener('click', () => {
   }
   body.innerHTML = `<div id="classOrgEditWrap" style="display:flex;flex-direction:column;gap:10px;">
     <div style="font-size:12.5px;color:var(--ink-soft);line-height:1.7;background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:10px 14px;">
-      <b>부담임 줄</b> — 「부담임 1학년: 이름, 이름, …」 앞에서부터 2개 반씩 담당합니다 (반 수가 홀수면 마지막 선생님은 1개 반).<br>
+      <b>부담임 줄</b> — 「부담임 1학년: 이름, 이름, …」 앞에서부터 2개 반씩 담당합니다 (반 수가 홀수면 마지막 선생님은 1개 반). 특정 선생님이 <b>1개 반만</b> 맡으면 이름 뒤에 <b>(1)</b>을 붙이세요. 예: 「… , 홍길동(1), 김철수(1)」 → 13·14반 각각 1명.<br>
       <b>특이사항 줄</b> — 「체육특기자: 1-8=4, 2-2=2」 처럼 <b>학년-반=인원</b> 형식으로. 값이 없는 줄은 표에 표시되지 않습니다.
     </div>
     <textarea id="classOrgEditTa"></textarea>
