@@ -183,7 +183,7 @@ ToggleGlass() {
     for hwnd, w in WidgetWins {
         try ApplyGlass(hwnd, w.wvc, gGlass)
         try SetWidgetOpacity(hwnd, w.opacity)   ; 글래스면 창 불투명(글자 선명), 끄면 슬라이더 값 복원
-        try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
+        try w.wvc.CoreWebView2.Navigate(WidgetUrl(w.panel, w.opacity))
     }
 }
 
@@ -228,7 +228,7 @@ ToggleDark() {
         try StyleWindow(w.handleGui.hwnd)   ; 손잡이 바 테두리도 함께
         ; 웹뷰 배경: 글래스면 투명(아크릴 비침), 아니면 투명(배경 틴트가 비침 — 배경만 반투명 모드)
         try w.wvc.DefaultBackgroundColor := 0x00000000
-        try w.wvc.CoreWebView2.Navigate(PanelUrl(w.panel) "&op=" w.opacity "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
+        try w.wvc.CoreWebView2.Navigate(WidgetUrl(w.panel, w.opacity))
         if (!gGlass)
             try ApplyWidgetBg(hwnd, w.opacity)   ; 새 테마에 맞춰 배경 틴트(다크/라이트) 다시 적용
     }
@@ -449,7 +449,9 @@ CreateWidget(p) {
     ; WebView2 자체 기본 배경색 — 다크면 어둡게(글래스면 투명). 페이지가 그리기 전/안 덮는 맨 위 영역에
     ;   흰 배경이 띠처럼 비치던 문제를 없앤다(웹 CSS로는 못 덮는 웹뷰 기본색).
     try wvc.DefaultBackgroundColor := 0x00000000   ; 웹뷰 투명 → 창의 배경 틴트(반투명)가 비침(배경만 반투명, 글자 불투명)
-    wvc.CoreWebView2.Navigate(PanelUrl(key) "&op=" op "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now)
+    ; navigate 실패(간헐 ERR_FAILED·타임아웃) 자동 재시도 → "되다가 안되다가" 자가 복구.
+    try wvc.CoreWebView2.add_NavigationCompleted(OnNavDone.Bind(g.hwnd))
+    wvc.CoreWebView2.Navigate(WidgetUrl(key, op))
     ; 웹 내장 손잡이 바(HTML) → AHK 브릿지: 투명도/닫기/앱/이동. 네이티브 손잡이 대체.
     try wvc.CoreWebView2.add_WebMessageReceived(OnWebMsg.Bind(g.hwnd, key))
     g.OnEvent("Size", OnResize)
@@ -493,7 +495,7 @@ CreateWidget(p) {
 
     WidgetWins[g.hwnd] := {panel: key, opacity: op, gui: g, wvc: wvc, label: label,
                            handleGui: h, hlbl: hlbl, hsld: hsld, hApp: hApp, hX: hX,
-                           handleShown: false, pinned: wantPin}
+                           handleShown: false, pinned: wantPin, navTries: 0}
     HandleToWidget[h.hwnd] := g.hwnd
 
     ; 크기 조절 시 웹뷰 리사이즈 + 크기 저장(디바운스). 손잡이 폭은 표시될 때 재배치(PositionHandle)
@@ -1143,6 +1145,41 @@ PanelUrl(panel) {
     if (panel = "memo")
         return APP_URL "memo2.html?embed=1"
     return APP_BASE panel
+}
+
+; 위젯이 실제로 로드할 전체 URL(테마·투명도·캐시버스터 포함). 최초 로드/재시도 공용.
+WidgetUrl(panel, op) {
+    global gDark, gGlass
+    return PanelUrl(panel) "&op=" op "&dark=" (gDark ? "1" : "0") "&glass=" (gGlass ? "1" : "0") "&t=" A_Now
+}
+
+; navigate 완료 콜백 — 성공하면 재시도 카운터 리셋, 실패(ERR_FAILED·타임아웃 등)면
+;   잠시 뒤 자동 재시도. "되다가 안되다가" 하는 간헐적 네트워크 실패가 새로고침 없이 스스로 복구된다.
+;   (thqby 래퍼: 핸들러는 (sender, args)를 뒤에 붙여 호출 → Bind(hwnd)로 hwnd가 앞에 온다)
+OnNavDone(hwnd, sender, args) {
+    global WidgetWins
+    if !WidgetWins.Has(hwnd)
+        return
+    w := WidgetWins[hwnd]
+    ok := 1   ; 속성을 못 읽으면(래퍼 차이) 성공으로 간주 — 잘못된 재로드 폭주 방지(안전측)
+    try ok := args.IsSuccess
+    if ok {
+        w.navTries := 0
+        return
+    }
+    ; 실패 — 최대 4회까지, 점점 간격을 늘려(1.5·3·4.5·6초) 재시도. 그 뒤엔 멈춘다(무한 루프 방지).
+    if (w.navTries >= 4)
+        return
+    w.navTries += 1
+    SetTimer(RetryNav.Bind(hwnd), -1500 * w.navTries)
+}
+
+RetryNav(hwnd) {
+    global WidgetWins
+    if !WidgetWins.Has(hwnd)
+        return
+    w := WidgetWins[hwnd]
+    try w.wvc.CoreWebView2.Navigate(WidgetUrl(w.panel, w.opacity))
 }
 
 PanelToPage(panel) {
