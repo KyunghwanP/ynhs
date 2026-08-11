@@ -3618,6 +3618,17 @@
     display:flex;justify-content:space-between;align-items:center;
   }
   .consult-day-del{font-size:12px;font-weight:600;color:var(--warn);background:none;border:none;cursor:pointer;}
+  /* 예약 오픈 시각 */
+  .consult-open-box{margin-bottom:14px;}
+  .consult-open-badge{font-size:11px;font-weight:800;border-radius:7px;padding:2px 8px;margin-left:6px;vertical-align:middle;}
+  .consult-open-badge.locked{background:#FEE2E2;color:#B91C1C;}
+  .consult-open-badge.openok{background:#DCFCE7;color:#166534;}
+  .consult-open-desc{font-size:12.5px;color:var(--ink-soft);margin:2px 0 9px;line-height:1.5;}
+  .consult-open-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+  .consult-open-row input[type=datetime-local]{flex:1;min-width:180px;padding:8px 10px;border:1.5px solid var(--rule);border-radius:9px;background:var(--paper);color:var(--ink);font-family:inherit;font-size:13.5px;}
+  .consult-open-save{padding:8px 16px;border:none;border-radius:9px;background:var(--mon);color:#fff;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;}
+  .consult-open-clear{padding:8px 13px;border:1.5px solid var(--rule);border-radius:9px;background:var(--paper);color:var(--ink-soft);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;}
+  .consult-open-status{margin-top:8px;font-size:13px;font-weight:700;color:var(--ink);}
   .consult-slot{
     display:flex;align-items:center;gap:10px;padding:11px 13px;
     border:1.5px solid var(--rule);border-radius:10px;margin-bottom:7px;background:var(--paper-soft);
@@ -4502,6 +4513,18 @@
                   <div class="consult-stat-box"><div class="cs-num" id="consultStatOpen">0</div><div class="cs-label">열린 시간</div></div>
                   <div class="consult-stat-box"><div class="cs-num" id="consultStatBooked">0</div><div class="cs-label">예약됨</div></div>
                   <div class="consult-stat-box"><div class="cs-num" id="consultStatClass">—</div><div class="cs-label">담당 학급</div></div>
+                </div>
+
+                <!-- 예약 오픈 시각 (선착순) -->
+                <div class="consult-section consult-open-box">
+                  <h4>⏰ 예약 오픈 시각 <span class="consult-open-badge" id="consultOpenBadge"></span></h4>
+                  <p class="consult-open-desc">이 시각 <b>전에는</b> 학부모가 예약할 수 없습니다(선착순). 비워두면 항상 예약 가능. <b>우리 반만</b> 적용됩니다.</p>
+                  <div class="consult-open-row">
+                    <input type="datetime-local" id="consultOpenAt">
+                    <button type="button" class="consult-open-save" id="consultOpenSaveBtn">저장</button>
+                    <button type="button" class="consult-open-clear" id="consultOpenClearBtn">해제</button>
+                  </div>
+                  <div class="consult-open-status" id="consultOpenStatus"></div>
                 </div>
 
                 <!-- 슬롯 만들기 -->
@@ -14146,6 +14169,7 @@ function initConsultPage(){
     const data  = snap.exists() ? (snap.data()||{}) : {};
     const slots = Array.isArray(data.slots) ? data.slots : [];
     renderConsultList(slots);
+    updateConsultOpenUI(data.openAt || '');
   }, err => {
     document.getElementById('consultList').innerHTML =
       '<div class="consult-empty">현황을 불러오지 못했습니다.</div>';
@@ -14160,6 +14184,8 @@ function bindConsultForm(){
   });
   document.getElementById('consultAddBtn').addEventListener('click', addConsultSlots);
   document.getElementById('consultAutoBtn').addEventListener('click', openConsultAutoModal);
+  document.getElementById('consultOpenSaveBtn').addEventListener('click', saveConsultOpenAt);
+  document.getElementById('consultOpenClearBtn').addEventListener('click', clearConsultOpenAt);
 
   // 공강 모달 컨트롤
   document.getElementById('caCloseBtn').addEventListener('click', closeConsultAutoModal);
@@ -14294,6 +14320,42 @@ async function addConsultSlots(){
     btn.textContent = '시간 만들기';
     btn.disabled = false;
   }
+}
+
+// ── 예약 오픈 시각 (선착순) : consultations/{반}.openAt (ISO UTC) ──
+function _dtLocalValue(d){ const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
+function updateConsultOpenUI(openAt){
+  const inp = document.getElementById('consultOpenAt');
+  const st  = document.getElementById('consultOpenStatus');
+  const bd  = document.getElementById('consultOpenBadge');
+  if(!inp || !st || !bd) return;
+  if(document.activeElement !== inp) inp.value = openAt ? _dtLocalValue(new Date(openAt)) : '';
+  const p=n=>String(n).padStart(2,'0');
+  if(!openAt){
+    bd.textContent=''; bd.className='consult-open-badge';
+    st.innerHTML = '설정 없음 — <b>항상 예약 가능</b>';
+    return;
+  }
+  const d = new Date(openAt), fut = d.getTime() > Date.now();
+  const when = `${d.getMonth()+1}/${d.getDate()}(${CONSULT_WD[d.getDay()]}) ${p(d.getHours())}:${p(d.getMinutes())}`;
+  bd.textContent = fut ? '오픈 전' : '오픈됨';
+  bd.className = 'consult-open-badge ' + (fut ? 'locked' : 'openok');
+  st.innerHTML = fut ? `🔒 <b>${when}</b>에 예약이 열립니다.` : `🔓 <b>${when}</b>에 열렸습니다 — 예약 가능`;
+}
+async function saveConsultOpenAt(){
+  if(!consultClassKey) return;
+  const v = document.getElementById('consultOpenAt').value;
+  if(!v){ alert('오픈 시각을 입력하세요. (해제하려면 「해제」 버튼)'); return; }
+  const iso = new Date(v).toISOString();   // 로컬 입력 → UTC ISO
+  try{
+    await setDoc(doc(fbDb, 'consultations', consultClassKey), { openAt: iso, updatedAt: new Date().toISOString() }, { merge:true });
+  }catch(e){ alert('저장 실패: ' + e.message); }
+}
+async function clearConsultOpenAt(){
+  if(!consultClassKey) return;
+  try{
+    await setDoc(doc(fbDb, 'consultations', consultClassKey), { openAt: '', updatedAt: new Date().toISOString() }, { merge:true });
+  }catch(e){ alert('해제 실패: ' + e.message); }
 }
 
 const CONSULT_WD = ['일','월','화','수','목','금','토'];
