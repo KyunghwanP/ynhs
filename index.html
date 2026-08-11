@@ -5798,7 +5798,7 @@ function buildWeekGrid(getPeriod, secondLineKey, enableSwap, teacherName, highli
 let OPERATING = null;          // appdata/operating (없으면 정규표 그대로)
 let ttWeekMon = null;          // 현재 보고 있는 주의 월요일(Date)
 let ttViewMode = 'base';       // 'base'(정규 기본 시간표, 기본값) | 'week'(운영표 주간 반영)
-const TT_ACT = { '진로활동':'진로','자율활동':'자율','동아리활동':'동아리','봉사활동':'봉사' };
+const TT_ACT = { '진로활동':'진로','자율활동':'자율','동아리활동':'동아','봉사활동':'봉사' };   // 기초표 표기(자율·동아·진로)와 일치
 const TT_NOCLASS = /추석|설날|설연휴|명절|방학|휴업|공휴|개교기념|대체공?휴일|재량휴업|연휴/;   // 휴일·추석 등 → 수업 없음
 const TT_EXAM = /지필|시험|고사/;                                                          // 중간·정기시험 → 시험
 function ttMondayOf(d){ const x=new Date(d); x.setHours(0,0,0,0); const w=x.getDay(); x.setDate(x.getDate()+(w===0?-6:1-w)); return x; }
@@ -5837,7 +5837,9 @@ function ttResolveCellOp(op, csched, grade, day, p){
   }
   const label = TT_ACT[s] || s;
   const base = reg();
-  const same = !!(base && base.subject === label);
+  // 창체(진로/자율/동아/봉사) 표기 정규화 후 비교 — 원래 자리면 변경 아님(연보라 X)
+  const canon = v => String(v||'').replace(/활동$/,'').replace('동아리','동아');
+  const same = !!base && canon(base.subject) === canon(s);
   return { period:p, subject:label, class:'', teacher: same ? (base.teacher||'') : '', activity:true, _sub: !same };
 }
 function ttResolveClass(csched, grade, day, p){ return ttResolveCellOp(ttOpFor(day), csched, grade, day, p); }
