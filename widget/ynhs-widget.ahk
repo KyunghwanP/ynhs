@@ -21,9 +21,11 @@ CoordMode "Mouse", "Screen"
 ; ============================================================
 
 global APP_BASE := "https://kyunghwanp.github.io/ynhs/?widget="
-; 디스크 꽉 참 사고로 손상된 옛 WebView2 프로필(Session)을 우회 — 새 폴더로 깨끗하게 시작.
-;   (손상된 프로필은 브라우저·앱은 멀쩡한데 위젯 WebView2만 인터넷 시간초과가 나던 원인)
-global SESSION  := A_AppData "\YnhsWidget\Session2"
+; 손상된 WebView2 프로필을 우회 — 새 폴더로 깨끗하게 시작.
+;   (손상된 프로필은 브라우저·앱은 멀쩡한데 위젯 WebView2만 인터넷 연결 실패/시간초과가 나던 원인.
+;    프로필 쓰기 도중 위젯이 비정상 종료(크래시)하면 프로필이 깨질 수 있음 → ERR_FAILED.
+;    이때는 폴더 번호를 올려 새 프로필로 시작하면 복구됨. 앱 재로그인만 한 번 필요.)
+global SESSION  := A_AppData "\YnhsWidget\Session3"
 global CONFIG   := A_AppData "\YnhsWidget\config.ini"
 global NEU_EXE  := A_ScriptDir "\ynhs-app.exe"
 global APP_URL  := "https://kyunghwanp.github.io/ynhs/"
