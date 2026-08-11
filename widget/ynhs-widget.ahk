@@ -88,10 +88,12 @@ EnsureEnv() {
     global WV2ENV, SESSION, DLL_PATH
     if WV2ENV
         return WV2ENV
+    ; UDP(HTTP/3=QUIC)를 막는 망에서 WebView2 navigate 타임아웃(새로고침 먹통) → QUIC 끄고 TCP만 사용.
+    ; (래퍼 인자 시그니처와 무관하게, WebView2가 직접 읽는 환경변수로 전달)
+    EnvSet("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-quic")
     loop 3 {
         try {
-            ; UDP(HTTP/3=QUIC)를 막는 망에서 WebView2가 navigate 타임아웃(새로고침 먹통) 나던 문제 → QUIC 끄고 TCP만 사용
-            WV2ENV := WebView2.CreateEnvironmentAsync(0, SESSION, "--disable-quic", DLL_PATH).await()
+            WV2ENV := WebView2.CreateEnvironmentAsync(0, SESSION, "", DLL_PATH).await()
             return WV2ENV
         } catch as e {
             if (A_Index < 3) {
