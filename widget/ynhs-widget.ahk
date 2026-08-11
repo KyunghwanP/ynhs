@@ -90,7 +90,8 @@ EnsureEnv() {
         return WV2ENV
     loop 3 {
         try {
-            WV2ENV := WebView2.CreateEnvironmentAsync(0, SESSION, "", DLL_PATH).await()
+            ; UDP(HTTP/3=QUIC)를 막는 망에서 WebView2가 navigate 타임아웃(새로고침 먹통) 나던 문제 → QUIC 끄고 TCP만 사용
+            WV2ENV := WebView2.CreateEnvironmentAsync(0, SESSION, "--disable-quic", DLL_PATH).await()
             return WV2ENV
         } catch as e {
             if (A_Index < 3) {
