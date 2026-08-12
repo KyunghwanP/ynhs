@@ -1,4 +1,7 @@
 const CACHE_NAME = 'ynhs-v495';
+// 이 sw.js가 놓인 폴더(= 배포 경로). GitHub Pages의 /ynhs/ · /test/ 어디에 올려도
+// 자동으로 맞춰지므로 두 저장소가 동일한 파일을 공유할 수 있다.
+const BASE = self.location.pathname.replace(/[^/]*$/, '');   // 예: '/ynhs/' · '/test/'
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -60,9 +63,11 @@ self.addEventListener('fetch', e => {
     if (res) return res;
 
     // 네트워크도 실패 + 캐시도 없음 → undefined 대신 명확한 응답(ERR_FAILED 방지).
+    // 앱 셸(index) 폴백. BASE는 이 sw.js가 놓인 폴더 → /ynhs/ · /test/ 어디든 그대로 동작
+    // (두 저장소가 완전히 같은 파일을 쓸 수 있게 경로를 하드코딩하지 않는다).
     if (isNav) {
-      const shell = await cache.match(new Request(url.origin + '/ynhs/'))
-                 || await cache.match(new Request(url.origin + '/ynhs/index.html'));
+      const shell = await cache.match(new Request(url.origin + BASE))
+                 || await cache.match(new Request(url.origin + BASE + 'index.html'));
       if (shell) return shell;
     }
     return new Response('오프라인 상태이고 캐시된 내용이 없습니다. 잠시 후 다시 시도해 주세요.', {
