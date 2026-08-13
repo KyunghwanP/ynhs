@@ -130,7 +130,20 @@ fn main() -> wry::Result<()> {
     //   시도하는데, 그 포트가 막힌 망에서는 ERR_TIMED_OUT 이 난다(시크릿 창은 그 기억이
     //   없어 멀쩡한 것이 단서였다). 사용자가 브라우저 설정을 바꾸지 않아도 되도록 앱에서
     //   꺼 준다. WebView2 가 브라우저 프로세스를 띄울 때 읽으므로 가장 먼저 설정한다.
-    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-quic");
+    // 네트워크 진단 로그(선택) — %AppData%\YnhsWidget\netlog.on 파일이 있으면 켜진다.
+    //   앱은 브라우저와 별개의 WebView2 프로필을 쓰므로, 브라우저는 되는데 앱만 먹통일 때
+    //   원인을 볼 방법이 없었다. DNS·TCP·TLS 어느 단계에서 끊겼는지가 로그에 남는다.
+    let mut args = String::from("--disable-quic");
+    if let Some(dir) = std::env::var_os("APPDATA") {
+        let dir = std::path::Path::new(&dir).join("YnhsWidget");
+        if dir.join("netlog.on").exists() {
+            args.push_str(&format!(
+                " --log-net-log={} --net-log-capture-mode=Default",
+                dir.join("netlog-app.json").display()
+            ));
+        }
+    }
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", &args);
 
     // 이미 실행 중이면 기존 창만 띄우고 조용히 종료
     #[cfg(windows)]
