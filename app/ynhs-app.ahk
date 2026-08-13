@@ -12,6 +12,17 @@ Persistent()
 ;  · 중복 실행 방지: 이미 떠 있으면 두 번째 실행은 경고 없이 기존 창만 띄우고 종료.
 ; ============================================================
 
+; ── WebView2 브라우저 인자 (어떤 WebView2 호출보다 먼저 설정해야 한다) ──
+;  · QUIC(HTTP/3) 끄기 — UDP 443 이 막힌 망에서 접속이 타임아웃되는 것을 피한다.
+;    WebView2 는 브라우저 프로세스를 '처음 띄울 때' 이 환경변수를 읽으므로,
+;    웹뷰를 만드는 시점에 설정하면 이미 떠 있는 프로세스를 재사용해 무시된다.
+;  · 넷로그(선택) — %AppData%\YnhsApp\netlog.on 파일이 있으면 진단 로그를 남긴다.
+;    앱은 브라우저·위젯과 별개의 프로필을 쓰므로, 앱만 먹통일 때 원인을 볼 수단이 없었다.
+_wvArgs := "--disable-quic"
+if FileExist(A_AppData "\YnhsApp\netlog.on")
+    _wvArgs .= " --log-net-log=" A_AppData "\YnhsApp\netlog.json --net-log-capture-mode=Default"
+EnvSet("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", _wvArgs)
+
 APP_URL := "https://kyunghwanp.github.io/ynhs/"
 main := 0
 wvc := 0
@@ -79,12 +90,17 @@ EnsureDesktopShortcut()
 
 ; ── WebView2 로드 ──
 SESSION := A_AppData "\YnhsApp\Session"
+RESET_FLAG := A_AppData "\YnhsApp\reset.flag"
+gNavTries := 0
+gResetAsked := false
+ResetProfileIfRequested()          ; 예약돼 있으면 웹뷰를 만들기 전에 프로필을 지운다
 try DirCreate(SESSION)
 try {
     env := WebView2.CreateEnvironmentAsync(0, SESSION, "", DLL).await()
     wvc := env.CreateCoreWebView2ControllerAsync(main.Hwnd).await()
     ; 위젯 ↗앱으로 실행됐으면 goto.txt의 페이지로 바로 진입, 아니면 메인
     startPage := ReadGoto()
+    try wvc.CoreWebView2.add_NavigationCompleted(OnNavDone)    ; 실패 시 자동 재시도
     wvc.CoreWebView2.Navigate(startPage != "" ? APP_URL "?goto=" startPage : APP_URL)
     try wvc.CoreWebView2.add_NewWindowRequested(OnNewWindow)   ; 새 창 → 기본 브라우저
     SetBounds()
@@ -93,6 +109,55 @@ try {
 }
 
 ; ── 함수 ──
+; navigate 실패 시 자동 재시도 → 망이 잠깐 흔들려도 흰 화면으로 멈추지 않는다.
+; 재시도로도 안 되면 프로필이 나쁜 상태에 갇힌 것일 수 있어 초기화를 한 번 묻는다.
+OnNavDone(sender, args) {
+    global gNavTries, wvc
+    ok := 1                        ; 속성을 못 읽으면 성공으로 간주(잘못된 재로드 폭주 방지)
+    try ok := args.IsSuccess
+    if ok {
+        gNavTries := 0
+        return
+    }
+    if (gNavTries >= 4) {
+        OfferProfileReset()
+        return
+    }
+    gNavTries += 1
+    SetTimer(RetryNav, -1500 * gNavTries)
+}
+RetryNav() {
+    global wvc, APP_URL
+    if wvc
+        try wvc.CoreWebView2.Navigate(APP_URL)
+}
+
+; ── WebView2 프로필 자가 복구 ──
+; 프로필 폴더는 WebView2 가 떠 있는 동안 잠겨 있어 지울 수 없다.
+; 그래서 '다음 시작 때 지우기'로 예약하고 재시작한다.
+ResetProfileIfRequested() {
+    global SESSION, RESET_FLAG
+    if !FileExist(RESET_FLAG)
+        return
+    try FileDelete(RESET_FLAG)
+    Sleep 400
+    try DirDelete(SESSION, 1)
+}
+OfferProfileReset() {
+    global gResetAsked, RESET_FLAG
+    if gResetAsked
+        return
+    gResetAsked := true
+    r := MsgBox("포털을 계속 불러오지 못하고 있습니다.`n`n"
+              . "앱 저장소를 초기화하고 다시 시작할까요?`n"
+              . "(설정은 유지되고, 앱 로그인만 다시 하시면 됩니다)",
+                "영남고", 0x24)
+    if (r != "Yes")
+        return
+    try FileAppend("", RESET_FLAG)
+    Reload
+}
+
 ; 위젯 ↗앱이 적어둔 이동 페이지를 한 번 읽고 지운다(없으면 "")
 ReadGoto() {
     global GOTO_FILE
