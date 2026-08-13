@@ -29,7 +29,7 @@ CoordMode "Mouse", "Screen"
 ;   먹통일 때 원인을 볼 방법이 없었다. 이 로그에 DNS·TCP·TLS 어느 단계에서 무슨
 ;   오류로 끊겼는지가 그대로 남는다. 평소에는 파일이 없으니 아무 영향이 없다.
 _wvArgs := "--disable-quic"
-_netlogDir := A_AppData "\YnhsWidget"
+_netlogDir := A_AppData "\YnhsApp"          ; 통합앱과 같은 위치를 봐야 인자가 일치한다
 if FileExist(_netlogDir "\netlog.on")
     _wvArgs .= " --log-net-log=" _netlogDir "\netlog.json --net-log-capture-mode=Default"
 EnvSet("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", _wvArgs)
@@ -39,7 +39,13 @@ global APP_BASE := "https://kyunghwanp.github.io/ynhs/?widget="
 ;   (손상된 프로필은 브라우저·앱은 멀쩡한데 위젯 WebView2만 인터넷 연결 실패/시간초과가 나던 원인.
 ;    프로필 쓰기 도중 위젯이 비정상 종료(크래시)하면 프로필이 깨질 수 있음 → ERR_FAILED.
 ;    이때는 폴더 번호를 올려 새 프로필로 시작하면 복구됨. 앱 재로그인만 한 번 필요.)
-global SESSION  := A_AppData "\YnhsWidget\Session3"
+; 통합앱과 '같은' WebView2 프로필을 쓴다 → 앱에서 로그인해 두면 위젯도 그대로 로그인 상태.
+;   WebView2 는 같은 사용자 데이터 폴더를 여러 프로세스가 쓰는 것을 허용하지만,
+;   환경 옵션(브라우저 인자)이 다르면 0x8007139F 로 거부한다. 그래서 아래 인자 계산을
+;   통합앱과 완전히 동일하게 맞춘다(넷로그 플래그도 같은 위치를 본다).
+;   혹시 공유에 실패하면 위젯 전용 폴더로 물러난다(로그인은 따로 해야 하지만 동작은 함).
+global SESSION       := A_AppData "\YnhsApp\Session"
+global SESSION_OWN   := A_AppData "\YnhsWidget\Session3"
 global CONFIG   := A_AppData "\YnhsWidget\config.ini"
 global NEU_EXE  := A_ScriptDir "\ynhs-app.exe"
 global APP_URL  := "https://kyunghwanp.github.io/ynhs/"
@@ -101,13 +107,23 @@ OnMessage(0x214, OnSizing)   ; WM_SIZING — 크기 조절 시 테두리 자석 
 
 ; 세션 폴더당 환경은 하나만 허용 → 처음 한 번만 만들어 재사용(모든 컨트롤러가 공유)
 EnsureEnv() {
-    global WV2ENV, SESSION, DLL_PATH
+    global WV2ENV, SESSION, SESSION_OWN, DLL_PATH
     if WV2ENV
         return WV2ENV
     loop 3 {
         try {
             WV2ENV := WebView2.CreateEnvironmentAsync(0, SESSION, "", DLL_PATH).await()
             return WV2ENV
+        } catch as e0 {
+            ; 통합앱과 공유 실패(옵션 불일치 등) → 위젯 전용 폴더로 물러나 한 번 더 시도
+            if (SESSION != SESSION_OWN) {
+                SESSION := SESSION_OWN
+                try {
+                    WV2ENV := WebView2.CreateEnvironmentAsync(0, SESSION, "", DLL_PATH).await()
+                    return WV2ENV
+                }
+            }
+            throw e0
         } catch as e {
             if (A_Index < 3) {
                 CleanupOrphanWebViews()
@@ -138,9 +154,16 @@ global _resetAsked := false
 
 ; 시작 시 호출 — 예약이 있으면 프로필을 지우고 깨끗하게 시작한다.
 ResetProfileIfRequested() {
-    global SESSION, RESET_FLAG
+    global SESSION, SESSION_OWN, RESET_FLAG
     if !FileExist(RESET_FLAG)
         return
+    ; 공유 프로필은 통합앱 것이기도 하다 → 위젯이 지우면 앱 로그인까지 날아간다.
+    ; 공유 중이면 위젯 전용 폴더만 정리하고, 공유 프로필은 건드리지 않는다.
+    if (SESSION != SESSION_OWN) {
+        try FileDelete(RESET_FLAG)
+        try DirDelete(SESSION_OWN, 1)
+        return
+    }
     try FileDelete(RESET_FLAG)
     CleanupOrphanWebViews()      ; 남은 웹뷰 프로세스가 폴더를 잡고 있으면 못 지운다
     Sleep 600
@@ -165,7 +188,12 @@ OfferProfileReset() {
 
 ; 우리 세션 폴더(YnhsWidget\Session)를 쓰는 msedgewebview2.exe만 골라 종료(다른 앱은 건드리지 않음)
 CleanupOrphanWebViews() {
-    global SESSION
+    global SESSION, SESSION_OWN
+    ; 통합앱과 프로필을 공유하는 동안에는 이 정리를 하지 않는다.
+    ; 같은 폴더를 쓰는 msedgewebview2 에는 '통합앱의 웹뷰'도 포함돼 있어서,
+    ; 여기서 죽이면 앱 화면까지 같이 꺼진다(위젯 문제를 앱 장애로 키우는 셈).
+    if (SESSION != SESSION_OWN)
+        return 0
     killed := 0
     try {
         wmi := ComObjGet("winmgmts:\\.\root\cimv2")
@@ -404,6 +432,14 @@ IsAppWindow(hwnd) {
 ; 저장된 선택 상태(config의 selected=1)대로 위젯을 바로 생성. 하나도 없으면 선택창을 띄운다.
 RestoreSelected() {
     global ALL_PANELS, CONFIG
+    ; 최초 실행(설정에 [selected] 자체가 없음)이면 기본 위젯을 임의로 띄우지 않고
+    ; 선택창을 먼저 보여 준다. 사용자가 고른 뒤부터 그 선택이 복원된다.
+    sec := ""
+    try sec := IniRead(CONFIG, "selected")
+    if (sec = "") {
+        ShowSelector()
+        return
+    }
     any := false
     for p in ALL_PANELS {
         sel := p[7]
