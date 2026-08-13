@@ -125,6 +125,13 @@ mod single {
 }
 
 fn main() -> wry::Result<()> {
+    // UDP(HTTP/3=QUIC)를 막는 망에서 접속이 간헐적으로 타임아웃되는 문제 → QUIC 끄고 TCP만.
+    //   브라우저는 사이트의 HTTP/3 지원 여부를 프로필에 기억해 뒀다가 UDP 443 으로 접속을
+    //   시도하는데, 그 포트가 막힌 망에서는 ERR_TIMED_OUT 이 난다(시크릿 창은 그 기억이
+    //   없어 멀쩡한 것이 단서였다). 사용자가 브라우저 설정을 바꾸지 않아도 되도록 앱에서
+    //   꺼 준다. WebView2 가 브라우저 프로세스를 띄울 때 읽으므로 가장 먼저 설정한다.
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-quic");
+
     // 이미 실행 중이면 기존 창만 띄우고 조용히 종료
     #[cfg(windows)]
     let _singleton = match single::acquire() {
