@@ -20,6 +20,12 @@ CoordMode "Mouse", "Screen"
 ;  단축키: Win+Alt+H 숨김/보임 · Win+Alt+T 항상위 토글 · Win+Alt+A 위젯추가 · Win+Alt+S 저장 · Win+Alt+Q 종료
 ; ============================================================
 
+; UDP(HTTP/3=QUIC)를 막는 망에서 접속이 타임아웃되는 문제 → QUIC 끄고 TCP만 사용.
+;   WebView2는 '브라우저 프로세스를 처음 띄울 때' 이 환경변수를 읽는다. 웹뷰를 만드는
+;   시점(EnsureEnv)에 설정하면, 그 전에 이미 msedgewebview2.exe 가 떠 있는 경우 기존
+;   프로세스를 재사용해 인자가 무시된다. 그래서 스크립트 맨 위에서 먼저 설정한다.
+EnvSet("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-quic")
+
 global APP_BASE := "https://kyunghwanp.github.io/ynhs/?widget="
 ; 손상된 WebView2 프로필을 우회 — 새 폴더로 깨끗하게 시작.
 ;   (손상된 프로필은 브라우저·앱은 멀쩡한데 위젯 WebView2만 인터넷 연결 실패/시간초과가 나던 원인.
@@ -90,9 +96,6 @@ EnsureEnv() {
     global WV2ENV, SESSION, DLL_PATH
     if WV2ENV
         return WV2ENV
-    ; UDP(HTTP/3=QUIC)를 막는 망에서 WebView2 navigate 타임아웃(새로고침 먹통) → QUIC 끄고 TCP만 사용.
-    ; (래퍼 인자 시그니처와 무관하게, WebView2가 직접 읽는 환경변수로 전달)
-    EnvSet("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-quic")
     loop 3 {
         try {
             WV2ENV := WebView2.CreateEnvironmentAsync(0, SESSION, "", DLL_PATH).await()
