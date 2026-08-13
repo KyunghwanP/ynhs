@@ -34,12 +34,22 @@ exe := dest "\영남고.exe"
 ico := dest "\icon.ico"
 try FileCreateShortcut(exe, A_Desktop "\영남고.lnk", dest, "", "영남고 포털", ico)          ; 바탕화면
 try FileCreateShortcut(exe, A_Programs "\영남고.lnk", dest, "", "영남고 포털", ico)         ; 시작 메뉴 실행
-try FileCreateShortcut(exe, A_Startup "\영남고.lnk", dest, "", "영남고 포털", ico)          ; 부팅 시 자동 실행
+; 부팅 시 자동 실행 — 묻고 나서 결정한다(임의로 등록하지 않는다).
+;   재설치 때도 다시 묻고, '아니오'면 기존 등록을 지운다 → 대답이 항상 실제 상태와 일치.
+startupLnk := A_Startup "\영남고.lnk"
+autorun := (MsgBox("컴퓨터를 켤 때 영남고 앱을 자동으로 실행할까요?`n`n"
+                 . "지금 정하지 않아도, 이 설치 파일을 다시 실행하면 바꿀 수 있습니다.",
+                   "영남고 설치", 0x24) = "Yes")
+if autorun
+    try FileCreateShortcut(exe, startupLnk, dest, "", "영남고 포털", ico)
+else
+    try FileDelete(startupLnk)
 try FileCreateShortcut(dest "\제거.exe", A_Programs "\영남고 제거.lnk", dest, "", "영남고 제거", ico)  ; 시작 메뉴 제거
 
 MsgBox("설치가 완료되었습니다.`n`n"
     . "· 바탕화면의 '영남고' 아이콘으로 실행하세요.`n"
-    . "· 부팅 시 자동 실행되도록 등록했습니다.`n"
+    . (autorun ? "· 부팅 시 자동으로 실행됩니다.`n"
+               : "· 부팅 시 자동 실행은 하지 않습니다(설치 파일을 다시 실행하면 바꿀 수 있어요).`n")
     . "· 바탕화면 위젯은 앱 트레이 아이콘 → '바탕화면 위젯'에서 켜세요.`n"
     . "· 제거는 시작 메뉴의 '영남고 제거'.`n`n"
     . "(이 다운로드 폴더는 이제 삭제하셔도 됩니다.)", "영남고 설치", "Iconi")
