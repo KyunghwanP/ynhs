@@ -24,7 +24,15 @@ CoordMode "Mouse", "Screen"
 ;   WebView2는 '브라우저 프로세스를 처음 띄울 때' 이 환경변수를 읽는다. 웹뷰를 만드는
 ;   시점(EnsureEnv)에 설정하면, 그 전에 이미 msedgewebview2.exe 가 떠 있는 경우 기존
 ;   프로세스를 재사용해 인자가 무시된다. 그래서 스크립트 맨 위에서 먼저 설정한다.
-EnvSet("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-quic")
+; 네트워크 진단 로그(선택) — %AppData%\YnhsWidget\netlog.on 파일이 있으면 켜진다.
+;   위젯은 브라우저와 별개의 WebView2 프로필을 쓰므로, 브라우저는 되는데 위젯만
+;   먹통일 때 원인을 볼 방법이 없었다. 이 로그에 DNS·TCP·TLS 어느 단계에서 무슨
+;   오류로 끊겼는지가 그대로 남는다. 평소에는 파일이 없으니 아무 영향이 없다.
+_wvArgs := "--disable-quic"
+_netlogDir := A_AppData "\YnhsWidget"
+if FileExist(_netlogDir "\netlog.on")
+    _wvArgs .= " --log-net-log=" _netlogDir "\netlog.json --net-log-capture-mode=Default"
+EnvSet("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", _wvArgs)
 
 global APP_BASE := "https://kyunghwanp.github.io/ynhs/?widget="
 ; 손상된 WebView2 프로필을 우회 — 새 폴더로 깨끗하게 시작.
