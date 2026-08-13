@@ -128,6 +128,41 @@ SuppressWebView2Err(e, mode) {
     return InStr(msg, "8007139F") ? 1 : 0
 }
 
+; ── WebView2 프로필 자가 복구 ────────────────────────────────────────────────
+; 브라우저는 멀쩡한데 위젯만 계속 실패하는 경우가 있다. 위젯은 자체 프로필을 쓰므로
+; 그 안의 캐시·소켓 상태가 나쁘게 굳으면 재시도로는 풀리지 않는다.
+; 프로필 폴더는 WebView2가 떠 있는 동안 잠겨 있어 지울 수 없으므로,
+; '다음 시작 때 지우기'로 예약해 두고 재시작한다.
+global RESET_FLAG := A_AppData "\YnhsWidget\reset.flag"
+global _resetAsked := false
+
+; 시작 시 호출 — 예약이 있으면 프로필을 지우고 깨끗하게 시작한다.
+ResetProfileIfRequested() {
+    global SESSION, RESET_FLAG
+    if !FileExist(RESET_FLAG)
+        return
+    try FileDelete(RESET_FLAG)
+    CleanupOrphanWebViews()      ; 남은 웹뷰 프로세스가 폴더를 잡고 있으면 못 지운다
+    Sleep 600
+    try DirDelete(SESSION, 1)
+}
+
+; 재시도로도 복구되지 않을 때 1회만 묻는다(계속 뜨면 성가시다).
+OfferProfileReset() {
+    global _resetAsked, RESET_FLAG
+    if _resetAsked
+        return
+    _resetAsked := true
+    r := MsgBox("위젯이 페이지를 계속 불러오지 못하고 있습니다.`n`n"
+              . "웹뷰 저장소를 초기화하고 다시 시작할까요?`n"
+              . "(위젯 표시 설정은 그대로 유지되고, 앱 로그인만 다시 하시면 됩니다)",
+                "영남고 위젯", 0x24)
+    if (r != "Yes")
+        return
+    try FileAppend("", RESET_FLAG)
+    Reload
+}
+
 ; 우리 세션 폴더(YnhsWidget\Session)를 쓰는 msedgewebview2.exe만 골라 종료(다른 앱은 건드리지 않음)
 CleanupOrphanWebViews() {
     global SESSION
@@ -247,6 +282,9 @@ ToggleDark() {
 
 ; 시작 시: 저장해둔(선택된) 위젯을 '선택창 없이' 바로 복원해서 띄운다.
 ;   선택된 게 하나도 없으면(설정 초기화 등) 그때만 선택창을 띄워 고르게 한다.
+; 지난 실행에서 초기화가 예약됐으면, 웹뷰를 만들기 전에 프로필을 지운다.
+; (웹뷰가 뜬 뒤에는 폴더가 잠겨 지울 수 없다 — 반드시 이 시점이어야 한다)
+ResetProfileIfRequested()
 RestoreSelected()
 ; 손잡이 바는 이제 웹(HTML)에 내장 → 네이티브 오버레이/호버 타이머 미사용(DPI·겹침 문제 제거)
 ; SetTimer(HoverCheck, 120)
@@ -1179,8 +1217,10 @@ OnNavDone(hwnd, sender, args) {
         return
     }
     ; 실패 — 최대 4회까지, 점점 간격을 늘려(1.5·3·4.5·6초) 재시도. 그 뒤엔 멈춘다(무한 루프 방지).
-    if (w.navTries >= 4)
+    if (w.navTries >= 4) {
+        OfferProfileReset()      ; 재시도로도 안 되면 프로필이 나쁜 상태에 갇힌 것일 수 있다
         return
+    }
     w.navTries += 1
     SetTimer(RetryNav.Bind(hwnd), -1500 * w.navTries)
 }
