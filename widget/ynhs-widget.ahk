@@ -114,17 +114,14 @@ EnsureEnv() {
         try {
             WV2ENV := WebView2.CreateEnvironmentAsync(0, SESSION, "", DLL_PATH).await()
             return WV2ENV
-        } catch as e0 {
-            ; 통합앱과 공유 실패(옵션 불일치 등) → 위젯 전용 폴더로 물러나 한 번 더 시도
+        } catch as e {
+            ; ① 통합앱과 공유 실패(브라우저 인자 불일치 등) → 위젯 전용 폴더로 물러난다.
+            ;    이때는 잔류 프로세스 정리가 필요 없다(폴더가 달라졌으므로) — 바로 다시 시도.
             if (SESSION != SESSION_OWN) {
                 SESSION := SESSION_OWN
-                try {
-                    WV2ENV := WebView2.CreateEnvironmentAsync(0, SESSION, "", DLL_PATH).await()
-                    return WV2ENV
-                }
+                continue
             }
-            throw e0
-        } catch as e {
+            ; ② 전용 폴더에서도 실패 → 세션 잠김일 수 있으니 정리 후 재시도.
             if (A_Index < 3) {
                 CleanupOrphanWebViews()
                 Sleep 800
