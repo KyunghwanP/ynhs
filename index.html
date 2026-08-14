@@ -5375,7 +5375,9 @@ function startTaskNotifyWatch(user){
   taskNotifyUnsubs = [];
   taskNotifyState.clear();
 
-  const myIds = [user.email, user.displayName].filter(Boolean);
+  // sharedWith·doneBy 에는 이메일이 들어갈 수도 이름이 들어갈 수도 있다 → 셋 다 내 식별자로 본다
+  const myIds = [user.email, user.displayName,
+                 TEACHERS.find(x => x.email === user.email)?.name].filter(Boolean);
   // 감시 대상 = 다른 교사들의 일정(내가 공유받은 것) + 내 일정(내가 만들어 남에게 공유한 것).
   // 내 컬렉션도 봐야 '각자 완료'가 작성자에게 전달된다.
   const targets = TEACHERS.filter(t => t.uid && t.uid !== user.uid).map(t => t.uid);
@@ -5409,10 +5411,13 @@ function startTaskNotifyWatch(user){
         }
         if(ch.type !== 'modified' || !prev) return;
 
-        // 새 댓글 (내가 쓴 건 제외)
+        // 새 댓글 — 내가 쓴 건 제외.
+        // 각자 완료 일정이면 '내 몫을 아직 안 끝낸 사람'에게만 보낸다
+        // (이미 자기 몫을 끝냈으면 이후 논의는 알림까지 받을 일이 아니다)
         if(cs.length > prev.c){
-          const last = cs[cs.length - 1] || {};
-          if(last.email !== user.email){
+          const last     = cs[cs.length - 1] || {};
+          const iAmDone  = d.perDone && dIds.some(x => myIds.includes(x));
+          if(last.email !== user.email && !iAmDone){
             showAppNotify(`💬 ${last.name || '새 댓글'}`,
               `${d.title || '업무 일정'} — ${last.text || ''}`,
               { type:'memo', id:'taskC:'+ch.doc.id+':'+cs.length, goto:'mytask' });
