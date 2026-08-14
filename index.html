@@ -5316,7 +5316,7 @@ function showAppNotify(title, body, opts){
 
 // ── 새 상담 예약 감시 (앱 켜져 있는 동안 상시) ──
 let consultNotifyUnsub = null;
-let consultNotifySeen = null;   // 이미 본 예약 slotId 집합 (null=첫 로드 전)
+let consultNotifySeen = null;   // Map(slotId → {who,when}) — 취소 알림 문구용 (null=첫 로드 전)
 function startConsultNotifyWatch(user){
   // 담임 학급 결정 (관리자 테스트는 1-1)
   let classKey = getMyHomeroom ? getMyHomeroom() : null;
@@ -5329,51 +5329,143 @@ function startConsultNotifyWatch(user){
     const data  = snap.exists() ? (snap.data()||{}) : {};
     const slots = Array.isArray(data.slots) ? data.slots : [];
     const booked = slots.filter(s => s.status === 'booked');
+    // 알림 문구용 요약 — 예약이 사라진 뒤에도 "누구·언제"를 말해줄 수 있어야 해서 함께 보관한다
+    const brief = s => ({
+      who : s.studentName || s.bookedName || '학부모',
+      when: `${(s.date||'').slice(5).replace('-','/')} ${s.time||''}`.trim()
+    });
 
     if(consultNotifySeen === null){
       // 첫 로드: 기준선만 기록, 알림 안 띄움
-      consultNotifySeen = new Set(booked.map(s => s.id));
+      consultNotifySeen = new Map(booked.map(s => [s.id, brief(s)]));
       return;
     }
     // 새로 예약된 것만 알림
     booked.forEach(s => {
       if(!consultNotifySeen.has(s.id)){
-        consultNotifySeen.add(s.id);
-        const who = s.studentName || s.bookedName || '학부모';
-        const when = `${s.date.slice(5).replace('-','/')} ${s.time}`;
-        showAppNotify('새 상담 예약', `${who} · ${when}`, { type:'cal', id:'consult:'+s.id });
+        const b = brief(s);
+        consultNotifySeen.set(s.id, b);
+        showAppNotify('새 상담 예약', `${b.who} · ${b.when}`, { type:'cal', id:'consult:'+s.id, goto:'consult' });
       }
     });
-    // 취소된 것 정리
-    const cur = new Set(booked.map(s => s.id));
-    consultNotifySeen.forEach(id => { if(!cur.has(id)) consultNotifySeen.delete(id); });
+    // 예약이 풀린 것 → 취소 알림.
+    // 단 '칸 자체가 사라진 경우'는 담임이 직접 시간을 닫은 것이므로 알리지 않는다
+    // (학부모 취소는 칸이 남고 status만 booked→open 으로 바뀐다).
+    const cur      = new Set(booked.map(s => s.id));
+    const slotIds  = new Set(slots.map(s => s.id));
+    [...consultNotifySeen.keys()].forEach(id => {
+      if(cur.has(id)) return;
+      const b = consultNotifySeen.get(id);
+      consultNotifySeen.delete(id);
+      if(!slotIds.has(id)) return;
+      showAppNotify('상담 예약 취소', `${b.who} · ${b.when}`, { type:'deadline', id:'consultOff:'+id, goto:'consult' });
+    });
     // 홈 현황판 상담 섹션 실시간 갱신 (예약·삭제 즉시 반영)
     loadHomeConsult(slots);
   }, err => { /* 구독 실패 무시 */ });
 }
 
 // ── 공유받은 업무 일정 감시 ──
+// 새 공유뿐 아니라 '댓글'과 '각자 완료' 진행도 알린다. docChanges는 바뀐 뒤 문서만 주므로
+// 직전 상태(댓글 수·완료자 목록)를 따로 들고 있다가 늘어난 만큼만 알림을 띄운다.
 let taskNotifyUnsubs = [];
+let taskNotifyState  = new Map();   // 'ownerUid/docId' → {c: 댓글수, dIds: [완료자 id]}
 function startTaskNotifyWatch(user){
   taskNotifyUnsubs.forEach(u => { try{u();}catch(e){} });
   taskNotifyUnsubs = [];
+  taskNotifyState.clear();
 
   const myIds = [user.email, user.displayName].filter(Boolean);
   TEACHERS.forEach(t => {
     if(!t.uid || t.uid === user.uid) return;
     let firstSnap = true;  // 이 교사 일정의 첫 스냅샷은 기준선
     const unsub = onSnapshot(collection(fbDb, 'tasks', t.uid, 'items'), snap => {
-      if(firstSnap){ firstSnap = false; return; }  // 기존 항목은 알림 안 띄움
+      const baseline = firstSnap; firstSnap = false;
       snap.docChanges().forEach(ch => {
-        if(ch.type !== 'added') return;
         const d = ch.doc.data();
         const sharedToMe = (d.sharedWith || []).some(s => myIds.includes(s));
         if(!sharedToMe) return;
-        showAppNotify('공유된 업무 일정', d.title || '새 일정이 공유되었습니다', { type:'memo', id:'task:'+ch.doc.id });
+
+        const key   = t.uid + '/' + ch.doc.id;
+        const cs    = d.comments || [];
+        const dIds  = (d.doneBy || []).map(x => x.id || x.name || '');
+        const prev  = taskNotifyState.get(key);
+        taskNotifyState.set(key, { c: cs.length, dIds });
+        if(baseline) return;                       // 첫 스냅샷은 기준선만 잡고 조용히 지나감
+
+        if(ch.type === 'added'){
+          showAppNotify('공유된 업무 일정', d.title || '새 일정이 공유되었습니다',
+            { type:'memo', id:'task:'+ch.doc.id, goto:'mytask' });
+          return;
+        }
+        if(ch.type !== 'modified' || !prev) return;
+
+        // 새 댓글 (내가 쓴 건 제외)
+        if(cs.length > prev.c){
+          const last = cs[cs.length - 1] || {};
+          if(last.email !== user.email){
+            showAppNotify(`💬 ${last.name || '새 댓글'}`,
+              `${d.title || '업무 일정'} — ${last.text || ''}`,
+              { type:'memo', id:'taskC:'+ch.doc.id+':'+cs.length, goto:'mytask' });
+          }
+        }
+        // 각자 완료 진행 (내가 누른 건 제외)
+        if(d.perDone){
+          const added = dIds.filter(x => x && !prev.dIds.includes(x));
+          if(added.length && !added.every(x => x === user.email)){
+            const total = (d.sharedWith || []).length + 1;   // 작성자 포함
+            showAppNotify('각자 완료 진행', `${d.title || '업무 일정'} — ${dIds.length}/${total} 완료`,
+              { type:'bell', id:'taskD:'+ch.doc.id+':'+dIds.length, goto:'mytask' });
+          }
+        }
       });
     }, err => {});
     taskNotifyUnsubs.push(unsub);
   });
+}
+
+// ── 다음 수업 5분 전 알림 ──
+// 오늘 내 시간표(요일 대체·보강 반영)를 1분마다 보고, 시작 5분 전이면 한 번만 알린다.
+// 시간표는 이미 메모리에 있어 서버 왕복이 없다.
+let nextClassNotifyTimer = null;
+let nextClassNotified    = new Set();   // 'YYYY-MM-DD:교시' — 하루에 교시당 한 번만
+function startNextClassNotifyWatch(){
+  if(nextClassNotifyTimer) clearInterval(nextClassNotifyTimer);
+  const tick = () => {
+    try{
+      const me = effTeacher();
+      if(!me || !me.schedule) return;
+      const now = new Date();
+      const wd  = ['일','월','화','수','목','금','토'][now.getDay()];
+      if(wd === '토' || wd === '일') return;
+
+      const nowMin = now.getHours()*60 + now.getMinutes();
+      const iso    = ttISO(now);
+      const op     = ttOpForDate(iso);
+      const pulled = op ? (ttTeacherDay(op, wd)[me.name] || null) : null;   // 다른 요일에서 당겨온 수업
+
+      if(nextClassNotified.size > 100) nextClassNotified.clear();           // 장기 실행 시 누적 방지
+
+      BELL_SCHEDULE.forEach(b => {
+        if(b.period === 'lunch') return;
+        const lead = toMinutes(b.start) - nowMin;
+        if(lead < 4 || lead > 6) return;               // 시작 5분 전 (틱 지연 대비 ±1분)
+        const key = iso + ':' + b.period;
+        if(nextClassNotified.has(key)) return;
+
+        const base = (me.schedule[wd] || []).find(x => x.period === b.period) || null;
+        const slot = op ? ttMaskTeacherSlot(op, base, pulled && pulled[b.period], wd, b.period) : base;
+        if(!slot || !slot.subject) return;             // 그 교시에 수업이 없으면 조용히
+
+        nextClassNotified.add(key);
+        showAppNotify(`${b.period}교시 수업 5분 전`,
+          `${slot.subject}${slot.class ? ' · ' + slot.class : ''} (${b.start} 시작)`,
+          { type:'cal', id:'class:'+key, goto:'timetable' });
+      });
+    }catch(e){ /* 시간표 미로딩 등은 조용히 무시 */ }
+  };
+  tick();
+  nextClassNotifyTimer = setInterval(tick, 60000);
 }
 
 
@@ -7307,6 +7399,7 @@ onAuthStateChanged(fbAuth, async (user) => {
       initNotify();
       startConsultNotifyWatch(user);
       startTaskNotifyWatch(user);
+      startNextClassNotifyWatch();
     }
   }catch(e){
     // 타임아웃이나 네트워크 오류 시에도 앱은 일단 진행
