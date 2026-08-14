@@ -7257,7 +7257,9 @@ onAuthStateChanged(fbAuth, async (user) => {
       if (adminBtn)  adminBtn.style.display  = 'block';
       if (adminBtnD) adminBtnD.style.display = 'block';
       // 관리자 페이지(admin.html)는 사이드바에 노출하지 않음 — 주소 직접 입력으로만 접근
-      // 특별실 예약 탭: 시범 운영 동안 관리자만 노출
+    }
+    // 특별실 예약 탭: 전체 교사에게 공개(시범 운영 종료)
+    {
       const navRoom = document.getElementById('navRoom');
       const tabRoom = document.getElementById('tabRoom');
       if (navRoom) navRoom.style.display = '';
