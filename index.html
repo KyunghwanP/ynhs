@@ -5376,17 +5376,25 @@ function startTaskNotifyWatch(user){
   taskNotifyState.clear();
 
   const myIds = [user.email, user.displayName].filter(Boolean);
-  TEACHERS.forEach(t => {
-    if(!t.uid || t.uid === user.uid) return;
-    let firstSnap = true;  // 이 교사 일정의 첫 스냅샷은 기준선
-    const unsub = onSnapshot(collection(fbDb, 'tasks', t.uid, 'items'), snap => {
+  // 감시 대상 = 다른 교사들의 일정(내가 공유받은 것) + 내 일정(내가 만들어 남에게 공유한 것).
+  // 내 컬렉션도 봐야 '각자 완료'가 작성자에게 전달된다.
+  const targets = TEACHERS.filter(t => t.uid && t.uid !== user.uid).map(t => t.uid);
+  targets.push(user.uid);
+
+  targets.forEach(ownerUid => {
+    const isMine = (ownerUid === user.uid);
+    let firstSnap = true;  // 이 컬렉션의 첫 스냅샷은 기준선
+    const unsub = onSnapshot(collection(fbDb, 'tasks', ownerUid, 'items'), snap => {
       const baseline = firstSnap; firstSnap = false;
       snap.docChanges().forEach(ch => {
         const d = ch.doc.data();
-        const sharedToMe = (d.sharedWith || []).some(s => myIds.includes(s));
-        if(!sharedToMe) return;
+        // 내 일정이면 '남에게 공유한 것'만, 남의 일정이면 '나에게 공유된 것'만 본다
+        const relevant = isMine
+          ? (d.sharedWith || []).length > 0
+          : (d.sharedWith || []).some(s => myIds.includes(s));
+        if(!relevant) return;
 
-        const key   = t.uid + '/' + ch.doc.id;
+        const key   = ownerUid + '/' + ch.doc.id;
         const cs    = d.comments || [];
         const dIds  = (d.doneBy || []).map(x => x.id || x.name || '');
         const prev  = taskNotifyState.get(key);
@@ -5394,6 +5402,7 @@ function startTaskNotifyWatch(user){
         if(baseline) return;                       // 첫 스냅샷은 기준선만 잡고 조용히 지나감
 
         if(ch.type === 'added'){
+          if(isMine) return;                       // 내가 방금 만든 일정은 알릴 필요 없음
           showAppNotify('공유된 업무 일정', d.title || '새 일정이 공유되었습니다',
             { type:'memo', id:'task:'+ch.doc.id, goto:'mytask' });
           return;
@@ -5409,12 +5418,16 @@ function startTaskNotifyWatch(user){
               { type:'memo', id:'taskC:'+ch.doc.id+':'+cs.length, goto:'mytask' });
           }
         }
-        // 각자 완료 진행 (내가 누른 건 제외)
-        if(d.perDone){
+        // 각자 완료 진행 — 진행 상황이 궁금한 건 '작성자'이므로 내 일정일 때만 알린다.
+        // (공유받은 사람끼리 서로의 완료를 통보받으면 알림만 시끄러워진다)
+        if(d.perDone && isMine){
           const added = dIds.filter(x => x && !prev.dIds.includes(x));
           if(added.length && !added.every(x => x === user.email)){
             const total = (d.sharedWith || []).length + 1;   // 작성자 포함
-            showAppNotify('각자 완료 진행', `${d.title || '업무 일정'} — ${dIds.length}/${total} 완료`,
+            const who   = (d.doneBy || []).find(x => (x.id || x.name) === added[0]);
+            const name  = who ? (who.name || (TEACHERS.find(t => t.email === who.id)?.name) || '') : '';
+            showAppNotify('각자 완료 진행',
+              `${d.title || '업무 일정'} — ${name ? name + ' 완료 · ' : ''}${dIds.length}/${total}`,
               { type:'bell', id:'taskD:'+ch.doc.id+':'+dIds.length, goto:'mytask' });
           }
         }
