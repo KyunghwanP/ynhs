@@ -15176,6 +15176,7 @@ async function loadMytasks() {
     collection(fbDb, 'tasks', myUid, 'items'),
     snap => {
       const myTasks = snap.docs.map(d => ({ id: d.id, ownerUid: myUid, ...d.data() }));
+      mytaskHealShareIds(myTasks, myUid);   // 이름으로 저장된 공유 대상을 이메일로 정정
       // 공유받은 일정(ownerUid !== myUid)은 유지, 내 일정만 교체
       mytaskTasks = [...myTasks, ...mytaskTasks.filter(t => t.ownerUid !== myUid)];
       if (mytaskInitialized && document.getElementById('mytaskPage')?.classList.contains('active')) {
@@ -15588,6 +15589,53 @@ function setMytaskStatusBtn(status) {
 // 공유받은 사람마다 자기 완료(doneBy)를 체크. 전원 완료되면 전체 상태가 자동으로
 // 완료가 되고, 작성자는 언제든 상태 버튼으로 직접 완료 처리할 수 있다.
 // 기존(공용 상태) 공유 일정은 그대로 — 작성 시 옵션을 켠 일정에만 적용.
+// ── 공유 대상 식별자 자가 치유 (이름 → 이메일) ──
+// sharedWith·doneBy 에는 (email || name)이 저장된다. 아직 로그인한 적 없는 교사는
+// 이메일이 없어 이름으로 들어가는데, 보안 규칙의 isSharedWithMe 는 완전 일치 비교라
+// 그 사람은 상태·댓글·완료를 저장할 수 없다(화면에 보이기는 한다).
+// 규칙 안에서는 리스트 원소를 정규화할 수단이 없으므로 데이터 쪽을 이메일로 맞춘다.
+// 고칠 수 있는 건 문서 소유자뿐이라(규칙상 전체 쓰기는 소유자 한정) 자기 일정을
+// 불러올 때 조용히 바꾼다. 선생님들이 앱을 쓰는 대로 자연히 수렴한다.
+let mytaskHealTried = new Set();        // 문서당 이 세션 1회만 시도 (쓰기 루프 방지)
+function mytaskHealShareIds(tasks, myUid){
+  if (IS_WIDGET_WV) return;             // 위젯 창마다 중복 실행되는 것 방지 — 메인 앱에서만
+  if (isViewAs()) return;               // 읽기 전용 보기: 어차피 쓰기가 막히고 경고만 뜬다
+  if (!TEACHERS.length || !myUid) return;   // 명렬 로딩 전이면 다음 스냅샷에서
+
+  // 동명이인이면 엉뚱한 사람에게 공유가 옮겨붙을 수 있다 → 유일할 때만 변환
+  const toEmail = name => {
+    const hit = TEACHERS.filter(t => t.name === name && t.email);
+    return hit.length === 1 ? hit[0].email : null;
+  };
+
+  tasks.forEach(t => {
+    if (mytaskHealTried.has(t.id)) return;
+    const shared = t.sharedWith || [];
+    if (!shared.some(x => x && !x.includes('@'))) return;      // 고칠 것 없음
+
+    // 풀리지 않는 이름(퇴직·전출·명렬 미등록)은 그대로 둔다 — 지우면 조용한 공유 해제가 된다
+    const newShared = shared.map(x => (x && !x.includes('@') && toEmail(x)) || x);
+    if (newShared.every((v, i) => v === shared[i])) return;    // 하나도 못 풀었으면 쓰지 않음
+
+    // doneBy 도 같은 형식이라 함께 옮긴다. 안 맞추면 완료 판정이 어긋나
+    // 이미 자기 몫을 끝낸 사람이 미완료로 되돌아 보인다.
+    const done    = t.doneBy || [];
+    const newDone = done.map(d => {
+      const id = d && d.id;
+      if (!id || id.includes('@')) return d;
+      const em = toEmail(id);
+      return em ? { ...d, id: em } : d;
+    });
+
+    mytaskHealTried.add(t.id);
+    const payload = { sharedWith: newShared };
+    if (newDone.some((v, i) => v !== done[i])) payload.doneBy = newDone;
+    // setDoc(merge) 는 보기 모드 차단 래퍼를 통과한다. 배열은 통째로 교체된다(원하는 동작).
+    setDoc(doc(fbDb, 'tasks', myUid, 'items', t.id), payload, { merge: true })
+      .catch(() => { /* 실패해도 다음 접속 때 다시 시도 */ });
+  });
+}
+
 function mytaskResolveShareEmail(entry){   // sharedWith 항목(이름 또는 이메일) → 이메일
   if (!entry) return null;
   if (entry.includes('@')) return entry;
@@ -15846,7 +15894,11 @@ function searchMytaskShare(val) {
       + ' onmouseover="this.style.background=\'var(--paper-soft)\'"'
       + ' onmouseout="this.style.background=\'\'"> '
       + t.name + ' <span style="font-size:12px;color:var(--ink-soft);">' + (t.subject||'') + '</span>'
-      + (t.email ? '<span style="font-size:10px;color:#10B981;margin-left:4px;">✓</span>' : '')
+      + (t.email
+          ? '<span style="font-size:10px;color:#10B981;margin-left:4px;">✓</span>'
+          : '<span style="font-size:10px;color:var(--ink-soft);margin-left:6px;border:1px solid var(--rule);'
+            + 'border-radius:6px;padding:1px 5px;" title="아직 앱에 로그인한 적이 없어 이름으로 저장됩니다. '
+            + '본인이 로그인하고 작성자가 앱을 열면 자동으로 연결됩니다.">아직 로그인 전</span>')
       + '</div>';
   }).join('');
 
