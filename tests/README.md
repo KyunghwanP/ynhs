@@ -10,11 +10,12 @@ node tests/current-period.test.mjs     # 시간표의 '지금 이 교시' + 자�
 node tests/sw-cache.test.mjs           # 서비스워커 캐시 전략 — Cache/fetch 를 스텁으로 물림
 node tests/operating.test.mjs          # 운영표(요일 대체·창체 이동·시험·휴일) 해석
 node tests/account-gate.test.mjs       # 학생 계정 차단 — 화면·규칙·워커가 같은 조건인지
+node tests/inline-handlers.test.mjs    # onclick 이 부르는 함수가 window 에 있는지
 node workers/teacher-api.test.mjs      # teacher-api 워커 — fetch 를 스텁으로 물림
 ```
 
-> `workers/roster-split.test.mjs` 는 `upload.html` 을 읽으므로 **test 저장소에서만**
-> 돈다. 이 저장소에는 그 파일이 없다.
+> `workers/roster-split.test.mjs` · `workers/parent-verify.test.mjs` 는 `upload.html` 을
+> 읽으므로 **test 저장소에서만** 돈다. 이 저장소에는 그 파일이 없다.
 
 ## 설치가 필요한 것
 
@@ -34,6 +35,7 @@ FAB(모바일 발급 버튼)은 `#passPage` 바깥의 `position:fixed` 라 하�
 
 ```bash
 node tests/pass-fab.test.mjs                       # FAB 이 외출증 화면에서만 뜨는지
+node tests/cal-consult.test.mjs                    # 업무 캘린더의 상담 예약 표시·상세
 ```
 
 가짜 Firestore를 물려 목록 렌더·사진 표시·발급 폼·저장 payload를 실제 DOM에서 본다.

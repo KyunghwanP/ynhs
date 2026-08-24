@@ -975,6 +975,14 @@
   .mytask-cal-chip.todo{border-left-color:#6366F1;}
   .mytask-cal-chip.doing{border-left-color:#F59E0B;}
   .mytask-cal-chip.done{border-left-color:#10B981;color:var(--ink-soft);text-decoration:line-through;}
+  .mytask-cal-chip.consult{border-left-color:#8B5CF6;background:rgba(139,92,246,.10);}
+  .pc-chip.consult{background:#EDE9FE;color:#5B21B6;}
+  .mytask-item-status.consult{background:#8B5CF6;}
+  .phd-dot.consult{background:#8B5CF6;color:#fff;}
+  .cpk-row{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--rule);font-size:14px;}
+  .cpk-row:last-child{border-bottom:none;}
+  .cpk-k{flex:0 0 68px;color:var(--ink-soft);}
+  .cpk-v{flex:1;font-weight:600;word-break:break-all;}
   .mytask-cal-more{font-size:10px;color:var(--ink-soft);padding:0 4px;}
 
   /* ── 데스크톱 패널 캘린더 (buildPanelCalendar) ── */
@@ -4250,7 +4258,7 @@
       다른 계정으로 로그인
     </button>
     <div id="authStatus" style="margin-top:12px;"></div>
-    <div style="margin-top:16px;font-family:'IBM Plex Mono';font-size:10px;color:var(--ink-soft);opacity:0.4;">ver6.88</div>
+    <div style="margin-top:16px;font-family:'IBM Plex Mono';font-size:10px;color:var(--ink-soft);opacity:0.4;">ver6.92</div>
   </div>
 </div>
 
@@ -4386,7 +4394,7 @@
       <div class="main-nav-item" data-page="meal">
         <span class="main-nav-icon">🍱</span>식단표
       </div>
-    <div class="nav-version" title="Made by 박경환">ver6.88</div>
+    <div class="nav-version" title="Made by 박경환">ver6.92</div>
     </nav>
 
     <!-- 업무캘린더 FAB (우하단 고정) -->
@@ -5302,6 +5310,7 @@
                 <button class="mytask-filter-btn active" data-filter="doing" onclick="toggleCalFilter('doing')">🟡 진행중</button>
                 <button class="mytask-filter-btn active" data-filter="done" onclick="toggleCalFilter('done')">🟢 완료</button>
                 <button class="mytask-filter-btn" data-filter="schedule" onclick="toggleCalFilter('schedule')">📆 학사일정</button>
+                <button class="mytask-filter-btn" data-filter="consult" id="calFilterConsult" style="display:none;" onclick="toggleCalFilter('consult')">🟣 상담</button>
               </div>
               <div class="mytask-cal">
                 <div class="mytask-cal-head">
@@ -5317,6 +5326,7 @@
                 <button class="mytask-filter-btn f-todo" data-filter="todo" onclick="toggleListFilter('todo')">🔵 시작전</button>
                 <button class="mytask-filter-btn f-doing" data-filter="doing" onclick="toggleListFilter('doing')">🟡 진행중</button>
                 <button class="mytask-filter-btn f-done" data-filter="done" onclick="toggleListFilter('done')">🟢 완료</button>
+                <button class="mytask-filter-btn" data-filter="consult" id="listFilterConsult" style="display:none;" onclick="toggleListFilter('consult')">🟣 상담</button>
               </div>
               <div class="mytask-list" id="mytaskListMobile"></div>
             </div>
@@ -5331,6 +5341,24 @@
 </div><!-- .app-shell 끝 -->
 
 <!-- 날짜 클릭 팝업 -->
+<!-- 상담 예약 상세(읽기 전용). 상담 페이지의 openConsultModal 은 변경·취소가 붙어 있고
+     consultClassKey 등 그 화면 상태에 기대므로, 캘린더에서는 보기만 하는 것을 따로 띄운다. -->
+<div class="mytask-modal" id="consultPeekModal" onclick="if(event.target===this) closeConsultPeek()">
+  <div class="mytask-modal-box" style="max-width:380px;">
+    <div class="mytask-modal-head">
+      <div class="mytask-modal-title" id="cpkTitle">상담 예약</div>
+      <button class="mytask-modal-close" onclick="closeConsultPeek()">×</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:12px 16px;">
+      <div id="cpkBody"></div>
+      <button onclick="closeConsultPeek(); navigateTo('consult');"
+        style="width:100%;margin-top:14px;padding:10px;border-radius:8px;border:1.5px solid var(--mon);background:transparent;color:var(--mon);font-weight:700;cursor:pointer;">
+        상담 관리에서 열기
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="mytask-modal" id="mytaskDayModal" onclick="closeMytaskDayModalOverlay(event)">
   <div class="mytask-modal-box" style="max-width:420px;">
     <div class="mytask-modal-head">
@@ -5788,7 +5816,7 @@ const REMOTE_BASE = (window.NL_TOKEN || window.NL_PORT) ? 'https://kyunghwanp.gi
 try {
   const nlKeys = Object.keys(window).filter(k => k.startsWith('NL_'));
   document.querySelectorAll('.nav-version').forEach(el => {
-    el.textContent = 'ver6.88 · ' + (location.hostname || '?') + ' NL:' + nlKeys.length + (IS_NEUTRALINO ? ' 앱✓' : '');
+    el.textContent = 'ver6.92 · ' + (location.hostname || '?') + ' NL:' + nlKeys.length + (IS_NEUTRALINO ? ' 앱✓' : '');
   });
   console.log('[진단] host:', location.hostname, '| NL 전역:', nlKeys, '| Neutralino:', IS_NEUTRALINO, '| UA:', navigator.userAgent);
 } catch(e){}
@@ -5910,7 +5938,11 @@ function showAppNotify(title, body, opts){
 // ── 새 상담 예약 감시 (앱 켜져 있는 동안 상시) ──
 let consultNotifyUnsub = null;
 let consultNotifySeen = null;   // Map(slotId → {who,when}) — 취소 알림 문구용 (null=첫 로드 전)
-function startConsultNotifyWatch(user){
+// opts.notify=false 면 구독만 하고 알림은 띄우지 않는다.
+//   가장('실제 권한으로 보기') 모드에서 쓴다 — 업무 캘린더가 이 자료를 써야 하므로
+//   구독 자체는 붙여야 하지만, 관리자 브라우저에 남의 상담 알림이 뜨면 안 된다.
+function startConsultNotifyWatch(user, opts){
+  const notify = !(opts && opts.notify === false);
   // 담임 학급 결정 (관리자 테스트는 1-1)
   let classKey = getMyHomeroom ? getMyHomeroom() : null;
   if(!classKey && !isViewAs() && user.email === ADMIN_EMAIL) classKey = '1-1';
@@ -5922,6 +5954,20 @@ function startConsultNotifyWatch(user){
     const data  = snap.exists() ? (snap.data()||{}) : {};
     const slots = Array.isArray(data.slots) ? data.slots : [];
     const booked = slots.filter(s => s.status === 'booked');
+
+    // 업무 캘린더도 이 구독을 같이 쓴다 — 따로 읽지 않으므로 Firestore 조회가 안 는다.
+    // 첫 로드에서 아래 consultNotifySeen 분기가 먼저 return 하므로 그 앞에 둔다.
+    const _hadSlots = Array.isArray(window._consultSlots);
+    window._consultSlots = booked;
+    // 담임만 여기까지 온다(위에서 classKey 없으면 return) → 칩을 켠다
+    for (const id of ['calFilterConsult', 'listFilterConsult']) {
+      const b = document.getElementById(id);
+      if (b) b.style.display = '';
+    }
+    // PC 패널은 renderRows 가 그린다. 구독이 처음 붙는 순간 한 번만 다시 그려
+    // '상' 버튼이 생기게 한다(매 스냅샷마다 다시 그리면 패널 조작 중에 화면이 튄다).
+    try { if (!_hadSlots) renderRows(); } catch(e){}
+    try { if (calFilters.has('consult')) renderMytaskCalendar(); } catch(e){}
     // 알림 문구용 요약 — 예약이 사라진 뒤에도 "누구·언제"를 말해줄 수 있어야 해서 함께 보관한다
     const brief = s => ({
       who : s.studentName || s.bookedName || '학부모',
@@ -5938,7 +5984,7 @@ function startConsultNotifyWatch(user){
       if(!consultNotifySeen.has(s.id)){
         const b = brief(s);
         consultNotifySeen.set(s.id, b);
-        showAppNotify('새 상담 예약', `${b.who} · ${b.when}`, { type:'cal', id:'consult:'+s.id, goto:'consult' });
+        if(notify) showAppNotify('새 상담 예약', `${b.who} · ${b.when}`, { type:'cal', id:'consult:'+s.id, goto:'consult' });
       }
     });
     // 예약이 풀린 것 → 취소 알림.
@@ -5951,7 +5997,7 @@ function startConsultNotifyWatch(user){
       const b = consultNotifySeen.get(id);
       consultNotifySeen.delete(id);
       if(!slotIds.has(id)) return;
-      showAppNotify('상담 예약 취소', `${b.who} · ${b.when}`, { type:'deadline', id:'consultOff:'+id, goto:'consult' });
+      if(notify) showAppNotify('상담 예약 취소', `${b.who} · ${b.when}`, { type:'deadline', id:'consultOff:'+id, goto:'consult' });
     });
     // 홈 현황판 상담 섹션 실시간 갱신 (예약·삭제 즉시 반영)
     loadHomeConsult(slots);
@@ -8151,9 +8197,13 @@ onAuthStateChanged(fbAuth, async (user) => {
     loadGroups();
     loadClubMeta();   // 동아리 메타데이터 미리 로딩 (동아리별 그룹칩 표시용)
     // 알림 초기화 + 상담/업무 새 항목 감시 시작 (보기 모드에서는 알림 감시 안 함)
+    // 상담 구독은 가장 모드에서도 붙인다. 업무 캘린더의 🟣 상담 이 이 자료를 쓰는데,
+    // 예전엔 아래 알림 묶음에 얹혀 있어서 '실제 권한으로 보기' 에서 기능이 통째로
+    // 사라졌다 — 관리자가 확인할 수 없으면 미리보기의 의미가 없다.
+    // 알림만 끈다(남의 상담 알림이 관리자 브라우저에 뜨면 안 된다).
+    startConsultNotifyWatch(user, { notify: !isViewAs() });
     if(!isViewAs()){
       initNotify();
-      startConsultNotifyWatch(user);
       startTaskNotifyWatch(user);
       startNextClassNotifyWatch();
     }
@@ -14957,7 +15007,7 @@ function getDefaultRows() {
   return [{
     id: ++rowIdCounter,
     panels: [
-      { id:++panelIdCounter, type:'calendar', filters:{status:['todo','doing','done']}, showSchedule:false, period:'month', calYear:new Date().getFullYear(), calMonth:new Date().getMonth() },
+      { id:++panelIdCounter, type:'calendar', filters:{status:['todo','doing','done']}, showSchedule:false, showConsult:false, period:'month', calYear:new Date().getFullYear(), calMonth:new Date().getMonth() },
       { id:++panelIdCounter, type:'list',     filters:{status:['todo','doing','done']}, period:'all' }
     ]
   }];
@@ -15085,7 +15135,11 @@ function renderRows() {
                 const sch = panel.type==='calendar'
                   ? '<button onclick="event.stopPropagation();togglePanelSchedule('+row.id+','+panel.id+')" class="phd-dot sched'+(panel.showSchedule?'':' off')+'" title="학사일정">학</button>'
                   : '';
-                return dots+sch;
+                // 상담은 달력·목록 양쪽에서 켤 수 있다(학사일정은 달력에만 있다)
+                const con = consultAvailable()
+                  ? '<button onclick="event.stopPropagation();togglePanelConsult('+row.id+','+panel.id+')" class="phd-dot consult'+(panel.showConsult?'':' off')+'" title="상담 예약">상</button>'
+                  : '';
+                return dots+sch+con;
               })()}
               <button onclick="togglePanelChips(this)" class="phd-ghost" title="${panel.chipsHidden?'필터 펼치기':'필터 접기'}">${panel.chipsHidden?'▾':'▴'}</button>
               <button class="panel-delete-btn" onclick="removePanel(${row.id},${panel.id})" style="display:none;width:24px;height:24px;border-radius:50%;border:none;background:#FEE2E2;color:#EF4444;font-size:14px;font-weight:700;cursor:pointer;align-items:center;justify-content:center;line-height:1;" title="패널 삭제">×</button>
@@ -15097,6 +15151,7 @@ function renderRows() {
               <button class="mytask-filter-btn ${panel.filters.status.includes('doing')?'active f-doing':''}" onclick="togglePanelStatus(${row.id},${panel.id},'doing')">🟡 진행중</button>
               <button class="mytask-filter-btn ${panel.filters.status.includes('done')?'active f-done':''}" onclick="togglePanelStatus(${row.id},${panel.id},'done')">🟢 완료</button>
               ${panel.type==='calendar' ? '<button class="mytask-filter-btn '+(panel.showSchedule?'active':'')+'" onclick="togglePanelSchedule('+row.id+','+panel.id+')">📆 학사일정</button>' : ''}
+              ${consultAvailable() ? '<button class="mytask-filter-btn '+(panel.showConsult?'active':'')+'" onclick="togglePanelConsult('+row.id+','+panel.id+')">🟣 상담</button>' : ''}
             </div>
             ${panel.type==='list' ? '<div class="mytask-filters nowrap">'+periodOpts.map(o=>'<button class="mytask-filter-btn '+(panel.period===o.v?'active':'')+'" onclick="setPanelPeriod('+row.id+','+panel.id+',\''+o.v+'\')">'+o.l+'</button>').join('')+'</div>' : ''}
           </div>
@@ -15281,6 +15336,10 @@ function togglePanelSchedule(rowId, panelId) {
   const r=rows.find(r=>r.id===rowId); const p=r?.panels.find(p=>p.id===panelId);
   if(p){p.showSchedule=!p.showSchedule;renderRows();saveRows();}
 }
+function togglePanelConsult(rowId, panelId) {
+  const r=rows.find(r=>r.id===rowId); const p=r?.panels.find(p=>p.id===panelId);
+  if(p){p.showConsult=!p.showConsult;renderRows();saveRows();}
+}
 
 // 모바일 전환
 window.addEventListener('resize', () => {
@@ -15300,6 +15359,41 @@ document.addEventListener('click', e => {
   }
 });
 
+// 패널의 기간 선택(최근·이번주·이번달·다음달·직접지정)으로 거른다.
+//   startDate·endDate 를 가진 것이면 무엇이든 받는다 — 업무도, 상담 줄도.
+//   상담은 하루짜리라 startDate = endDate = 그 날짜다.
+function filterByPanelPeriod(items, panel) {
+  const now = new Date();
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const period = panel.period || 'all';
+
+  if (period === 'recent') {
+    const from = new Date(now); from.setDate(from.getDate()-3);
+    const to   = new Date(now); to.setDate(to.getDate()+4);
+    return items.filter(t => t.startDate <= fmt(to) && t.endDate >= fmt(from));
+  }
+  if (period === 'week') {
+    const day = now.getDay();
+    const mon = new Date(now); mon.setDate(now.getDate()-day);
+    const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+    return items.filter(t => t.startDate <= fmt(sun) && t.endDate >= fmt(mon));
+  }
+  if (period === 'month') {
+    const thisYm = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    return items.filter(t => t.startDate?.slice(0,7)===thisYm || t.endDate?.slice(0,7)===thisYm ||
+      (t.startDate <= thisYm+'-31' && t.endDate >= thisYm+'-01'));
+  }
+  if (period === 'next') {
+    const nm = new Date(now.getFullYear(), now.getMonth()+1, 1);
+    const nmYm = `${nm.getFullYear()}-${String(nm.getMonth()+1).padStart(2,'0')}`;
+    return items.filter(t => t.startDate?.slice(0,7)===nmYm || t.endDate?.slice(0,7)===nmYm);
+  }
+  if (period === 'range' && panel.startDate && panel.endDate) {
+    return items.filter(t => t.startDate <= panel.endDate && t.endDate >= panel.startDate);
+  }
+  return items;   // 'all' → 전체
+}
+
 // ── 패널 내용 렌더링 (모바일 디자인과 동일) ──
 function renderPanelContent(panel) {
   const el = document.getElementById(`pc_${panel.id}`);
@@ -15312,32 +15406,8 @@ function renderPanelContent(panel) {
   // 상태 필터
   let tasks = mytaskTasks.map(mytaskEffTask).filter(t => panel.filters.status.includes(t.status));
 
-  // 기간 필터
-  const now = new Date();
-  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const period = panel.period || 'all';
-
-  if (period === 'recent') {
-    const from = new Date(now); from.setDate(from.getDate()-3);
-    const to   = new Date(now); to.setDate(to.getDate()+4);
-    tasks = tasks.filter(t => t.startDate <= fmt(to) && t.endDate >= fmt(from));
-  } else if (period === 'week') {
-    const day = now.getDay();
-    const mon = new Date(now); mon.setDate(now.getDate()-day);
-    const sun = new Date(mon); sun.setDate(mon.getDate()+6);
-    tasks = tasks.filter(t => t.startDate <= fmt(sun) && t.endDate >= fmt(mon));
-  } else if (period === 'month') {
-    const thisYm = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-    tasks = tasks.filter(t => t.startDate?.slice(0,7)===thisYm || t.endDate?.slice(0,7)===thisYm ||
-      (t.startDate <= thisYm+'-31' && t.endDate >= thisYm+'-01'));
-  } else if (period === 'next') {
-    const nm = new Date(now.getFullYear(), now.getMonth()+1, 1);
-    const nmYm = `${nm.getFullYear()}-${String(nm.getMonth()+1).padStart(2,'0')}`;
-    tasks = tasks.filter(t => t.startDate?.slice(0,7)===nmYm || t.endDate?.slice(0,7)===nmYm);
-  } else if (period === 'range' && panel.startDate && panel.endDate) {
-    tasks = tasks.filter(t => t.startDate <= panel.endDate && t.endDate >= panel.startDate);
-  }
-  // 'all' → 전체
+  // 기간 필터 — 상담 줄도 같은 창을 써야 해서 함수로 뺐다(filterByPanelPeriod).
+  tasks = filterByPanelPeriod(tasks, panel);
 
   if (panel.type === 'calendar') {
     el.innerHTML = '';
@@ -15353,7 +15423,8 @@ function renderPanelContent(panel) {
     });
   } else {
     el.style.padding = '8px';
-    el.innerHTML = buildPanelList(tasks);
+    el.innerHTML = buildPanelList(tasks,
+      panel.showConsult ? filterByPanelPeriod(consultCalItems(window._consultSlots), panel) : []);
   }
 }
 
@@ -15568,6 +15639,7 @@ function buildPanelCalendar(tasks, cy, cm, panel) {
   const today    = new Date();
   const ym       = `${cy}-${String(cm+1).padStart(2,'0')}`;
   const totalRows = Math.ceil((firstDay + lastDate) / 7);
+  const consultItems = panel.showConsult ? consultCalItems(window._consultSlots, ym) : [];
   let scheduleItems = [];
   if (panel.showSchedule) {
     const monthEvents = (window._scheduleData || {})[ym] || [];
@@ -15590,7 +15662,8 @@ function buildPanelCalendar(tasks, cy, cm, panel) {
     const dateStr = date ? `${ym}-${String(date).padStart(2,'0')}` : '';
     const dayTasks    = tasks.filter(t => t.startDate<=dateStr && t.endDate>=dateStr);
     const daySchedule = scheduleItems.filter(s => s.date===dateStr);
-    const allItems    = [...daySchedule.map(s=>({...s,_type:'schedule'})), ...dayTasks];
+    const dayConsult  = consultItems.filter(c => c.date===dateStr);
+    const allItems    = [...daySchedule.map(s=>({...s,_type:'schedule'})), ...dayConsult, ...dayTasks];
     html += `<div class="panel-cal-cell${isOther?' other':''}${isToday?' today':''}" data-datestr="${dateStr}"
       ${date?`ondragover="calDragOver(event)" ondrop="calDrop(event,'${dateStr}')" ondragleave="calDragLeave(event)" onclick="mytaskDayClick('${dateStr}',event)"`:''}>
       <div class="pc-date-row">
@@ -15600,6 +15673,8 @@ function buildPanelCalendar(tasks, cy, cm, panel) {
       <div class="panel-cal-items">
       ${allItems.map(t => t._type==='schedule'
         ? `<div class="pc-chip schedule" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>`
+        : t._type==='consult'
+        ? `<div class="pc-chip consult" title="상담 ${escapeHtml(t.title)}" style="cursor:pointer;" onclick="event.stopPropagation();openConsultPeek('${t.id}')">${escapeHtml(t.title)}</div>`
         : `<div class="pc-chip ${t.status}" draggable="true" title="${escapeHtml(t.title)}" ondragstart="calDragStart(event,'${t.id}','${t.ownerUid||''}')" ondragend="calDragEnd(event)"
             onclick="event.stopPropagation();openMytaskModal('${t.id}','${t.ownerUid||''}')">${escapeHtml(mytaskChipLabel(t,dateStr))}</div>`
       ).join('')}
@@ -15632,8 +15707,14 @@ function bindDayPreview(calEl, tasks, panel) {
       const monthEvs = (window._scheduleData || {})[ym2] || [];
       schedItems = monthEvs.filter(e => String(e.date).padStart(2,'0') === dateStr.slice(8));
     }
+    const consultRows = (panel && panel.showConsult)
+      ? consultCalItems(window._consultSlots, dateStr.slice(0,7))
+          .filter(c => c.date === dateStr)
+          .map(c => ({ text: '상담 ' + c.title, style: 'background:#EDE9FE;color:#5B21B6;' }))
+      : [];
     const items = [
       ...schedItems.map(e => ({ text: e.content||e.title||'', style: 'background:#FEE2E2;color:#991B1B;' })),
+      ...consultRows,
       ...dayTasks.map(t => ({
         text: mytaskChipLabel(t, dateStr),
         style: t.status==='todo' ? 'background:#EEF2FF;color:#4F46E5;'
@@ -15681,8 +15762,8 @@ function adjustCalChips(contentEl) {
 }
 window.adjustCalChips = adjustCalChips;
 
-function buildPanelList(tasks) {
-  const sorted = [...tasks].sort((a,b) => a.startDate?.localeCompare(b.startDate));
+function buildPanelList(tasks, consults) {
+  const sorted = mergeListItems(tasks, consults || []);
   if (sorted.length === 0) return '<div style="padding:24px;text-align:center;color:var(--ink-soft);font-size:14px;">일정이 없습니다.</div>';
   const statusLabel = { todo:'시작전', doing:'진행중', done:'완료' };
   let html = '', lastYm = '';
@@ -15693,6 +15774,7 @@ function buildPanelList(tasks) {
       html += `<div class="mytask-month-divider">${y}년 ${parseInt(m)}월</div>`;
       lastYm = ym;
     }
+    if (t._type === 'consult') { html += consultListRow(t); return; }
     html += `<div class="mytask-item ${t.status}" onclick="openMytaskModal('${t.id}','${t.ownerUid||''}')">
       <div class="mytask-item-status ${t.status}"></div>
       <div class="mytask-item-info">
@@ -15959,6 +16041,7 @@ window.togglePanelStatus   = togglePanelStatus;
 window.setPanelPeriod      = setPanelPeriod;
 window.setPanelDateRange   = setPanelDateRange;
 window.togglePanelSchedule = togglePanelSchedule;
+window.togglePanelConsult  = togglePanelConsult;
 
 
 let mytaskYear      = new Date().getFullYear();
@@ -17049,13 +17132,21 @@ function toggleCalFilter(filter) {
 
 // ── 목록 필터 (전체 누르면 단독, 나머지 누르면 전체 해제 후 다중) ──
 function toggleListFilter(filter) {
-  if (filter === 'all') {
+  // 상담은 업무 '상태'가 아니라 별개의 겹쳐보기다. 전체/시작전/… 과 섞으면
+  // '전체' 를 누를 때 같이 꺼지거나, 상담만 켰을 때 업무가 통째로 사라진다.
+  if (filter === 'consult') {
+    if (listFilters.has('consult')) listFilters.delete('consult');
+    else listFilters.add('consult');
+  } else if (filter === 'all') {
+    const keepConsult = listFilters.has('consult');
     listFilters = new Set(['all']);
+    if (keepConsult) listFilters.add('consult');
   } else {
     listFilters.delete('all');
     if (listFilters.has(filter)) listFilters.delete(filter);
     else listFilters.add(filter);
-    if (listFilters.size === 0) listFilters = new Set(['all']);
+    // 상태를 하나도 안 고르면 '전체' 로 되돌린다(상담 켠 것은 그대로 둔다)
+    if ([...listFilters].every(f => f === 'consult')) listFilters.add('all');
   }
   document.querySelectorAll('#mytaskListFiltersMobile .mytask-filter-btn').forEach(b => {
     b.classList.toggle('active', listFilters.has(b.dataset.filter));
@@ -17105,6 +17196,82 @@ function getListTasks() {
   return expandRepeatTasks(base, '2000-01-01', '2099-12-31').filter(t => listFilters.has(t.status));
 }
 
+// 상담 예약을 볼 수 있는 사람인가 = startConsultNotifyWatch 가 구독을 붙였는가.
+//   담임(과 관리자)만 여기까지 온다. 규칙도 같은 조건이라 화면과 권한이 어긋나지 않는다.
+function consultAvailable() { return Array.isArray(window._consultSlots); }
+
+// 업무 페이지는 레이아웃이 둘이다 — 모바일(#mytaskMobileBody, calFilters)과
+// PC(#mytaskPanelContainer, panel.showConsult). 날짜 상세는 둘이 함께 쓰므로
+// 어느 쪽이든 켜져 있으면 보여준다.
+function consultOn() {
+  if (calFilters.has('consult')) return true;
+  try { return (rows || []).some(r => (r.panels || []).some(pn => pn.showConsult)); }
+  catch (e) { return false; }
+}
+
+// 그 달(ym='2026-08')의 예약된 상담을 캘린더용으로 추린다.
+//   예약 안 된 빈 슬롯은 뺀다 — 캘린더에 띄울 '일정'이 아니다.
+//   이름은 앱의 다른 화면과 같은 순서로 고른다(studentName → bookedName).
+function consultCalItems(slots, ym) {
+  return (Array.isArray(slots) ? slots : [])
+    .filter(s => s && s.status === 'booked' && String(s.date || '').trim())
+    // ym 을 주면 그 달만, 안 주면 전체(목록 보기가 그렇게 쓴다)
+    .filter(s => !ym || String(s.date).slice(0, 7) === ym)
+    .map(s => ({
+      _type: 'consult',
+      id   : s.id,
+      date : s.date,
+      time : s.time || '',
+      who  : s.studentName || s.bookedName || '학부모',
+      title: `${s.time || ''} ${s.studentName || s.bookedName || '학부모'}`.trim(),
+      // 기간 필터(filterByPanelPeriod)와 월 구분선이 업무와 같은 필드를 본다.
+      // 상담은 하루짜리라 시작=끝이다.
+      startDate: s.date,
+      endDate  : s.date
+    }))
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+}
+
+// 목록 보기에 끼울 상담 줄. 업무 줄과 같은 마크업을 쓰되 상태 선택은 없다 — 바꿀 게 없다.
+function consultListRow(c) {
+  return `<div class="mytask-item consult" style="cursor:pointer;" onclick="openConsultPeek('${c.id}')">
+      <div class="mytask-item-status consult"></div>
+      <div class="mytask-item-info">
+        <div class="mytask-item-title">상담 · ${escapeHtml(c.who)}</div>
+        <div class="mytask-item-date">${escapeHtml(c.date)}${c.time ? ' ' + escapeHtml(c.time) : ''}</div>
+      </div>
+    </div>`;
+}
+
+// 업무와 상담을 날짜순으로 한 줄에 섞는다. 월 구분선을 두 목록이 같은 방식으로
+// 그려야 해서, 정렬 키(startDate)와 그리는 순서를 여기 한 곳에서 정한다.
+//   Array#sort 는 안정 정렬이라 같은 날 안에서는 consultCalItems 가 매긴
+//   시각 순서가 그대로 남는다.
+function mergeListItems(tasks, consults) {
+  return [...tasks, ...consults].sort((a, b) =>
+    String(a.startDate || '').localeCompare(String(b.startDate || '')));
+}
+
+// 캘린더에서 상담 칩을 눌렀을 때 — 보기만 한다(변경은 상담 관리에서).
+function openConsultPeek(id) {
+  const s = (window._consultSlots || []).find(x => x && x.id === id);
+  if (!s) return;
+  const method = s.bookedType || s.type || 'face';
+  const row = (k, v) => v ? `<div class="cpk-row"><span class="cpk-k">${k}</span><span class="cpk-v">${escapeHtml(v)}</span></div>` : '';
+  document.getElementById('cpkTitle').textContent = `${s.date || ''} ${s.time || ''}`.trim() || '상담 예약';
+  document.getElementById('cpkBody').innerHTML =
+      row('학생',   (s.studentName || '') + (s.studentNum ? ` (${s.studentNum}번)` : ''))
+    + row('예약자', s.bookedName)
+    + row('연락처', s.bookedPhone)
+    + row('방식',   method === 'phone' ? '전화' : '대면')
+    + row('남긴 말', s.bookedMemo)
+    || '<div class="cpk-row"><span class="cpk-v">표시할 내용이 없습니다.</span></div>';
+  document.getElementById('consultPeekModal').classList.add('show');
+}
+function closeConsultPeek() {
+  document.getElementById('consultPeekModal').classList.remove('show');
+}
+
 // ── 캘린더 렌더링 ──
 function renderMytaskCalendar() {
   const title = document.getElementById('mytaskMonthTitleM');
@@ -17118,6 +17285,11 @@ function renderMytaskCalendar() {
   const calTasks  = getCalTasks();
 
   // 학사일정 데이터
+  // 상담 예약 — startConsultNotifyWatch 가 담아 둔 것을 그대로 쓴다(추가 조회 없음)
+  const consultItems = calFilters.has('consult')
+    ? consultCalItems(window._consultSlots, `${mytaskYear}-${String(mytaskMonth+1).padStart(2,'0')}`)
+    : [];
+
   let scheduleItems = [];
   if (calFilters.has('schedule')) {
     const ym = `${mytaskYear}-${String(mytaskMonth+1).padStart(2,'0')}`;
@@ -17142,7 +17314,8 @@ function renderMytaskCalendar() {
     const dateStr = date ? `${mytaskYear}-${String(mytaskMonth+1).padStart(2,'0')}-${String(date).padStart(2,'0')}` : '';
     const dayTasks = calTasks.filter(t => t.startDate <= dateStr && t.endDate >= dateStr);
     const daySchedule = scheduleItems.filter(s => s.date === dateStr);
-    const allItems = [...daySchedule.map(s=>({...s, _type:'schedule'})), ...dayTasks];
+      const dayConsult  = consultItems.filter(c => c.date === dateStr);
+      const allItems = [...daySchedule.map(s=>({...s, _type:'schedule'})), ...dayConsult, ...dayTasks];
 
     html += `<div class="mytask-cal-cell ${isOther?'other-month':''} ${isToday?'today':''}"
       ${date ? `ondragover="calDragOver(event)" ondrop="calDrop(event,'${dateStr}')" ondragleave="calDragLeave(event)"` : ''}
@@ -17153,6 +17326,8 @@ function renderMytaskCalendar() {
       </div>
       ${allItems.slice(0,2).map(t => t._type==='schedule'
         ? `<div class="mytask-cal-chip schedule" onclick="event.stopPropagation()">${escapeHtml(t.title||t.name||'')}</div>`
+        : t._type==='consult'
+        ? `<div class="mytask-cal-chip consult" onclick="event.stopPropagation();openConsultPeek('${t.id}')" style="cursor:pointer;">${escapeHtml(t.title)}</div>`
         : `<div class="mytask-cal-chip ${t.status}"
             draggable="true"
             ondragstart="calDragStart(event,'${t.id}','${t.ownerUid||''}')"
@@ -17183,8 +17358,14 @@ function renderMytaskCalendar() {
             .filter(e => String(e.date).padStart(2,'0') === dateStr.slice(8))
             .map(e => ({ text: e.content||e.title||'', style: 'background:#FEE2E2;color:#991B1B;' }))
         : [];
+      const consultRows = calFilters.has('consult')
+        ? consultCalItems(window._consultSlots, dateStr.slice(0,7))
+            .filter(c => c.date === dateStr)
+            .map(c => ({ text: '상담 ' + c.title, style: 'background:#EDE9FE;color:#5B21B6;' }))
+        : [];
       const items = [
         ...schedItems,
+        ...consultRows,
         ...dayTasks.map(t => ({
           text: t.title,
           style: t.status==='todo' ? 'background:#EEF2FF;color:#4F46E5;'
@@ -17295,6 +17476,19 @@ function mytaskDayClick(dateStr, e) {
     }
   }
 
+  // 상담 예약 — 누르면 읽기 전용 상세로
+  let consultHtml = '';
+  if (consultOn()) {
+    consultHtml = consultCalItems(window._consultSlots, dateStr.slice(0, 7))
+      .filter(c => c.date === dateStr)
+      .map(c =>
+        `<div onclick="closeMytaskDayModal();openConsultPeek('${c.id}')"
+          style="padding:10px 12px;border-radius:8px;background:#EDE9FE;color:#5B21B6;font-size:14px;font-weight:700;margin-bottom:6px;cursor:pointer;">
+          🟣 상담 ${escapeHtml(c.title)}
+        </div>`
+      ).join('');
+  }
+
   document.getElementById('mytaskDayTitle').textContent = dateStr;
   const list = document.getElementById('mytaskDayList');
   const statusLabel = { todo:'시작전', doing:'진행중', done:'완료' };
@@ -17308,10 +17502,10 @@ function mytaskDayClick(dateStr, e) {
     </div>
   `).join('');
 
-  if (!scheduleHtml && !taskHtml) {
+  if (!scheduleHtml && !consultHtml && !taskHtml) {
     list.innerHTML = '<div style="color:var(--ink-soft);font-size:14px;padding:8px 0;">일정이 없습니다.</div>';
   } else {
-    list.innerHTML = scheduleHtml + taskHtml;
+    list.innerHTML = scheduleHtml + consultHtml + taskHtml;
   }
   document.getElementById('mytaskDayModal').classList.add('show');
 }
@@ -17331,7 +17525,10 @@ function closeMytaskDayModalOverlay(e) {
 function renderMytaskList() {
   const list = document.getElementById('mytaskListMobile');
   if (!list) return;
-  const filtered = getListTasks().sort((a,b) => a.startDate?.localeCompare(b.startDate));
+  const filtered = mergeListItems(
+    getListTasks(),
+    listFilters.has('consult') ? consultCalItems(window._consultSlots) : []
+  );
   if (filtered.length === 0) {
     list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink-soft);font-size:15px;">일정이 없습니다.</div>';
     return;
@@ -17345,6 +17542,7 @@ function renderMytaskList() {
       html += `<div class="mytask-month-divider">${y}년 ${parseInt(m)}월</div>`;
       lastYm = ym;
     }
+    if (t._type === 'consult') { html += consultListRow(t); return; }
     html += `
       <div class="mytask-item ${t.status}" onclick="openMytaskModal('${t.id}','${t.ownerUid||''}')">
         <div class="mytask-item-status ${t.status}"></div>
@@ -18163,6 +18361,8 @@ async function deleteMytask() {
 
 window.mytaskChangeMonth       = mytaskChangeMonth;
 window.toggleCalFilter         = toggleCalFilter;
+window.openConsultPeek         = openConsultPeek;
+window.closeConsultPeek        = closeConsultPeek;
 window.toggleListFilter        = toggleListFilter;
 window.openMytaskModal         = openMytaskModal;
 window.closeMytaskModal        = closeMytaskModal;
