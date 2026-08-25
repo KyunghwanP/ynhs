@@ -38,6 +38,7 @@ FAB(모바일 발급 버튼)은 `#passPage` 바깥의 `position:fixed` 라 하�
 node tests/pass-fab.test.mjs                       # FAB 이 외출증 화면에서만 뜨는지
 node tests/cal-consult.test.mjs                    # 업무 캘린더의 상담 예약 표시·상세
 node tests/consult-weekend.test.mjs                # 상담 주말 슬롯 + 7칸 폭 측정
+node tests/task-share.test.mjs                     # 공유받은 업무에 작성자·함께 받은 사람
 ```
 
 가짜 Firestore를 물려 목록 렌더·사진 표시·발급 폼·저장 payload를 실제 DOM에서 본다.
