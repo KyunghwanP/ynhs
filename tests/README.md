@@ -39,6 +39,18 @@ node tests/pass-fab.test.mjs                       # FAB 이 외출증 화면에
 node tests/cal-consult.test.mjs                    # 업무 캘린더의 상담 예약 표시·상세
 node tests/consult-weekend.test.mjs                # 상담 주말 슬롯 + 7칸 폭 측정
 node tests/task-share.test.mjs                     # 공유받은 업무에 작성자·함께 받은 사람
+node tests/seat-inpage.test.mjs                    # 자리 배치 '크게 보기' → 앱 안 화면 + 돌아가기
+```
+
+### 교실 자리 배치 (seating.html)
+
+자리 배치는 눈으로 보면 그럴듯한데 제약 하나가 조용히 깨져 있어도 모른다.
+그래서 배정 결과를 값으로 확인한다.
+
+```bash
+node tests/seating.test.mjs        # 배정이 제약(고정·앞자리·분리)을 실제로 지키는지
+node tests/seating-page.test.mjs   # 실제 브라우저 — 표에서 켜고 끄기, 끌어놓기, 화면 폭
+node tests/seating-print.test.mjs  # 9가지 분단·줄 조합이 모두 A4 한 장인지
 ```
 
 가짜 Firestore를 물려 목록 렌더·사진 표시·발급 폼·저장 payload를 실제 DOM에서 본다.
