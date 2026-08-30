@@ -1500,7 +1500,14 @@
   .s360-cl-item.active{background:var(--mon);color:#fff;}
   .s360-cl-cnt{font-size:12px;font-weight:700;color:var(--ink-soft);}
   .s360-cl-item.active .s360-cl-cnt{color:#fff;opacity:.85;}
-  .s360-roster-head{position:sticky;top:0;background:var(--paper);z-index:1;padding:12px 14px;font-size:13px;font-weight:900;color:var(--ink);border-bottom:1px solid var(--rule);}
+  .s360-seat-btn{
+    margin-left:auto;flex-shrink:0;
+    border:1px solid var(--mon);background:var(--paper);color:var(--mon);
+    font-family:inherit;font-size:12px;font-weight:800;
+    padding:4px 10px;border-radius:8px;cursor:pointer;
+  }
+  .s360-seat-btn:hover{background:var(--mon);color:#fff;}
+  .s360-roster-head{display:flex;align-items:center;gap:8px;position:sticky;top:0;background:var(--paper);z-index:1;padding:12px 14px;font-size:13px;font-weight:900;color:var(--ink);border-bottom:1px solid var(--rule);}
   .s360-rs-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:none;border-bottom:1px solid var(--rule);background:transparent;color:var(--ink);font-family:inherit;cursor:pointer;text-align:left;}
   .s360-rs-item:hover{background:var(--paper-soft);}
   .s360-rs-item.active{background:#eef2ff;box-shadow:inset 3px 0 0 var(--mon);}
@@ -5346,6 +5353,16 @@
         <iframe id="gradesFrame" data-src="career.html" title="진로진학 상담" style="flex:1;width:100%;border:0;background:#f1f5f9;"></iframe>
       </div>
 
+      <!-- 교실 자리 배치 — 모달에서 「페이지로」 를 누르면 여기로 온다.
+           새 브라우저 탭이 아니라 이 앱 화면 안에서 크게 본다. -->
+      <div class="page-view" id="seatPage">
+        <div id="seatPageHead" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--rule);flex-shrink:0;">
+          <button class="sg-back-btn" id="seatBackBtn">← 돌아가기</button>
+          <span id="seatPageTitle" style="font-size:13px;font-weight:800;color:var(--ink-soft);"></span>
+        </div>
+        <iframe id="seatPageFrame" title="교실 자리 배치" style="flex:1;width:100%;border:0;background:#eef1f5;"></iframe>
+      </div>
+
       <!-- 학생 종합검색 페이지 (테스터 전용) -->
       <div class="page-view" id="searchPage">
         <div class="s360-top">
@@ -5720,6 +5737,16 @@
     <button class="jd-close" id="jindanModalClose" title="닫기">✕</button>
     <button class="jd-open" id="jindanOpenBtn" title="새 페이지로 크게 보기">⛶ 페이지로</button>
     <iframe id="jindanFrame" title="적정 대학 진단"></iframe>
+  </div>
+</div>
+
+<!-- 교실 자리 배치(seating.html) — 진단 모달과 같은 껍데기를 쓴다. 본체는 별도 페이지라
+     index.html 에는 여는 버튼과 이 iframe 만 있다. -->
+<div class="jd-overlay" id="seatModal">
+  <div class="jd-box">
+    <button class="jd-close" id="seatModalClose" title="닫기">✕</button>
+    <button class="jd-open" id="seatOpenBtn" title="이 화면 안에서 크게 봅니다. 「돌아가기」로 되돌아옵니다.">⛶ 크게 보기</button>
+    <iframe id="seatFrame" title="교실 자리 배치"></iframe>
   </div>
 </div>
 
@@ -7602,6 +7629,35 @@ function closeJindanModal(){
   document.getElementById('jindanFrame').src = 'about:blank'; // iframe 메모리 해제
 }
 
+// ── 교실 자리 배치 (seating.html) ──
+// 본체는 별도 페이지다. 여기 있는 건 '누가 열 수 있나'와 iframe 을 띄우는 것뿐.
+// 담임 판정은 화면 편의일 뿐이고, 저장은 firestore.rules 의 isHomeroomOf 가 다시 막는다.
+function canSeatClass(classKey){
+  if (isViewAs()) return false;                       // 가장 모드에서는 남의 반을 저장하면 안 된다
+  if (fbAuth.currentUser?.email === ADMIN_EMAIL) return true;
+  const hr = getMyHomeroom();
+  return !!hr && sameClassKey(hr, classKey);
+}
+// '2-03' 과 '2-3' 을 같게 본다 — 시간표 표기와 명렬 표기가 다르다
+function sameClassKey(a, b){
+  const n = v => String(v || '').split('-').map(x => parseInt(x, 10)).join('-');
+  return !!a && !!b && n(a) === n(b);
+}
+function openSeatModal(classKey){
+  clearTimeout(exitArmTimer);
+  const hr = fbAuth.currentUser?.email === ADMIN_EMAIL ? classKey : (getMyHomeroom() || '');
+  document.getElementById('seatFrame').src =
+    `${REMOTE_BASE}seating.html?class=${encodeURIComponent(classKey)}&hr=${encodeURIComponent(hr)}&embed=1`;
+  document.getElementById('seatModal').classList.add('open');
+}
+function closeSeatModal(){
+  document.getElementById('seatModal').classList.remove('open');
+  document.getElementById('seatFrame').src = 'about:blank';
+}
+window.canSeatClass = canSeatClass;
+window.openSeatModal = openSeatModal;
+window.closeSeatModal = closeSeatModal;
+
 function openSwapModal(teacherObj, day, period, entry){
   clearTimeout(exitArmTimer); // 팝업을 여는 동안에는 무장 타이머가 끼어들지 않도록
   popupTab = 'swap';
@@ -7628,6 +7684,7 @@ window.addEventListener('popstate', (e)=>{
   if (document.getElementById('ptsDetailModal')?.classList.contains('show')) { closePtsDetailBtn(); armExitGuard(); return; }
   if (document.querySelector('.cd-overlay.open')) { document.querySelector('.cd-overlay.open').classList.remove('open'); armExitGuard(); return; }
   if (document.getElementById('jindanModal')?.classList.contains('open')) { closeJindanModal(); armExitGuard(); return; }
+  if (document.getElementById('seatModal')?.classList.contains('open')) { closeSeatModal(); armExitGuard(); return; }
   if (document.getElementById('classOrgModal')?.classList.contains('open')) { closeClassOrgModal(); armExitGuard(); return; }
   if (document.getElementById('s360PhotoZoom')?.classList.contains('open')) { s360ClosePhotoZoom(); armExitGuard(); return; }
   // 외출증 — 상세를 먼저 본다(상세 위에 발급이 겹칠 일은 없지만, 수정 중이면 상세가 위다)
@@ -7705,6 +7762,42 @@ document.getElementById('jindanOpenBtn').addEventListener('click', () => {
 });
 document.getElementById('jindanModal').addEventListener('click', e=>{ if(e.target.id==='jindanModal') closeJindanModal(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeJindanModal(); });
+
+// 자리 배치 모달 — 진단 모달과 같은 배선
+let _seatQuery = '';
+document.getElementById('seatModalClose').addEventListener('click', closeSeatModal);
+// 「페이지로」 — 새 브라우저 탭이 아니라 이 앱 화면 안에서 크게 본다.
+// 새 탭으로 띄우면 로그인 상태만 같을 뿐 앱을 벗어나서, 돌아올 길이 브라우저
+// 뒤로가기밖에 없었다. 여기서는 「돌아가기」로 보던 탭으로 되돌아온다.
+let _seatBackTo = 'search';
+function openSeatPage(){
+  const src = document.getElementById('seatFrame').src;
+  if (!src || src === 'about:blank') return;
+  _seatBackTo = document.querySelector('.page-view.active')?.id?.replace('Page','') || 'search';
+  // new URL() 은 주소 모양이 조금만 달라도 던진다 — 클릭 핸들러 안에서 던지면
+  // 아무 일도 안 일어난 것처럼 보인다. 반 이름만 뽑는 데 그럴 이유가 없다.
+  const cls = decodeURIComponent((/[?&]class=([^&]*)/.exec(src) || [])[1] || '');
+  document.getElementById('seatPageTitle').textContent = cls ? `${cls} 자리 배치` : '자리 배치';
+  closeSeatModal();
+  document.getElementById('seatPageFrame').src = src;
+  navigateTo('seat');
+}
+function closeSeatPage(){
+  // 프레임을 비워야 다음에 다른 반을 열 때 이전 반이 잠깐 스쳐 보이지 않는다
+  document.getElementById('seatPageFrame').src = 'about:blank';
+  navigateTo(_seatBackTo === 'seat' ? 'search' : _seatBackTo);
+}
+window.openSeatPage = openSeatPage;
+window.closeSeatPage = closeSeatPage;
+
+document.getElementById('seatOpenBtn').addEventListener('click', openSeatPage);
+document.getElementById('seatBackBtn').addEventListener('click', closeSeatPage);
+document.getElementById('seatModal').addEventListener('click', e=>{ if(e.target.id==='seatModal') closeSeatModal(); });
+document.addEventListener('keydown', e=>{
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('seatPage')?.classList.contains('active')) { closeSeatPage(); return; }
+  closeSeatModal();
+});
 
 card.addEventListener('click', e=>{
   const cell = e.target.closest('.gt-cell.swappable');
@@ -10912,12 +11005,19 @@ function s360FillRosterPane(){
       <span class="spot-cell spot-cell-pts">${ptsBadge}</span>
     </div>`;
   }).join('');
+  // 자리 배치는 그 반 담임(과 관리자)만 연다 — 남의 반 자리를 건드릴 일이 없다.
+  const seatBtn = canSeatClass(s360Group.key)
+    ? `<button type="button" class="s360-seat-btn" data-seat="${s360Group.key}">🪑 자리 배치</button>` : '';
   if (compact) {
-    el.innerHTML = `<div class="s360-roster-head">${s360Group.label} · ${students.length}명</div>${rows}`;
+    el.innerHTML = `<div class="s360-roster-head">${s360Group.label} · ${students.length}명${seatBtn}</div>${rows}`;
   } else {
     // 기존 목록 그대로: max-width 가운데 정렬(좌우 여백) + 카드 박스
-    el.innerHTML = `<div class="s360-list-head" style="padding:2px 4px 10px;font-size:14px;font-weight:900;color:var(--ink);">${s360Group.label} · ${students.length}명</div><div class="s360-list-box">${rows}</div>`;
+    el.innerHTML = `<div class="s360-list-head" style="padding:2px 4px 10px;font-size:14px;font-weight:900;color:var(--ink);display:flex;align-items:center;">${s360Group.label} · ${students.length}명${seatBtn}</div><div class="s360-list-box">${rows}</div>`;
   }
+  el.querySelectorAll('[data-seat]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    openSeatModal(b.dataset.seat);
+  }));
   el.querySelectorAll('.spot-row, .s360-rs-item').forEach(b=>b.addEventListener('click',()=>{
     const first = !s360PaneStudent;   // 처음 학생 선택이면 상세 패널을 새로 생성(2열→3열)
     s360PaneStudent = students[parseInt(b.dataset.i)];
@@ -13951,10 +14051,17 @@ function navigateTo(page) {
   // 탭 전환
   document.querySelectorAll('.main-nav-item').forEach(i => i.classList.toggle('active', i.dataset.page === page));
   document.querySelectorAll('.mobile-tab-bar .tab-item').forEach(t => t.classList.toggle('active', t.dataset.page === page));
-  ['home','timetable','weekly','meal','contacts','students','schedule','points','mytask','consult','docs','grades','search','room','pass'].forEach(p => {
+  // 'seat' 은 탭 버튼이 없는 화면이다 — 자리 배치 모달의 「페이지로」로만 들어온다.
+  // 여기 목록에 없으면 다른 탭으로 옮겨도 안 닫힌다.
+  ['home','timetable','weekly','meal','contacts','students','schedule','points','mytask','consult','docs','grades','search','room','pass','seat'].forEach(p => {
     const el = document.getElementById(p + 'Page');
     if(el) el.classList.toggle('active', p === page);
   });
+  // 다른 탭으로 나가면 자리 배치 프레임을 비운다(뒤에서 계속 돌 이유가 없다)
+  if (page !== 'seat') {
+    const sf = document.getElementById('seatPageFrame');
+    if (sf && sf.src && sf.src !== 'about:blank') sf.src = 'about:blank';
+  }
   if(page !== 'consult') stopConsultWatch();
   if(page !== 'room') stopRoomWatch();
   if(page === 'room') initRoomPage();

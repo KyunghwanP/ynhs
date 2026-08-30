@@ -1,0 +1,1422 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>교실 자리 배치 — 영남고등학교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;700&display=swap">
+<style>
+  /* ── 색 ─────────────────────────────────────────────────────────────────
+     자리 배치도는 교실 벽에 붙는 인쇄물이다. 화면도 그 종이를 만드는 작업대처럼
+     보이는 편이 맞다 — 도구는 물러서고 종이가 앞에 오게. */
+  :root{
+    --paper:#FFFFFF; --paper-soft:#F5F7FA; --bg:#EDF0F5; --sunk:#E4E9F0;
+    --ink:#16202B; --ink-mid:#4C5A6B;
+    --ink-soft:#7B8798; --rule:#DDE3EC; --rule-soft:#EBEFF5;
+    --mon:#2E5AAC; --mon-deep:#234785; --mon-soft:#E8EEFA;
+    --desk:#C89B6A;
+    --warn:#B0740C; --warn-soft:#FBF0DA;
+    --stop:#C2453B; --stop-soft:#FBE6E4;
+    --ok:#0F766E;   --ok-soft:#D6F0EC;
+    --shadow-1:0 1px 2px rgba(22,32,43,.05), 0 2px 8px -4px rgba(22,32,43,.10);
+    --shadow-2:0 2px 4px rgba(22,32,43,.06), 0 10px 22px -10px rgba(22,32,43,.22);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1B2530; --paper-soft:#212C39; --bg:#131B24; --sunk:#1A242F;
+      --ink:#E8EDF3; --ink-mid:#B6C2D0;
+      --ink-soft:#8794A6; --rule:#32404F; --rule-soft:#28333F;
+      --mon:#7FA6E8; --mon-deep:#A8C4F0; --mon-soft:#22304A;
+      --desk:#B08858;
+      --warn:#E3B056; --warn-soft:#3A2E12;
+      --stop:#E88A81; --stop-soft:#3B1E1B;
+      --ok:#6FD3BE;   --ok-soft:#123830;
+      --shadow-1:0 1px 2px rgba(0,0,0,.30);
+      --shadow-2:0 2px 6px rgba(0,0,0,.34), 0 12px 26px -12px rgba(0,0,0,.6);
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  /* 자리판이 주인공이라 넓게 쓴다. 1240px 로 묶여 있을 때 FHD 에서
+     자리판이 484px(화면의 25%)밖에 안 됐다. 끝까지 채우지는 않는다 —
+     보통 쓰는 FHD 에서 양옆에 여백이 조금 남는 편이 읽기 편하다. */
+  .wrap{max-width:1680px;margin:0 auto;padding:30px 26px 80px;}
+
+  /* ── 머리 ── */
+  .head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px;}
+  .head h1{font-size:25px;font-weight:900;margin:0;letter-spacing:-.035em;color:var(--ink);}
+  .head .cls{font-size:16px;font-weight:800;color:var(--mon);letter-spacing:-.01em;}
+  .head .who{margin-left:auto;font-size:12.5px;color:var(--ink-soft);align-self:center;}
+
+  .note{padding:11px 15px;border-radius:11px;font-size:13.5px;font-weight:600;
+    margin-bottom:12px;line-height:1.65;}
+  .note.warn{background:var(--warn-soft);color:var(--warn);}
+  .note.stop{background:var(--stop-soft);color:var(--stop);}
+  .note.ok{background:var(--ok-soft);color:var(--ok);}
+  .note:empty{display:none;}
+
+  /* ── 도구 막대: 종이보다 조용하게. 알약 버튼을 늘어놓지 않고 묶음으로 만든다 ── */
+  .bar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+  .bar + .bar{margin-bottom:20px;}
+  .bar-label{font-size:11px;font-weight:800;color:var(--ink-soft);
+    letter-spacing:.11em;text-transform:uppercase;}
+  .sep{flex:1;}
+  button{font-family:inherit;cursor:pointer;}
+
+  /* 한 무리로 붙인 버튼들 — 낱개 알약보다 훨씬 조용하다 */
+  .seg{display:inline-flex;background:var(--sunk);border-radius:11px;padding:3px;gap:2px;}
+  .seg .btn{border:none;background:transparent;box-shadow:none;
+    padding:7px 13px;border-radius:8px;font-size:13px;font-weight:700;color:var(--ink-mid);}
+  .seg .btn:hover{background:var(--paper);color:var(--ink);}
+  .seg .btn.on{background:var(--paper);color:var(--mon);box-shadow:var(--shadow-1);}
+
+  .btn{padding:8px 15px;border-radius:10px;border:1px solid var(--rule);
+    background:var(--paper);color:var(--ink-mid);font-size:13px;font-weight:700;
+    box-shadow:var(--shadow-1);transition:color .12s,border-color .12s,background .12s;}
+  .btn:hover{color:var(--mon);border-color:var(--mon);}
+  .btn.on{background:var(--mon);border-color:var(--mon);color:#fff;}
+  .btn.pri{background:var(--mon);border-color:var(--mon);color:#fff;}
+  .btn.pri:hover{background:var(--mon-deep);border-color:var(--mon-deep);color:#fff;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
+  .num{width:56px;padding:7px 8px;border:1px solid var(--rule);border-radius:9px;
+    background:var(--paper);color:var(--ink);font-family:'IBM Plex Mono';
+    font-weight:700;text-align:center;font-size:13px;box-shadow:var(--shadow-1);}
+  .num:focus{outline:none;border-color:var(--mon);}
+  .sel{padding:7px 9px;border:1px solid var(--rule);border-radius:9px;background:var(--paper);
+    color:var(--ink);font-family:inherit;font-size:12.5px;font-weight:700;
+    box-shadow:var(--shadow-1);cursor:pointer;}
+  .sel:focus{outline:none;border-color:var(--mon);}
+  label{font-size:12.5px;font-weight:700;color:var(--ink-mid);
+    display:inline-flex;align-items:center;gap:6px;}
+
+  /* ── 자리판: 이 페이지의 주인공. 여백을 아끼지 않는다 ── */
+  .board{background:var(--paper);border-radius:20px;padding:34px 30px 30px;
+    margin-bottom:16px;box-shadow:var(--shadow-2);
+    display:flex;flex-direction:column;gap:30px;}
+  .board.flip{flex-direction:column-reverse;}
+  .grid{display:flex;gap:34px;align-items:stretch;}
+  .aisle{flex:1;display:grid;gap:26px 12px;grid-auto-rows:1fr;}
+
+  .seat{
+    /* 화면이 넓어지면 칸도 같이 커진다. 높이를 82px 로 두면 폭만 늘어나
+       납작한 막대가 된다 — 책상은 가로가 조금 긴 정도다. */
+    position:relative;min-height:clamp(82px, 5.3vw, 104px);border-radius:14px;
+    background:var(--paper);border:1px solid var(--rule-soft);
+    padding:14px 8px 12px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    cursor:pointer;user-select:none;box-shadow:var(--shadow-1);
+    transition:box-shadow .15s,transform .15s,border-color .15s;
+  }
+  .seat:hover{box-shadow:var(--shadow-2);transform:translateY(-2px);border-color:var(--mon-soft);}
+  /* 번호는 카드 위에 걸친 꼬리표. 이름과 자리를 다투지 않으면서 멀리서도 읽힌다. */
+  .s-num{
+    position:absolute;top:-11px;left:50%;transform:translateX(-50%);
+    background:var(--mon);color:#fff;
+    font-family:'IBM Plex Mono';font-size:11.5px;font-weight:700;letter-spacing:.04em;
+    padding:2px 11px 3px;border-radius:7px;box-shadow:var(--shadow-1);white-space:nowrap;
+  }
+  /* 고정 자물쇠 — 번호 배지 바로 옆. 자리에서 바로 켜고 끈다. */
+  .s-pin{
+    position:absolute;top:-11px;left:50%;margin-left:26px;
+    width:22px;height:21px;padding:0;line-height:1;
+    border:1px solid var(--rule);border-radius:7px;background:var(--paper);
+    font-size:11px;cursor:pointer;box-shadow:var(--shadow-1);
+    opacity:.35;transition:opacity .12s;
+  }
+  .seat:hover .s-pin{opacity:1;}
+  .s-pin:hover{border-color:var(--stop);}
+  .s-pin.on{opacity:1;background:var(--stop-soft);border-color:var(--stop);}
+  .s-pin:disabled{display:none;}
+  .s-name{font-size:clamp(18px, 1.15vw, 23px);font-weight:700;line-height:1.2;text-align:center;
+    word-break:keep-all;letter-spacing:-.02em;color:var(--ink);}
+  .s-duty{font-size:11px;font-weight:700;color:var(--mon);background:var(--mon-soft);
+    border-radius:999px;padding:2px 10px;max-width:100%;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .seat.empty{background:transparent;border:1.5px dashed var(--rule);box-shadow:none;}
+  .seat.empty:hover{transform:none;box-shadow:none;border-color:var(--mon);}
+  .seat.off{background:var(--sunk);border:none;box-shadow:none;opacity:.55;}
+  .seat.off:hover{transform:none;box-shadow:none;}
+  .seat.sel{border-color:var(--mon);box-shadow:0 0 0 2px var(--mon), var(--shadow-2);}
+  .seat.pick{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn), var(--shadow-2);}
+  .seat.dragging,.row.dragging{opacity:.4;}
+  .seat.over{border-color:var(--mon);box-shadow:0 0 0 3px var(--mon-soft), var(--shadow-2);transform:translateY(-2px);}
+  .row.stu{cursor:pointer;}
+  .row.stu.on{background:var(--mon-soft);box-shadow:inset 2px 0 0 var(--mon);}
+  .row-tags{display:flex;gap:3px;flex-shrink:0;}
+  .row-tags .s-tag{font-size:9.5px;}
+  .s-tag.dt{background:var(--mon-soft);color:var(--mon);max-width:70px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row.stu:active{cursor:grabbing;}
+  .list.over{outline:2px dashed var(--mon);outline-offset:3px;border-radius:8px;}
+  .s-tags{position:absolute;top:7px;right:8px;display:flex;gap:3px;font-size:9.5px;}
+  .s-tag{border-radius:999px;padding:1px 6px;font-weight:800;line-height:1.6;}
+  .s-tag.fix{background:var(--stop-soft);color:var(--stop);}
+  .s-tag.fr{background:var(--warn-soft);color:var(--warn);}
+  .s-tag.ap{background:var(--ok-soft);color:var(--ok);}
+
+  /* 칠판은 벽, 교탁은 그 앞. 순서는 언제나 [학생 … 교탁 … 칠판] */
+  .front{display:flex;flex-direction:column-reverse;align-items:center;gap:0;}
+  .board.flip .front{flex-direction:column;}
+  .desk{background:var(--desk);color:#fff;font-size:12.5px;font-weight:800;
+    letter-spacing:.28em;text-indent:.28em;padding:9px 40px;
+    border-radius:0 0 10px 10px;box-shadow:var(--shadow-1);z-index:1;}
+  .board.flip .desk{border-radius:10px 10px 0 0;}
+  .chalk{background:var(--mon);color:#fff;font-size:12.5px;font-weight:800;
+    letter-spacing:.28em;text-indent:.28em;width:min(900px,80%);text-align:center;
+    padding:13px;border-radius:8px;box-shadow:var(--shadow-1);}
+
+  /* ── 옆 패널: 테두리 대신 여백으로 나눈다 ── */
+  /* [학생별 설정 | 자리판 | 옆 패널] — 자리판을 보면서 왼쪽 줄을 바로 건드린다.
+     양옆은 고정 폭이라, 화면이 넓어지면 늘어난 만큼 전부 자리판이 가져간다. */
+  .cols{display:grid;grid-template-columns:344px minmax(0,1fr) 316px;gap:22px;align-items:start;}
+  /* 좁아지면 학생별 설정을 자리판 아래 전체 폭으로 내리고 여러 단으로 편다.
+     1560px 아래에서 3단을 유지하면 자리판이 600~750px 로 쪼그라들어,
+     오히려 2단일 때보다 좁아진다(1366 노트북이 여기 걸렸다). */
+  @media (max-width:1560px){
+    .cols{grid-template-columns:minmax(0,1fr) 316px;}
+    .stucol{grid-column:1 / -1;grid-row:2;}
+    /* 아래로 내려가면 여러 단이 된다. 격자로 채우면 01 02 03 / 04 05 06 처럼
+       가로로 읽히는데, 명렬은 번호가 세로로 이어져야 눈으로 따라간다.
+       multi-column 은 한 단을 다 채우고 다음 단으로 넘어간다. */
+    .stucol .stu-grid{display:block;columns:310px;column-gap:16px;}
+    .stucol .stu-row{break-inside:avoid;-webkit-column-break-inside:avoid;}
+  }
+  @media (max-width:960px){ .cols{grid-template-columns:minmax(0,1fr);} }
+  .card{background:var(--paper);border-radius:16px;padding:18px 20px;margin-bottom:14px;
+    box-shadow:var(--shadow-1);}
+  .card h2{font-size:11px;font-weight:800;margin:0 0 12px;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--ink-soft);display:flex;align-items:center;gap:8px;}
+  .card h2 .cnt{font-weight:700;color:var(--mon);letter-spacing:0;text-transform:none;font-size:12px;}
+  .hint{font-size:12.5px;color:var(--ink-soft);line-height:1.7;margin:0 0 12px;}
+  .list{display:flex;flex-direction:column;gap:1px;}
+  .list.scroll{max-height:322px;overflow-y:auto;margin:0 -6px;padding:0 6px;}
+  .row{display:flex;align-items:center;gap:9px;font-size:13.5px;padding:7px 8px;
+    border-radius:8px;}
+  .row:hover{background:var(--paper-soft);}
+  .row .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row .mono{font-family:'IBM Plex Mono';font-size:11.5px;font-weight:700;color:var(--ink-soft);
+    min-width:22px;}
+  .x{border:none;background:transparent;color:var(--rule);font-size:16px;line-height:1;
+    padding:3px 5px;border-radius:6px;}
+  .row:hover .x{color:var(--ink-soft);}
+  .x:hover{background:var(--stop-soft);color:var(--stop);}
+  .none{font-size:12.5px;color:var(--ink-soft);padding:6px 2px;}
+  .txt{width:100%;padding:10px 13px;border:1px solid var(--rule);border-radius:10px;
+    background:var(--paper);color:var(--ink);font-family:inherit;font-size:13.5px;outline:none;}
+  .txt:focus{border-color:var(--mon);}
+  textarea.txt{min-height:92px;resize:vertical;line-height:1.7;}
+
+  /* 학생별 설정 표 — 한 줄에 한 학생. 반 전체가 한 화면에 들어와야 한다. */
+  #stuCard h2{flex-wrap:wrap;row-gap:6px;}
+  .stu-front{margin-left:auto;font-size:12px;letter-spacing:0;text-transform:none;}
+  .stu-front .num{width:52px;}
+  .stu-apart{display:inline-flex;gap:6px;align-items:center;letter-spacing:0;text-transform:none;}
+  .stu-apart .sel{padding:5px 7px;font-size:12px;}
+  .stu-apart .btn{padding:5px 12px;font-size:12px;}
+  /* 왼쪽 열에서는 한 단으로 쭉 세운다 */
+  /* min-width:0 이 없으면 격자 칸이 내용만큼 벌어져 임무 칸이 카드 밖으로 나간다 */
+  .stu-grid{display:grid;grid-template-columns:1fr;gap:2px;margin-bottom:6px;min-width:0;}
+  .stu-row{display:flex;align-items:center;gap:5px;padding:5px 6px;border-radius:9px;min-width:0;}
+  .stu-row:hover{background:var(--paper-soft);}
+  .stu-row .mono{flex:0 0 20px;font-family:'IBM Plex Mono';font-size:11.5px;color:var(--ink-soft);}
+  .stu-row .nm{flex:0 0 54px;font-size:13px;font-weight:700;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .stu-row .tog{padding:3px 7px;font-size:11.5px;font-weight:800;border-radius:7px;
+    border:1px solid var(--rule);background:var(--paper);color:var(--ink-soft);
+    font-family:inherit;cursor:pointer;flex:0 0 auto;white-space:nowrap;}
+  .stu-row .tog:hover{border-color:var(--mon);color:var(--mon);}
+  .stu-row .tog.on{background:var(--mon);border-color:var(--mon);color:#fff;}
+  .stu-row .tog:disabled{opacity:.4;cursor:not-allowed;}
+  .stu-row .tog.on.sel-apart{background:var(--gold);border-color:var(--gold);}
+  /* 이미 묶여 있는 학생 — '고르는 중'(금색)과 구분해서 조용한 초록으로 둔다 */
+  .stu-row .tog.tied{background:var(--ok-soft);border-color:var(--ok);color:var(--ok);}
+  .stu-row .tog.tied.on{background:var(--gold);border-color:var(--gold);color:#fff;}
+  .stu-row .duty{flex:1 1 40px;min-width:0;width:0;padding:4px 7px;font-size:12px;
+    border:1px solid var(--rule);border-radius:7px;background:var(--paper);
+    color:var(--ink);font-family:inherit;outline:none;}
+  .stu-row .duty:focus{border-color:var(--mon);}
+  .stu-row .duty:not(:placeholder-shown){font-weight:700;background:var(--mon-soft);}
+  .memo-print{white-space:pre-wrap;}
+  .print-only{display:none;}
+
+  /* ── 인쇄 ────────────────────────────────────────────────────────────────
+     교실 벽에 붙는 종이다. 여기가 이 페이지의 결과물이고 화면은 그걸 만드는
+     작업대일 뿐이다.
+
+     색을 쓰되 '진한 바탕 + 흰 글씨'는 피한다. 브라우저가 배경을 안 찍으면
+     흰 글씨가 흰 종이에서 통째로 사라지기 때문이다. 연한 바탕 · 진한 글씨 ·
+     테두리로 만들면 배경이 빠져도 글씨와 구조가 그대로 남는다.
+     print-color-adjust 로 색을 요청하되, 그것에 기대지는 않는다.          */
+  @media print{
+    /* 여백을 0으로 두면 크롬이 날짜·주소·페이지번호(머리글/바닥글)를 기본적으로 안 붙인다.
+       대신 종이 여백은 .wrap 의 padding 으로 우리가 직접 준다. 프린터가 못 찍는
+       가장자리(보통 5mm 안쪽)보다 넉넉하게 잡는다. */
+    @page{ size:A4 landscape; margin:0; }
+    *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    html,body{height:100%;}
+    body{background:#fff;color:#1A2432;font-size:10.5pt;}
+    .wrap{max-width:none;padding:10mm 9mm;display:flex;flex-direction:column;height:100vh;}
+    .noprint{display:none !important;}
+    .head{display:none;}                   /* 인쇄에는 아래 큰 제목이 대신 나온다 */
+    .print-only{display:block;}
+
+    /* 화면용 .cols 는 align-items:start 다. flex 를 세로로 돌리면 그게 가로 정렬이
+       되어 자리판이 종이의 1/3 로 쪼그라든다 — stretch 로 되돌린다. */
+    .cols{display:flex;flex-direction:column;align-items:stretch;flex:1;min-height:0;}
+    /* 종이는 [명렬표 | 자리판] 두 칸. 이름을 번호로 찾는 일이 잦다.
+       화면에서 자리판이 몇 번째 칸이든 상관없게 클래스로 잡는다. */
+    .boardcol{
+      flex:1;min-height:0;display:grid;
+      grid-template-columns:auto 1fr;   /* 명렬 단 수에 따라 좌측 폭이 늘어난다 */
+      grid-template-rows:auto 1fr auto;
+      grid-template-areas:"title title" "roster board" "roster memo";
+      column-gap:14px;row-gap:9px;}
+    /* 명렬을 자리판의 첫 줄 또는 끝 줄에 맞춘다.
+       자리판 칸에는 교탁·칠판 덩어리가 함께 들어 있어서, 그만큼을 여백으로 비켜 준다.
+       그 높이는 글자 크기와 여백이 고정이라 값이 정해진다(교탁·칠판 56pt + 사이 9pt).
+       명렬이 자리판보다 길어도 칸이 늘어나지 않아 한 장을 유지한다.
+       글자 크기를 건드리면 이 값이 어긋나는데, 어긋나면 검사가 잡는다. */
+    #printRoster{--front-h:65pt;align-self:start;}
+    .pcol:not(.pflip) #printRoster{margin-top:var(--front-h);}          /* 칠판이 위 */
+    /* 끝 줄 맞춤에서는 명렬을 자리판 줄에만 건다. 메모 줄까지 걸쳐 있으면
+       아래 끝이 메모 아래가 되어 자리판 끝 줄과 안 맞는다. */
+    .pcol.rlast #printRoster{align-self:end;margin-top:0;
+      grid-row:board-start / board-end;}
+    .pcol.rlast.pflip #printRoster{margin-bottom:var(--front-h);}       /* 칠판이 아래 */
+
+    /* 좌우 1fr 가운데 auto — 로고가 있어도 제목이 종이 가운데에 그대로 온다 */
+    #printHead{grid-area:title;display:grid;grid-template-columns:1fr auto 1fr;
+      align-items:center;padding:0 0 1mm;}
+    #printTitle{text-align:center;font-size:19pt;font-weight:900;
+      color:#16407A;letter-spacing:-.035em;white-space:nowrap;}
+    .brand{display:flex;align-items:center;gap:6pt;justify-self:start;}
+    .brand img{width:26pt;height:26pt;object-fit:contain;}
+    .brand span{font-size:10pt;font-weight:800;color:#16407A;letter-spacing:-.02em;}
+    #printRoster{grid-area:roster;}
+    .board{grid-area:board;min-height:0;display:flex;flex-direction:column;gap:9pt;
+      background:#fff;border:none;border-radius:0;padding:0;margin:0;box-shadow:none;}
+    #memoCard{grid-area:memo;}
+
+    /* 명렬표 */
+    .pr-cap{background:#DCE7F7;color:#16407A;border:1.2px solid #5C82BC;border-bottom:none;
+      border-radius:5px 5px 0 0;padding:4px;text-align:center;font-weight:800;font-size:9pt;}
+    .pr-n{font-weight:700;color:#456594;font-size:8pt;}
+    .pr-cols{display:flex;gap:5px;align-items:flex-start;}
+    .pr-tbl{width:176px;border-collapse:collapse;font-size:8.5pt;table-layout:fixed;}
+    .pr-tbl col.c-num{width:30px;} .pr-tbl col.c-nm{width:66px;}
+    /* 32명을 한 단에 담으려면 줄이 촘촘해야 한다. 기본 line-height(1.55)로는
+       줄당 22px 이라 종이를 넘어 두 장이 된다. */
+    .pr-tbl th{background:#EDF3FB;color:#1E4A8C;border:1.2px solid #5C82BC;
+      padding:2px;font-weight:800;line-height:1.25;}
+    .pr-tbl td{border:1px solid #A8C0DF;padding:0.8px 4px;text-align:center;
+      color:#141C26;line-height:1.2;}
+    .pr-tbl td.nm{text-align:left;font-weight:600;}
+    /* 비고 — 임무가 있으면 찍히고, 없으면 손으로 적을 빈칸으로 남는다 */
+    .pr-tbl td.note{text-align:left;color:#16407A;font-weight:600;
+      overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+
+    /* 자리판 */
+    .grid{flex:1;min-height:0;gap:17pt;}
+    .aisle{gap:var(--rowgap,13pt) 6pt;grid-auto-rows:1fr;}
+    .seat{min-height:0;background:#fff;border:1.2px solid #7593BA;border-radius:6px;
+      padding:var(--seatpad,9pt) 3pt 4pt;box-shadow:none;transform:none;gap:1pt;}
+    .seat.empty{border:1.2px dashed #AEC1D9;background:#fff;}
+    .seat.off{background:#DFE5EC;border:1.2px solid #AEC1D9;}
+    /* 고르던 자리·마우스 올린 자리는 화면용 표시다 */
+    .seat.sel,.seat.pick,.seat:hover{border:1.2px solid #7593BA;box-shadow:none;transform:none;}
+    /* 번호 꼬리표 — 연한 바탕에 진한 파랑이라 배경이 안 찍혀도 읽힌다 */
+    .s-num{top:-7pt;background:#DCE7F7;color:#16407A;border:1.2px solid #4E76B0;
+      border-radius:4px;padding:0.5pt 7pt 1pt;font-size:9.5pt;font-weight:700;box-shadow:none;}
+    .s-name{font-size:12.5pt;font-weight:700;color:#111C29;}
+    .s-duty{background:#EDF3FB;color:#1E4A8C;border:1px solid #9DB6DA;
+      font-size:8pt;padding:0 5pt;}
+    .s-tags{display:none;}                 /* 제약 배지는 작업용이다 */
+
+    /* 교탁·칠판 */
+    /* 교탁은 따뜻한 색 + 얕은 상자, 칠판은 굵은 테두리 — 흑백으로 나가도 모양으로 갈린다 */
+    .desk{background:#F2DFC4;color:#7A5220;border:1.2px solid #BE8B4C;
+      padding:4pt 26pt;font-size:9.5pt;box-shadow:none;}
+    .chalk{background:#fff;color:#16407A;border:2.2px solid #16407A;
+      width:min(58%,360pt);padding:7pt;font-size:9.5pt;box-shadow:none;}
+
+    /* 메모 — 붙여 둔 쪽지처럼 */
+    .card{background:#FBF6E3;border:1.2px solid #BFA95F;border-radius:6px;
+      padding:6pt 10pt;margin:0;box-shadow:none;break-inside:avoid;}
+    #memoCard h2{font-size:8pt;margin:0 0 2pt;color:#6E5A14;letter-spacing:.1em;}
+    .memo-print{display:block;white-space:pre-wrap;font-size:9.5pt;line-height:1.55;color:#20211A;}
+    #memoCard textarea{display:none;}   /* 입력칸 대신 위의 글이 나간다 */
+    #memoCard.memo-empty{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <h1>교실 자리 배치</h1>
+    <span class="cls" id="clsLabel">—</span>
+    <span class="who noprint" id="who"></span>
+  </div>
+
+  <div class="note stop noprint" id="err"></div>
+  <div class="note warn noprint" id="warn"></div>
+  <div class="note ok noprint" id="ok"></div>
+
+  <div class="bar noprint" id="barMain">
+    <span class="bar-label">배정</span>
+    <div class="seg">
+      <button class="btn" id="bOrder">번호순</button>
+      <button class="btn" id="bRandom">랜덤</button>
+      <button class="btn" id="bPartial" title="고른 학생들끼리만 다시 섞습니다">부분 랜덤</button>
+      <button class="btn" id="bClear">전부 비우기</button>
+      <button class="btn" id="bUndo" disabled>되돌리기</button>
+    </div>
+    <span class="sep"></span>
+    <span class="bar-label">모드</span>
+    <!-- 하나만 켜지는 성격이라 낱개 버튼이 아니라 묶음 컨트롤로 둔다.
+         고정석·앞자리·분리·임무는 모드가 아니라 아래 「학생별 설정」 표에서 켠다.
+         여기 남은 둘은 '자리판을 눌러야만' 되는 것들이다. -->
+    <div class="seg">
+      <button class="btn on" id="mMove">자리 옮기기</button>
+      <button class="btn" id="mOff">빈칸</button>
+    </div>
+    <span class="sep"></span>
+    <button class="btn" id="bFlip" title="교실을 180도 돌려 봅니다. 자리는 그대로이고 보는 방향만 바뀝니다.">학생 입장 (교탁 ↑)</button>
+  </div>
+
+  <div class="bar noprint" id="barGrid">
+    <span class="bar-label">자리판</span>
+    <label>분단 <input class="num" type="number" id="nCols" min="1" max="12" value="5"></label>
+    <label>줄 <input class="num" type="number" id="nRows" min="1" max="12" value="6"></label>
+    <label title="몇 칸씩 한 분단으로 묶을지. 1이면 안 묶습니다.">묶음 <input class="num" type="number" id="nGroup" min="1" max="6" value="1"></label>
+    <span class="bar-label" style="margin-left:6px;">번호순</span>
+    <select class="sel" id="ordStart" title="1번이 앉을 모서리">
+      <option value="FL">앞 왼쪽부터</option>
+      <option value="FR">앞 오른쪽부터</option>
+      <option value="BL">뒤 왼쪽부터</option>
+      <option value="BR">뒤 오른쪽부터</option>
+    </select>
+    <select class="sel" id="ordDir" title="번호가 늘어나는 방향">
+      <option value="row">가로로</option>
+      <option value="col">세로로</option>
+    </select>
+    <span class="bar-label" style="margin-left:6px;">인쇄 명렬</span>
+    <select class="sel" id="rosterAlign" title="인쇄물에서 명렬표를 자리판의 어느 줄에 맞출지">
+      <option value="first">첫 줄에 맞춤</option>
+      <option value="last">끝 줄에 맞춤</option>
+    </select>
+    <span class="sep"></span>
+    <button class="btn pri" id="bSave">저장</button>
+    <button class="btn" id="bPrint" title="인쇄 대화상자에서 색상을 '컬러'로 두어야 색이 나옵니다">인쇄</button>
+    <button class="btn" id="bCopy">표 복사</button>
+  </div>
+
+  <div class="cols">
+    <!-- 학생별 설정은 자리판 왼쪽에 세로로 세운다. 자리판을 보면서 그 줄을
+         바로 켜고 끄는 게 아래로 내려가 찾는 것보다 짧다. -->
+    <div class="stucol noprint">
+      <!-- 학생별 설정 — 반 전체가 한 화면에 뜨고 그 줄에서 바로 켜고 끈다.
+           모드를 바꾼 뒤 자리를 누르거나 드롭다운에서 학생을 찾는 것보다,
+           '누구에게 무엇이 걸려 있는지'가 한눈에 보이는 편이 낫다. -->
+      <div class="card noprint" id="stuCard">
+        <h2>학생별 설정
+          <span class="cnt" id="stuCnt"></span>
+          <label class="stu-front">앞자리 <input class="num" type="number" id="nFront" min="1" max="12" value="2"> 줄</label>
+          <span class="stu-apart">
+            <select class="sel" id="apartD" title="떨어뜨릴 정도">
+              <option value="2">이웃 금지</option>
+              <option value="3">멀리</option>
+            </select>
+            <button class="btn pri" id="bApartMake" disabled>묶기</button>
+          </span>
+        </h2>
+        <p class="hint">
+          <b>고정</b> 랜덤을 돌려도 그 자리 그대로 · <b>앞</b> 앞줄 안에 앉히기 ·
+          <b>분리</b> 둘 이상 켜고 「묶기」 — 서로 안 붙게 배정합니다.
+          임무는 이름 옆 칸에 적으면 자리표와 인쇄물에 같이 나옵니다.
+        </p>
+        <div class="stu-grid" id="stuGrid"></div>
+        <div class="list" id="consList"></div>
+      </div>
+    </div>
+
+    <div class="boardcol">
+      <!-- 인쇄물에만 나오는 제목과 명렬표. 화면에는 이미 머리글과 옆 패널이 있다. -->
+      <div class="print-only" id="printHead">
+        <div class="brand">
+          <img src="icon-180.png" alt="">
+          <span>영남고등학교</span>
+        </div>
+        <div id="printTitle"></div>
+        <div></div>
+      </div>
+      <div class="print-only" id="printRoster"></div>
+
+      <div class="board">
+        <div class="front"><div class="desk">교 탁</div><div class="chalk">칠 판</div></div>
+        <div class="grid" id="grid"></div>
+      </div>
+
+      <div class="card" id="memoCard">
+        <h2>메모</h2>
+        <textarea class="txt noprint" id="memo" placeholder="청소 구역, 유의사항 등 — 인쇄물 아래에 같이 나옵니다."></textarea>
+        <div class="memo-print print-only" id="memoPrint"></div>
+      </div>
+    </div>
+
+    <div class="noprint">
+      <div class="card">
+        <h2>아직 안 앉은 학생 <span class="cnt" id="unseatedCnt"></span></h2>
+        <p class="hint" id="modeHint">자리를 눌러 학생을 고르고, 다른 자리를 누르면 서로 바뀝니다.</p>
+        <div class="list scroll" id="unseated"></div>
+      </div>
+
+      <div class="card">
+        <h2>지난 배치 <span class="cnt" id="histCnt"></span></h2>
+        <p class="hint">저장할 때마다 한 장씩 쌓입니다. 눌러서 그때 자리를 다시 불러올 수 있습니다.</p>
+        <div class="list" id="histList"></div>
+      </div>
+
+      <div class="card">
+        <h2>학생 넣고 빼기</h2>
+        <p class="hint">학적 반영이 늦어 명렬과 다를 때만 쓰세요. 이 반 자리 배치에만 적용되고 명렬 원본은 바뀌지 않습니다.</p>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <input class="txt" id="addNum" placeholder="번호" style="width:74px;font-family:'IBM Plex Mono';">
+          <input class="txt" id="addName" placeholder="이름" style="flex:1;">
+          <button class="btn" id="bAdd">추가</button>
+        </div>
+        <div class="list scroll" id="rosterEdit"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyCrYCGksB-Nv8LNIv1kZc_a8d6bIL_5CvA",
+  authDomain: "ynhs-7b5ba.firebaseapp.com",
+  projectId: "ynhs-7b5ba",
+  storageBucket: "ynhs-7b5ba.firebasestorage.app",
+  messagingSenderId: "1031618043470",
+  appId: "1:1031618043470:web:edb5b8d1f98db029916d1f"
+});
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+const $   = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+/* ══ 배정 알고리즘 ══════════════════════════════════════════════════════════
+   DOM 을 모른다 — 그래야 테스트에서 그대로 뽑아 돌려볼 수 있다.            */
+
+const SEAT_TRIES = 800;   // 랜덤 재시도. 30명·제약 몇 개면 대개 첫 판에 나온다.
+
+function seatRC(r, c){ return r + ',' + c; }
+function seatParse(k){ const [r, c] = String(k).split(',').map(Number); return { r, c }; }
+// 체비쇼프 거리 — 옆·앞뒤·대각이 모두 거리 1. 대각선도 '이웃'으로 친다.
+function seatDist(a, b){
+  const p = seatParse(a), q = seatParse(b);
+  return Math.max(Math.abs(p.r - q.r), Math.abs(p.c - q.c));
+}
+// 쓸 수 있는 자리 — 앞줄부터, 왼쪽부터. 번호순 배정이 이 순서를 그대로 쓴다.
+// 번호를 매기는 순서. 학교마다·담임마다 다르다.
+//   start 'FL'|'FR'|'BL'|'BR' — 앞/뒤(F/B) × 왼쪽/오른쪽(L/R) 중 어디서 시작할지
+//   dir   'row'  줄을 따라 가로로 (1·2·3… 이 한 줄에 늘어선다)
+//         'col'  분단을 따라 세로로 (1·2·3… 이 한 줄로 앞뒤에 늘어선다)
+// 이 순서는 '앞에서부터 채우기'의 기준이기도 하다 — 남는 자리는 이 순서의 끝에 몰린다.
+function seatCells(grid, ord){
+  const off   = new Set(grid.off || []);
+  const start = (ord && ord.start) || 'FL';
+  const dir   = (ord && ord.dir)   || 'row';
+  const rows  = Array.from({ length: grid.rows }, (_, i) => i);
+  const cols  = Array.from({ length: grid.cols }, (_, i) => i);
+  if (start[0] === 'B') rows.reverse();
+  if (start[1] === 'R') cols.reverse();
+  const out = [];
+  if (dir === 'col') { for (const c of cols) for (const r of rows) out.push(seatRC(r, c)); }
+  else               { for (const r of rows) for (const c of cols) out.push(seatRC(r, c)); }
+  return out.filter(k => !off.has(k));
+}
+function seatShuffle(arr, rand){
+  const a = arr.slice(), rnd = rand || Math.random;
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+// k 를 cell 에 앉혀도 분리 조건이 지켜지나 (이미 앉은 상대만 본다)
+// 분리는 '묶음'이다. 한 묶음에 든 학생끼리는 서로 다 떨어져 앉는다.
+// 5명을 떼어놓으려고 짝 10개를 만들게 하면 목록도 지저분하고 지우기도 번거롭다.
+// 예전 짝 형태({a,b})도 그대로 읽는다.
+function apartMembers(p){ return p.ks || [p.a, p.b].filter(Boolean); }
+// 묶음이 여럿이면 '분리' 표시만으로는 누가 누구와 묶였는지 알 수 없다.
+// 순서대로 A·B·C… 이름표를 붙여 목록·자리·표에서 같은 글자로 부른다.
+const apartTag = i => i < 26 ? String.fromCharCode(65 + i) : String(i + 1);
+// 이 학생이 속한 묶음들의 이름표. 보통 하나지만 여러 묶음에 낄 수 있다.
+function apartTagsOf(list, k){
+  const out = [];
+  (list || []).forEach((p, i) => { if (apartMembers(p).includes(k)) out.push(apartTag(i)); });
+  return out;
+}
+
+function seatFits(seats, cell, k, apart){
+  for (const p of apart) {
+    const ks = apartMembers(p);
+    if (!ks.includes(k)) continue;
+    const d = p.d || 2;
+    for (const c in seats)
+      if (ks.includes(seats[c]) && seats[c] !== k && seatDist(cell, c) < d) return false;
+  }
+  return true;
+}
+// 다 앉힌 뒤 어긋난 것 찾기 — 번호순은 제약을 무시하므로 대신 알려준다.
+function seatViolations(seats, front, apart, nameOf){
+  const at = {}; for (const c in seats) at[seats[c]] = c;
+  const nm = nameOf || (k => k), msgs = [];
+  for (const k in front)
+    if (at[k] && seatParse(at[k]).r >= front[k]) msgs.push(nm(k) + ' 앞자리');
+  for (const p of apart) {
+    const ks = apartMembers(p).filter(k => at[k]);
+    const d  = p.d || 2;
+    for (let i = 0; i < ks.length; i++) for (let j = i + 1; j < ks.length; j++)
+      if (seatDist(at[ks[i]], at[ks[j]]) < d) msgs.push(nm(ks[i]) + '·' + nm(ks[j]) + ' 분리');
+  }
+  return msgs.length ? [...new Set(msgs)] : null;
+}
+// 애초에 말이 되는 제약인지. 안 되는 걸 800번 돌려봐야 시간만 버리고,
+// '못 찾았습니다'만 뜨면 무엇이 문제인지 알 수가 없다.
+function seatDiagnose(roster, cells, fixed, front, apart, nameOf){
+  const nm = nameOf || (k => k), cellSet = new Set(cells);
+  if (roster.length > cells.length)
+    return `자리가 ${cells.length}개인데 학생이 ${roster.length}명입니다. 줄이나 분단을 늘리세요.`;
+  const taken = {};
+  for (const k in fixed) {
+    if (!roster.includes(k)) continue;
+    if (!cellSet.has(fixed[k])) return `${nm(k)}의 고정석이 자리판 밖입니다. 다시 지정하세요.`;
+    if (taken[fixed[k]]) return `${nm(taken[fixed[k]])}와 ${nm(k)}의 고정석이 같은 자리입니다.`;
+    taken[fixed[k]] = k;
+  }
+  const byLimit = {};
+  for (const k in front) if (roster.includes(k)) byLimit[front[k]] = (byLimit[front[k]] || 0) + 1;
+  for (const lim in byLimit) {
+    const room = cells.filter(c => seatParse(c).r < Number(lim)).length;
+    if (byLimit[lim] > room)
+      return `앞 ${lim}줄 자리는 ${room}개인데 앞자리 우선이 ${byLimit[lim]}명입니다.`;
+  }
+  for (const p of apart) {
+    const ks = apartMembers(p).filter(k => fixed[k]);
+    const d  = p.d || 2;
+    for (let i = 0; i < ks.length; i++) for (let j = i + 1; j < ks.length; j++)
+      if (seatDist(fixed[ks[i]], fixed[ks[j]]) < d)
+        return `${nm(ks[i])}와 ${nm(ks[j])}는 분리인데 고정석이 서로 붙어 있습니다.`;
+  }
+  return null;
+}
+// 배치 만들기.
+//   mode 'order'  번호순 — 순서가 곧 의미라 제약 때문에 흐트러뜨리지 않는다.
+//                 대신 어긋난 게 있으면 warn 으로 알려준다.
+//   mode 'random' 랜덤 — 제약을 지키는 배치가 나올 때까지 다시 뽑는다.
+//   keep          { 학생키: 자리 } — 안 움직일 학생(부분 랜덤에서 나머지 고정용)
+function seatAssign(opt){
+  const grid   = opt.grid;
+  const cons   = opt.cons || {};
+  const fixed  = cons.fixed || {}, front = cons.front || {}, apart = cons.apart || [];
+  const roster = opt.roster || [], keep = opt.keep || {}, nameOf = opt.nameOf;
+  const all = seatCells(grid, opt.ord);
+
+  const bad = seatDiagnose(roster, all, fixed, front, apart, nameOf);
+  if (bad) return { error: bad };
+
+  // 자리가 학생보다 많으면 앞에서부터 채운다. 가운데가 군데군데 뚫린 배치도는
+  // 실제 교실과 다르고 보기에도 얼룩이 된다. 일부러 비우려면 '빈칸' 모드를 쓴다.
+  //   고정석과 '안 움직일 학생'의 자리는 뒤쪽이어도 반드시 남긴다.
+  const allCells = new Set(all);
+  const must = new Set();
+  for (const k in fixed) if (roster.includes(k) && allCells.has(fixed[k])) must.add(fixed[k]);
+  for (const k in keep)  if (roster.includes(k) && allCells.has(keep[k]))  must.add(keep[k]);
+  const cells = all.filter(c => must.has(c));
+  for (const c of all) {
+    if (cells.length >= roster.length) break;
+    if (!must.has(c)) cells.push(c);
+  }
+  cells.sort((a, b) => all.indexOf(a) - all.indexOf(b));   // 다시 앞→뒤 순서로
+
+  const base = {}, used = new Set(), placed = new Set(), cellSet = new Set(cells);
+  for (const k in fixed) {
+    if (!roster.includes(k)) continue;
+    base[fixed[k]] = k; used.add(fixed[k]); placed.add(k);
+  }
+  for (const k in keep) {
+    if (placed.has(k) || !roster.includes(k) || !cellSet.has(keep[k]) || used.has(keep[k])) continue;
+    base[keep[k]] = k; used.add(keep[k]); placed.add(k);
+  }
+  const rest      = roster.filter(k => !placed.has(k));
+  const restCells = cells.filter(c => !used.has(c));
+
+  if (opt.mode === 'order') {
+    const seats = { ...base };
+    rest.forEach((k, i) => { if (restCells[i]) seats[restCells[i]] = k; });
+    return { seats, warn: seatViolations(seats, front, apart, nameOf) };
+  }
+  for (let t = 0; t < SEAT_TRIES; t++) {
+    const seats = { ...base };
+    const open  = seatShuffle(restCells, opt.rand);
+    // 앞자리 제약이 있는 학생부터 앉힌다 — 나중에 돌리면 앞줄이 이미 다 차 있다.
+    const pool  = seatShuffle(rest, opt.rand)
+      .sort((a, b) => (front[a] ? 0 : 1) - (front[b] ? 0 : 1));
+    let ok = true;
+    for (const k of pool) {
+      const lim = front[k];
+      const i = open.findIndex(c =>
+        (!lim || seatParse(c).r < lim) && seatFits(seats, c, k, apart));
+      if (i < 0) { ok = false; break; }
+      seats[open[i]] = k; open.splice(i, 1);
+    }
+    if (ok) return { seats, warn: null };
+  }
+  // 어디가 빡빡한지 짚어 준다. 대개는 '멀리'로 묶은 인원이 많아서다.
+  const tight = apart.filter(p => (p.d || 2) >= 3 && apartMembers(p).length >= 4);
+  return { error: tight.length
+    ? `제약이 서로 부딪혀 자리를 못 찾았습니다. '멀리'로 묶은 ${apartMembers(tight[0]).length}명이 원인일 수 있습니다 — '이웃 금지'로 다시 묶어 보세요.`
+    : '제약이 서로 부딪혀 자리를 못 찾았습니다. 분리 조건을 줄이거나 빈칸을 자리로 바꿔 보세요.' };
+}
+
+/* ══ 화면 ═══════════════════════════════════════════════════════════════ */
+
+const ADMIN_EMAIL = 'pkh910518@yeungnam.hs.kr';
+const HIST_KEEP   = 30;    // 지난 배치 보관 장수. 한 장이 수백 바이트라 넉넉하다.
+
+const P        = new URLSearchParams(location.search);
+const CLASSKEY = (P.get('class') || '').trim();      // '2-3'
+const EMBED    = P.get('embed') === '1';
+
+let ME = null, MYNAME = '', CANEDIT = false;
+let ROSTER = [];                    // [{ key, num, name, extra }]
+let ST = {                          // 이 반 문서
+  cols:5, rows:6, off:[], seats:{},
+  fixed:{}, front:{}, apart:[], frontRows:2,
+  duty:{}, memo:'', extra:[], removed:[], history:[],
+  // 기본은 교사 입장(교탁 아래). 자리표를 만드는 사람이 교탁에 서서 보는 방향이다.
+  // 그리기에만 쓴다 — 번호순 배정(seatCells)은 flip 과 무관하게 늘 교탁 쪽이 첫 줄이다.
+  flip:true,
+  group:1,                          // 몇 칸씩 한 분단으로 묶을지 (1이면 안 묶음)
+  ordStart:'FL', ordDir:'row',      // 번호순 시작 모서리·진행 방향
+  rosterAlign:'first'               // 인쇄물 명렬표를 자리판 첫 줄/끝 줄 중 어디에 맞출지
+};
+let MODE = 'move';
+let PICK = null;                    // 자리 옮기기: 먼저 고른 자리
+let APART_SEL = new Set();          // 분리로 묶는 중인 학생들
+let APART_D   = 2;                  // 분리 거리(칸). 2=이웃 금지, 3=멀리
+let PARTIAL = new Set();            // 부분 랜덤 대상 학생
+let DIRTY = false;
+let UNDO = null;
+
+const nameOf = k => (ROSTER.find(s => s.key === k) || {}).name || k;
+const numOf  = k => (ROSTER.find(s => s.key === k) || {}).num  || '';
+const grid   = () => ({ cols: ST.cols, rows: ST.rows, off: ST.off });
+const say = (id, msg) => { $(id).textContent = msg || ''; };
+const clearSay = () => { say('err',''); say('warn',''); say('ok',''); };
+// '2-03' 과 '2-3' 을 같게 본다 (시간표 표기와 명렬 표기가 다르다)
+const sameClass = (a, b) => {
+  const n = v => String(v||'').split('-').map(x => parseInt(x,10)).join('-');
+  return !!a && !!b && n(a) === n(b);
+};
+
+/* ── 명렬 ── */
+async function loadRoster(){
+  const snap = await getDoc(doc(db, 'students', 'main'));
+  const all  = snap.exists() ? (snap.data().students || []) : [];
+  const [g, r] = CLASSKEY.split('-').map(Number);
+  const removed = new Set(ST.removed || []);
+  const base = all
+    .filter(s => parseInt(s.grade) === g && parseInt(s.room) === r)
+    .map(s => ({ key: `${parseInt(s.grade)}-${parseInt(s.room)}-${parseInt(s.num)}`,
+                 num: parseInt(s.num) || 0, name: s.name || '', extra: false }))
+    .filter(s => !removed.has(s.key));
+  const extra = (ST.extra || []).map(e => ({ ...e, extra: true }));
+  ROSTER = [...base, ...extra].sort((a, b) => a.num - b.num);
+}
+
+/* ── 자리판 ── */
+// 보는 사람이 바뀌면 교실을 180도 돌려 보는 것이다 — 상하와 좌우가 같이 뒤집힌다.
+// 상하만 뒤집으면 그건 회전이 아니라 거울이라, 왼쪽·오른쪽이 반대가 된다.
+//   학생 입장 : 교탁이 위. 학생이 교탁을 바라보는 방향.
+//   교사 입장 : 교탁이 아래. 교탁에 서서 학생들을 바라보는 방향.
+function rowOrder(){
+  const rs = Array.from({ length: ST.rows }, (_, i) => i);
+  return ST.flip ? rs.reverse() : rs;
+}
+function colOrder(){
+  const cs = Array.from({ length: ST.cols }, (_, i) => i);
+  return ST.flip ? cs.reverse() : cs;
+}
+function renderGrid(){
+  const off = new Set(ST.off);
+  const el  = $('grid');
+  document.querySelector('.board').classList.toggle('flip', !!ST.flip);
+  // 인쇄 격자용 — 교탁 방향과 명렬 맞춤은 인쇄 레이아웃이 알아야 한다
+  const pcol = document.querySelector('.boardcol');
+  if (pcol) {
+    pcol.classList.add('pcol');
+    pcol.classList.toggle('pflip', !!ST.flip);
+    pcol.classList.toggle('rlast', ST.rosterAlign === 'last');
+  }
+  const fb = $('bFlip');
+  if (fb) { fb.textContent = ST.flip ? '교사 입장 (교탁 ↓)' : '학생 입장 (교탁 ↑)'; fb.classList.toggle('on', !!ST.flip); }
+  const seatHtml = cell => {
+    if (off.has(cell)) return `<div class="seat off" data-cell="${cell}"></div>`;
+    const k = ST.seats[cell];
+    if (!k) return `<div class="seat empty" data-cell="${cell}"></div>`;   // 빈 자리도 받는다
+    const ap = apartTagsOf(ST.apart, k);
+    const tags =
+      (ST.front[k] ? '<span class="s-tag fr">앞</span>' : '') +
+      (ap.length ? `<span class="s-tag ap">분리 ${ap.join('·')}</span>` : '');
+    const cls = [ 'seat',
+      PICK === cell ? 'sel' : '',
+      PARTIAL.has(k) ? 'pick' : '',
+      APART_SEL.has(k) ? 'pick' : '' ].filter(Boolean).join(' ');
+    // 고정은 번호 옆 자물쇠로 — 자리에서 바로 켜고 끄는 게 가장 짧은 길이다.
+    return `<div class="${cls}" data-cell="${cell}" draggable="${CANEDIT}">
+      ${tags ? `<span class="s-tags">${tags}</span>` : ''}
+      <span class="s-num">${String(numOf(k)).padStart(2,'0')}</span>
+      <button class="s-pin${ST.fixed[k] ? ' on' : ''} noprint" data-pin="${esc(k)}"
+        title="${ST.fixed[k] ? '고정을 풉니다' : '이 자리에 고정합니다 — 랜덤을 돌려도 안 움직입니다'}"
+        ${CANEDIT ? '' : 'disabled'}>${ST.fixed[k] ? '🔒' : '🔓'}</button>
+      <span class="s-name">${esc(nameOf(k))}</span>
+      ${ST.duty[k] ? `<span class="s-duty">${esc(ST.duty[k])}</span>` : ''}
+    </div>`;
+  };
+  // 줄이 많으면 인쇄에서 줄 간격만으로 종이를 넘긴다 — 줄 수에 맞춰 좁힌다.
+  el.style.setProperty('--rowgap',  ST.rows >= 10 ? '5pt' : ST.rows >= 8 ? '9pt' : '13pt');
+  el.style.setProperty('--seatpad', ST.rows >= 10 ? '7pt' : '9pt');
+  // 분단(묶음)마다 격자를 따로 만들어 사이를 벌린다
+  const cols = colOrder(), rows = rowOrder(), g = Math.max(1, ST.group || 1);
+  let html = '';
+  for (let i = 0; i < cols.length; i += g) {
+    const part = cols.slice(i, i + g);
+    html += `<div class="aisle" style="grid-template-columns:repeat(${part.length},minmax(0,1fr));">`;
+    for (const r of rows) for (const c of part) html += seatHtml(seatRC(r, c));
+    html += '</div>';
+  }
+  el.innerHTML = html;
+  el.querySelectorAll('.seat').forEach(s => {
+    s.addEventListener('click', () => onSeat(s.dataset.cell));
+    bindDrag(s);
+  });
+  // 자물쇠는 자리 클릭(고르기·교환)과 겹치면 안 된다
+  el.querySelectorAll('[data-pin]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!CANEDIT) return;
+    const k = b.dataset.pin;
+    clearSay();
+    if (ST.fixed[k]) delete ST.fixed[k];
+    else ST.fixed[k] = Object.keys(ST.seats).find(c => ST.seats[c] === k);
+    touch();
+  }));
+}
+
+/* ── 자리 클릭: 모드마다 하는 일이 다르다 ── */
+function onSeat(cell){
+  if (!CANEDIT) return;
+  const k = ST.seats[cell];
+  clearSay();
+  if (MODE === 'off') {
+    const off = new Set(ST.off);
+    if (off.has(cell)) off.delete(cell);
+    else { if (k) { delete ST.seats[cell]; unfixAt(k); } off.add(cell); }
+    ST.off = [...off]; touch(); return;
+  }
+  if (MODE === 'move') {
+    if (PICK === null) { if (k || true) PICK = cell; }
+    else if (PICK === cell) PICK = null;
+    else { swap(PICK, cell); PICK = null; touch(); return; }
+    renderGrid(); return;
+  }
+  if (!k) { say('warn', '빈 자리입니다. 학생이 앉은 자리를 눌러 주세요.'); return; }
+  if (MODE === 'partial') {
+    if (PARTIAL.has(k)) PARTIAL.delete(k); else PARTIAL.add(k);
+    renderGrid(); return;
+  }
+}
+function swap(a, b){
+  const ka = ST.seats[a], kb = ST.seats[b];
+  if (ka) ST.seats[b] = ka; else delete ST.seats[b];
+  if (kb) ST.seats[a] = kb; else delete ST.seats[a];
+  // 손으로 옮겼으면 그 자리가 새 고정석이다 — 안 그러면 랜덤 한 번에 도로 날아간다
+  if (ka && ST.fixed[ka]) ST.fixed[ka] = b;
+  if (kb && ST.fixed[kb]) ST.fixed[kb] = a;
+}
+function unfixAt(k){ delete ST.fixed[k]; }
+
+/* ── 옆 패널 ── */
+function renderSide(){
+  const seated = new Set(Object.values(ST.seats));
+  const un = ROSTER.filter(s => !seated.has(s.key));
+  $('unseatedCnt').textContent = un.length ? `${un.length}명` : '없음';
+  // 제약은 자리를 눌러 고르게 돼 있었는데, 처음 열면 아무도 안 앉아 있어 누를 자리가 없다.
+  // 배정 전에 제약부터 걸고 싶은 게 보통이라 이 목록에서도 고를 수 있어야 한다.
+  $('unseated').innerHTML = un.length
+    ? un.map(s => {
+        const tag = (ST.fixed[s.key] ? '<span class="s-tag fix">고정</span>' : '')
+                  + (ST.front[s.key] ? '<span class="s-tag fr">앞</span>' : '')
+                  + (apartTagsOf(ST.apart, s.key).length
+                      ? `<span class="s-tag ap">분리 ${apartTagsOf(ST.apart, s.key).join('·')}</span>` : '')
+                  + (ST.duty[s.key] ? `<span class="s-tag dt">${esc(ST.duty[s.key])}</span>` : '');
+        return `<div class="row stu${APART_SEL.has(s.key) ? ' on' : ''}" data-stu="${esc(s.key)}" draggable="${CANEDIT}">
+        <span class="mono">${String(s.num).padStart(2,'0')}</span>
+        <span class="nm">${esc(s.name)}</span>${s.extra?'<span class="mono">추가</span>':''}
+        <span class="row-tags">${tag}</span></div>`;
+      }).join('')
+    : '<div class="none">모두 앉았습니다.</div>';
+  $('unseated').querySelectorAll('.stu').forEach(el => {
+    bindDrag(el);
+    el.addEventListener('click', () => onStudent(el.dataset.stu));
+  });
+  bindUnseatDrop();
+  renderCons();
+  renderHist();
+  renderRosterEdit();
+}
+// 안 앉은 학생 목록에서 눌렀을 때. 제약은 「학생별 설정」 표에서 켠다.
+function onStudent(k){
+  if (!CANEDIT || !k) return;
+  clearSay();
+  if (MODE === 'off') { say('warn', '빈칸은 자리판에서 지정합니다.'); return; }
+  say('warn', '이 학생을 앉히려면 자리로 끌어다 놓으세요.');
+}
+
+// 묶기 버튼 — 표에서 '분리'를 둘 이상 켜야 열린다
+function renderApartBar(){
+  const btn = $('bApartMake');
+  if (!btn) return;
+  const n = APART_SEL.size;
+  btn.disabled = !CANEDIT || n < 2;
+  btn.textContent = n < 2 ? '묶기' : `${n}명 묶기`;
+  if ($('apartD')) $('apartD').disabled = !CANEDIT;
+}
+
+// 지금 어느 자리에 앉아 있나. 고정석은 '어느 칸에' 가 있어야 걸 수 있다.
+const seatOf = k => Object.keys(ST.seats).find(c => ST.seats[c] === k) || null;
+
+// 걸어 둔 분리 묶음만 여기 남는다 — 고정·앞자리·임무는 표에 그대로 보인다.
+function renderCons(){
+  $('consList').innerHTML = ST.apart.map((p, i) => {
+    const ks = apartMembers(p);
+    return `<div class="row"><span class="s-tag ap">분리 ${apartTag(i)}</span>
+      <span class="mono">${(p.d||2) >= 3 ? '멀리' : '이웃 금지'}</span>
+      <span class="nm">${ks.map(k => esc(nameOf(k))).join(' · ')}</span>
+      <button class="x" data-drop="${i}" title="이 묶음을 지웁니다">×</button></div>`;
+  }).join('');
+  $('consList').querySelectorAll('[data-drop]').forEach(b =>
+    b.addEventListener('click', () => { ST.apart.splice(Number(b.dataset.drop), 1); touch(); }));
+  renderStuGrid();
+}
+
+// 학생별 설정 표. 한 줄에 한 학생, 그 자리에서 켜고 끈다.
+// 다시 그릴 때 입력 중인 임무 칸이 날아가면 안 되므로 change 에서만 반영한다.
+function renderStuGrid(){
+  const g = $('stuGrid');
+  if (!g) return;
+  const on = (c, yes) => yes ? c + ' on' : c;
+  g.innerHTML = ROSTER.map(s => {
+    const k = s.key, seated = !!seatOf(k);
+    // 이미 묶여 있으면 어느 묶음인지(A·B…)를 버튼에 그대로 보여 준다
+    const tags = apartTagsOf(ST.apart, k);
+    const apLabel = tags.length ? `분리 ${tags.join('·')}` : '분리';
+    return `<div class="stu-row" data-row="${esc(k)}">
+      <span class="mono">${String(s.num).padStart(2,'0')}</span>
+      <span class="nm" title="${esc(s.name)}">${esc(s.name)}</span>
+      <button class="${on('tog', !!ST.fixed[k])}" data-tog="fix" data-k="${esc(k)}"
+        ${seated ? '' : 'disabled'} title="${seated ? '랜덤을 돌려도 이 자리 그대로' : '먼저 자리에 앉혀야 고정할 수 있습니다'}">고정</button>
+      <button class="${on('tog', !!ST.front[k])}" data-tog="front" data-k="${esc(k)}"
+        title="앞 ${ST.frontRows}줄 안에 앉힙니다">앞</button>
+      <button class="${on('tog sel-apart', APART_SEL.has(k))}${tags.length ? ' tied' : ''}"
+        data-tog="apart" data-k="${esc(k)}"
+        title="${tags.length ? `묶음 ${tags.join('·')} 에 들어 있습니다. 새로 묶으려면 눌러 고르세요.`
+                             : '떼어놓을 학생으로 고릅니다. 둘 이상 고른 뒤 위 「묶기」'}">${apLabel}</button>
+      <input class="duty" data-duty="${esc(k)}" value="${esc(ST.duty[k] || '')}"
+        placeholder="임무" maxlength="20" spellcheck="false" ${CANEDIT ? '' : 'disabled'}>
+    </div>`;
+  }).join('');
+
+  if (!CANEDIT) g.querySelectorAll('button').forEach(b => b.disabled = true);
+
+  g.querySelectorAll('[data-tog]').forEach(b => b.addEventListener('click', () => {
+    if (!CANEDIT) return;
+    const k = b.dataset.k;
+    clearSay();
+    if (b.dataset.tog === 'fix') {
+      if (ST.fixed[k]) delete ST.fixed[k];
+      else {
+        const cell = seatOf(k);
+        if (!cell) { say('warn', `${nameOf(k)} 학생이 아직 안 앉았습니다. 먼저 앉힌 뒤 고정하세요.`); return; }
+        ST.fixed[k] = cell;
+      }
+      touch();
+    } else if (b.dataset.tog === 'front') {
+      if (ST.front[k]) delete ST.front[k]; else ST.front[k] = ST.frontRows;
+      touch();
+    } else {
+      // 분리는 아직 '고르는 중'이라 저장 상태가 아니다 — 표시만 바꾸고 묶기 버튼을 연다
+      if (APART_SEL.has(k)) APART_SEL.delete(k); else APART_SEL.add(k);
+      b.classList.toggle('on', APART_SEL.has(k));
+      renderApartBar(); renderGrid();
+    }
+  }));
+
+  g.querySelectorAll('[data-duty]').forEach(inp => inp.addEventListener('change', () => {
+    if (!CANEDIT) return;
+    const k = inp.dataset.duty, v = inp.value.trim().slice(0, 20);
+    if (v) ST.duty[k] = v; else delete ST.duty[k];
+    touch();
+  }));
+
+  const nCons = Object.keys(ST.fixed).length + Object.keys(ST.front).length
+              + Object.keys(ST.duty).length + ST.apart.length;
+  $('stuCnt').textContent = ROSTER.length ? `${ROSTER.length}명${nCons ? ` · 걸어 둔 것 ${nCons}` : ''}` : '';
+  renderApartBar();
+}
+function renderRosterEdit(){
+  $('rosterEdit').innerHTML = ROSTER.map(s =>
+    `<div class="row"><span class="mono">${String(s.num).padStart(2,'0')}</span>
+      <span class="nm">${esc(s.name)}</span>
+      ${s.extra ? '<span class="mono">추가</span>' : ''}
+      <button class="x" data-out="${esc(s.key)}" title="이 반 자리 배치에서 뺍니다">×</button></div>`).join('');
+  $('rosterEdit').querySelectorAll('[data-out]').forEach(b =>
+    b.addEventListener('click', async () => {
+      const key = b.dataset.out;
+      if (!confirm(`${nameOf(key)} 학생을 이 반 자리 배치에서 뺍니다.\n(명렬 원본은 바뀌지 않습니다)`)) return;
+      ST.extra = (ST.extra || []).filter(e => e.key !== key);
+      if (!ST.extra.some(e => e.key === key)) ST.removed = [...new Set([...(ST.removed||[]), key])];
+      for (const c in ST.seats) if (ST.seats[c] === key) delete ST.seats[c];
+      delete ST.fixed[key]; delete ST.front[key]; delete ST.duty[key];
+      // 묶음에서 그 학생만 빼고, 혼자 남은 묶음은 의미가 없으니 지운다
+      ST.apart = ST.apart
+        .map(p => ({ ...p, ks: apartMembers(p).filter(k => k !== key), a: undefined, b: undefined }))
+        .filter(p => p.ks.length >= 2);
+      await loadRoster(); touch();
+    }));
+}
+function renderHist(){
+  // 본인이 저장한 것만 보여준다 (관리자는 전부)
+  const mine = (ST.history || [])
+    .map((h, i) => ({ ...h, i }))
+    .filter(h => ME === ADMIN_EMAIL || h.by === ME)
+    .reverse();
+  $('histCnt').textContent = mine.length ? `${mine.length}장` : '없음';
+  $('histList').innerHTML = mine.length
+    ? mine.map(h => `<div class="row">
+        <span class="mono">${esc((h.at||'').slice(5,16).replace('T',' '))}</span>
+        <span class="nm">${esc(h.by === ME ? '' : (h.byName||''))}</span>
+        <button class="btn" data-hist="${h.i}" style="padding:3px 9px;font-size:12px;">불러오기</button>
+        <button class="x" data-histdel="${h.i}" title="이 기록을 지웁니다">×</button>
+      </div>`).join('')
+    : '<div class="none">저장한 배치가 아직 없습니다.</div>';
+  $('histList').querySelectorAll('[data-histdel]').forEach(b =>
+    b.addEventListener('click', async () => {
+      const i = Number(b.dataset.histdel), h = ST.history[i];
+      if (!h) return;
+      if (!confirm(`${(h.at||'').slice(0,10)} 에 저장한 배치를 지웁니다.\n되돌릴 수 없습니다.`)) return;
+      ST.history.splice(i, 1);
+      await saveHistoryOnly();
+    }));
+  $('histList').querySelectorAll('[data-hist]').forEach(b =>
+    b.addEventListener('click', () => {
+      const h = ST.history[Number(b.dataset.hist)];
+      if (!h || !confirm('그때 자리로 되돌립니다. 지금 화면은 저장 전이면 사라집니다.')) return;
+      UNDO = JSON.parse(JSON.stringify({ seats: ST.seats, duty: ST.duty, cols: ST.cols, rows: ST.rows, off: ST.off }));
+      ST.cols = h.cols ?? ST.cols; ST.rows = h.rows ?? ST.rows;
+      ST.off = h.off || []; ST.seats = { ...(h.seats || {}) }; ST.duty = { ...(h.duty || {}) };
+      if (h.memo != null) { ST.memo = h.memo; $('memo').value = h.memo; }
+      $('nCols').value = ST.cols; $('nRows').value = ST.rows;
+      $('bUndo').disabled = false;
+      touch(); say('ok', '지난 배치를 불러왔습니다. 저장해야 남습니다.');
+    }));
+}
+
+/* ── 끌어놓기 ────────────────────────────────────────────────────────────
+   · 안 앉은 학생을 자리로 끌면 그 자리에 앉는다(있던 학생은 목록으로 나온다)
+   · 자리끼리 끌면 서로 바뀐다. 빈 자리로 끌면 그냥 옮겨진다.
+   · 앉은 학생을 목록으로 끌면 자리에서 뺀다
+   클릭으로 바꾸는 방법도 그대로 둔다 — 터치 기기에서는 끌기가 잘 안 먹는다. */
+let DRAG = null;   // { type:'seat'|'stu', v:자리 또는 학생키 }
+
+function bindDrag(el){
+  if (!CANEDIT || el.dataset.dragBound) return;
+  el.dataset.dragBound = '1';
+  el.addEventListener('dragstart', e => {
+    const cell = el.dataset.cell, stu = el.dataset.stu;
+    if (stu)                       DRAG = { type:'stu',  v:stu };
+    else if (cell && ST.seats[cell]) DRAG = { type:'seat', v:cell };
+    else { e.preventDefault(); return; }
+    el.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', DRAG.type + ':' + DRAG.v);
+  });
+  el.addEventListener('dragend', () => { el.classList.remove('dragging'); DRAG = null; clearOver(); });
+  if (!el.dataset.cell) return;                       // 목록 항목은 받지 않는다
+  el.addEventListener('dragover', e => {
+    if (!DRAG || el.classList.contains('off')) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    el.classList.add('over');
+  });
+  el.addEventListener('dragleave', () => el.classList.remove('over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); clearOver();
+    if (!DRAG || el.classList.contains('off')) return;
+    dropOnSeat(el.dataset.cell);
+  });
+}
+function clearOver(){ document.querySelectorAll('.over').forEach(e => e.classList.remove('over')); }
+
+function dropOnSeat(cell){
+  const d = DRAG; DRAG = null;
+  if (!d) return;
+  clearSay();
+  if (d.type === 'seat') { if (d.v !== cell) { swap(d.v, cell); touch(); } return; }
+  // 안 앉은 학생 → 이 자리. 있던 학생은 목록으로 나온다.
+  for (const c in ST.seats) if (ST.seats[c] === d.v) delete ST.seats[c];
+  ST.seats[cell] = d.v;
+  if (ST.fixed[d.v]) ST.fixed[d.v] = cell;
+  touch();
+}
+
+// 목록으로 끌어다 놓으면 자리에서 뺀다
+function bindUnseatDrop(){
+  const box = $('unseated');
+  if (box.dataset.dropBound) return;
+  box.dataset.dropBound = '1';
+  box.addEventListener('dragover', e => {
+    if (!DRAG || DRAG.type !== 'seat') return;
+    e.preventDefault(); box.classList.add('over');
+  });
+  box.addEventListener('dragleave', () => box.classList.remove('over'));
+  box.addEventListener('drop', e => {
+    e.preventDefault(); box.classList.remove('over');
+    if (!DRAG || DRAG.type !== 'seat') return;
+    const k = ST.seats[DRAG.v];
+    delete ST.seats[DRAG.v];
+    if (k) delete ST.fixed[k];
+    DRAG = null; touch();
+  });
+}
+
+function touch(){ DIRTY = true; renderGrid(); renderSide(); }
+
+/* ── 배정 ── */
+// 「앞 왼쪽부터」는 선생님이 지금 보고 있는 화면 기준이어야 한다.
+// 앞/뒤는 교탁 쪽이라 두 화면에서 같지만, 교사 입장은 180도 돌아가 있어
+// 좌우가 반대로 그려진다. 그래서 왼/오만 바꿔서 넘긴다.
+// (배정 엔진 seatCells 는 늘 물리적 좌표로만 생각한다 — 화면을 모른다.)
+function ordForView(){
+  const s = ST.ordStart || 'FL';
+  if (!ST.flip) return s;
+  return s[0] + (s[1] === 'L' ? 'R' : 'L');
+}
+
+function runAssign(mode, keep){
+  clearSay();
+  UNDO = JSON.parse(JSON.stringify(ST.seats));
+  $('bUndo').disabled = false;
+  const res = seatAssign({
+    grid: grid(), roster: ROSTER.map(s => s.key),
+    cons: { fixed: ST.fixed, front: ST.front, apart: ST.apart },
+    ord: { start: ordForView(), dir: ST.ordDir },
+    mode, keep, nameOf
+  });
+  if (res.error) { say('err', res.error); return; }
+  ST.seats = res.seats;
+  if (res.warn) say('warn', '번호순이라 이 조건은 못 지켰습니다 — ' + res.warn.join(', '));
+  touch();
+}
+
+/* ── 저장·불러오기 ── */
+async function load(){
+  const snap = await getDoc(doc(db, 'seating', CLASSKEY));
+  if (snap.exists()) {
+    const d = snap.data();
+    ST = {
+      cols: d.cols || 5, rows: d.rows || 6, off: d.off || [],
+      seats: d.seats || {}, fixed: d.fixed || {}, front: d.front || {},
+      apart: (d.apart || []).map(p => p.ks ? p : { ks: [p.a, p.b].filter(Boolean), d: p.d || 3 }),
+      frontRows: d.frontRows || 2,
+      duty: d.duty || {}, memo: d.memo || '',
+      extra: d.extra || [], removed: d.removed || [], history: d.history || [],
+      // 열 때는 늘 교사 입장(교탁 아래)으로 시작한다. 자리표를 만드는 사람이
+      // 교탁에 서서 보는 방향이라, 저장돼 있던 방향을 따르면 매번 한 번씩 뒤집게 된다.
+      // 보는 방향은 자리 데이터가 아니라 화면 설정이라 저장값을 무시해도 잃는 게 없다.
+      flip: true,
+      group: d.group || 1,
+      ordStart: d.ordStart || 'FL', ordDir: d.ordDir || 'row',
+      rosterAlign: d.rosterAlign || 'first'
+    };
+  }
+  $('nCols').value = ST.cols; $('nRows').value = ST.rows; $('nFront').value = ST.frontRows;
+  $('nGroup').value = ST.group;
+  $('ordStart').value = ST.ordStart; $('ordDir').value = ST.ordDir;
+  $('rosterAlign').value = ST.rosterAlign;
+  $('memo').value = ST.memo;
+}
+async function save(){
+  if (!CANEDIT) { say('err', '이 반 담임만 저장할 수 있습니다.'); return; }
+  clearSay();
+  const now = new Date().toISOString();
+  // 저장할 때마다 한 장씩 쌓는다. 최근 것만 남긴다 — 문서 크기 한도(1MB)를 넘길 일이 없게.
+  const hist = [...(ST.history || []), {
+    at: now, by: ME, byName: MYNAME,
+    cols: ST.cols, rows: ST.rows, off: ST.off,
+    seats: { ...ST.seats }, duty: { ...ST.duty }, memo: ST.memo
+  }].slice(-HIST_KEEP);
+  ST.memo = $('memo').value;
+  try {
+    await setDoc(doc(db, 'seating', CLASSKEY), {
+      cols: ST.cols, rows: ST.rows, off: ST.off, seats: ST.seats,
+      fixed: ST.fixed, front: ST.front, apart: ST.apart, frontRows: ST.frontRows,
+      duty: ST.duty, memo: ST.memo, extra: ST.extra, removed: ST.removed, flip: !!ST.flip, group: ST.group, ordStart: ST.ordStart, ordDir: ST.ordDir, rosterAlign: ST.rosterAlign,
+      history: hist, updatedAt: now, updatedBy: ME
+    });
+    ST.history = hist; DIRTY = false;
+    renderHist();
+    say('ok', '저장했습니다.');
+  } catch(e) {
+    say('err', e.code === 'permission-denied'
+      ? '저장 권한이 없습니다. 이 반 담임만 저장할 수 있습니다.'
+      : '저장하지 못했습니다: ' + e.message);
+  }
+}
+
+// 인쇄물에만 넣는 제목과 명렬표. 이름을 번호로 찾는 일이 잦아 옆에 두면 쓸모가 있다.
+const PR_ONE_COL = 32;   // 이 인원까지는 명렬을 한 단으로 (대부분의 학급)
+const PR_CHUNK   = 25;   // 넘으면 이만큼씩 단을 나눈다
+
+function buildPrintExtras(){
+  const [g, r] = CLASSKEY.split('-');
+  $('printTitle').textContent = `${g}학년 ${r}반 자리 배치도`;
+  // 명렬이 아주 길면 한 단으로는 종이 높이를 넘는다 — 그때만 단을 나눈다.
+  const size  = ROSTER.length > PR_ONE_COL ? PR_CHUNK : Math.max(1, ROSTER.length);
+  const parts = [];
+  for (let i = 0; i < ROSTER.length; i += size) parts.push(ROSTER.slice(i, i + size));
+  $('printRoster').innerHTML =
+    `<div class="pr-cap">${g}-${r} 명렬 <span class="pr-n">${ROSTER.length}명</span></div>` +
+    // 비고 칸에는 임무를 적어 내보낸다. 임무가 없어도 칸은 남긴다 —
+    // 인쇄물에 손으로 적어 넣을 자리가 있어야 쓸모가 있다.
+    `<div class="pr-cols">` + (parts.length ? parts : [[]]).map(part =>
+      `<table class="pr-tbl">`
+      + `<colgroup><col class="c-num"><col class="c-nm"><col></colgroup>`
+      + `<tr><th>번호</th><th>이름</th><th>비고</th></tr>` +
+      part.map(s => `<tr><td>${s.num}</td><td class="nm">${esc(s.name)}</td>`
+                  + `<td class="note">${esc(ST.duty[s.key] || '')}</td></tr>`).join('') +
+      `</table>`).join('') + `</div>`;
+}
+
+window.__buildPrintExtras = buildPrintExtras;   // 인쇄 모습 검사에서 부른다
+
+// 지난 기록을 지울 때는 이력만 저장한다. 보통 저장(save)은 지금 화면을 한 장
+// 더 쌓기 때문에, 지우려다 오히려 하나가 늘어난다.
+async function saveHistoryOnly(){
+  if (!CANEDIT) { say('err', '이 반 담임만 지울 수 있습니다.'); return; }
+  try {
+    await setDoc(doc(db, 'seating', CLASSKEY), { history: ST.history }, { merge: true });
+    renderHist();
+    say('ok', '기록을 지웠습니다.');
+  } catch(e) {
+    say('err', e.code === 'permission-denied'
+      ? '지울 권한이 없습니다. 이 반 담임만 지울 수 있습니다.'
+      : '지우지 못했습니다: ' + e.message);
+  }
+}
+
+/* ── 표 복사 — Word·한글에 붙여넣으면 표 모양 그대로 들어간다 ── */
+async function copyTable(){
+  clearSay();
+  const off = new Set(ST.off);
+  let t = `<table border="1" style="border-collapse:collapse;text-align:center;">`;
+  const desk = `<tr><td colspan="${ST.cols}" style="padding:6px;font-weight:bold;">${esc(CLASSKEY)} 자리 배치 — 교탁</td></tr>`;
+  if (!ST.flip) t += desk;
+  for (const r of rowOrder()) {
+    t += '<tr>';
+    for (const c of colOrder()) {
+      const cell = seatRC(r, c), k = ST.seats[cell];
+      const body = off.has(cell) ? ''
+        : k ? `${String(numOf(k)).padStart(2,'0')} ${esc(nameOf(k))}${ST.duty[k] ? '<br>('+esc(ST.duty[k])+')' : ''}`
+            : '';
+      t += `<td style="padding:8px 10px;min-width:64px;">${body}</td>`;
+    }
+    t += '</tr>';
+  }
+  if (ST.flip) t += desk;
+  t += '</table>';
+  if (ST.memo || $('memo').value) t += `<p>${esc($('memo').value || ST.memo)}</p>`;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html':  new Blob([t], { type: 'text/html' }),
+      'text/plain': new Blob([$('grid').innerText], { type: 'text/plain' })
+    })]);
+    say('ok', '복사했습니다. Word 나 한글에 붙여넣으면 표 그대로 들어갑니다.');
+  } catch(e) {
+    say('err', '복사하지 못했습니다. 브라우저가 막았을 수 있습니다 — 인쇄를 쓰거나 주소창에서 다시 시도해 보세요.');
+  }
+}
+
+/* ── 시작 ── */
+function bindModes(){
+  // 남은 모드는 '자리판을 눌러야만' 되는 것들뿐이다.
+  // 고정석·앞자리·분리·임무는 아래 「학생별 설정」 표에서 켠다.
+  const modes = { mMove:'move', mOff:'off' };
+  const hints = {
+    move : '자리를 끌어다 놓거나, 눌러 고른 뒤 다른 자리를 누르면 서로 바뀝니다. 오른쪽 목록의 학생도 끌어다 앉힐 수 있습니다.',
+    off  : '자리를 누르면 빈칸(자리 아님)이 됩니다. 통로나 결원 자리에 쓰세요.',
+    partial: '다시 섞을 학생들을 누르세요. 고른 학생들끼리만 자리를 바꿉니다.'
+  };
+  const setMode = m => {
+    MODE = m; PICK = null;
+    if (m !== 'partial') PARTIAL.clear();
+    Object.entries(modes).forEach(([id, v]) => $(id).classList.toggle('on', v === m));
+    $('bPartial').classList.toggle('on', m === 'partial');
+    $('modeHint').textContent = hints[m] || '';
+    renderGrid(); renderApartBar();
+  };
+  Object.entries(modes).forEach(([id, m]) => $(id).addEventListener('click', () => setMode(m)));
+
+  $('bPartial').addEventListener('click', () => {
+    if (MODE !== 'partial') { setMode('partial'); return; }
+    if (!PARTIAL.size) { say('warn', '섞을 학생을 먼저 고르세요.'); return; }
+    // 고른 학생만 빼고 나머지는 지금 자리에 묶어 둔다
+    const keep = {};
+    for (const c in ST.seats) if (!PARTIAL.has(ST.seats[c])) keep[ST.seats[c]] = c;
+    runAssign('random', keep);
+    PARTIAL.clear(); setMode('move');
+  });
+  setMode('move');
+}
+
+function bindRest(){
+  $('bOrder').addEventListener('click', () => runAssign('order'));
+  $('bRandom').addEventListener('click', () => runAssign('random'));
+  $('bClear').addEventListener('click', () => {
+    if (!confirm('자리를 전부 비웁니다. 제약과 임무는 그대로 둡니다.')) return;
+    UNDO = JSON.parse(JSON.stringify(ST.seats)); $('bUndo').disabled = false;
+    ST.seats = {}; touch();
+  });
+  $('bUndo').addEventListener('click', () => {
+    if (!UNDO) return;
+    ST.seats = UNDO.seats ? UNDO.seats : UNDO;
+    if (UNDO.duty) ST.duty = UNDO.duty;
+    UNDO = null; $('bUndo').disabled = true; touch();
+  });
+  const resize = () => {
+    const c = Math.min(12, Math.max(1, parseInt($('nCols').value) || 5));
+    const r = Math.min(12, Math.max(1, parseInt($('nRows').value) || 6));
+    $('nCols').value = c; $('nRows').value = r;
+    ST.cols = c; ST.rows = r;
+    // 줄어든 판 밖으로 나간 자리·제약은 정리한다 — 안 그러면 안 보이는 곳에 학생이 남는다
+    const inside = k => { const p = seatParse(k); return p.r < r && p.c < c; };
+    for (const cell in ST.seats) if (!inside(cell)) delete ST.seats[cell];
+    for (const k in ST.fixed) if (!inside(ST.fixed[k])) delete ST.fixed[k];
+    ST.off = ST.off.filter(inside);
+    touch();
+  };
+  ['ordStart','ordDir','rosterAlign'].forEach(id => $(id).addEventListener('change', () => {
+    ST[id] = $(id).value; touch();
+  }));
+  $('nGroup').addEventListener('change', () => {
+    ST.group = Math.min(6, Math.max(1, parseInt($('nGroup').value) || 1));
+    $('nGroup').value = ST.group;
+  $('ordStart').value = ST.ordStart; $('ordDir').value = ST.ordDir;
+  $('rosterAlign').value = ST.rosterAlign; touch();
+  });
+  $('nCols').addEventListener('change', resize);
+  $('nRows').addEventListener('change', resize);
+  $('nFront').addEventListener('change', () => {
+    ST.frontRows = Math.min(12, Math.max(1, parseInt($('nFront').value) || 2));
+    $('nFront').value = ST.frontRows;
+    for (const k in ST.front) ST.front[k] = ST.frontRows;
+    touch();
+  });
+  $('apartD').addEventListener('change', () => { APART_D = +$('apartD').value || 2; });
+  $('bApartMake').addEventListener('click', () => {
+    if (APART_SEL.size < 2) return;
+    const n = APART_SEL.size;
+    ST.apart.push({ ks: [...APART_SEL], d: APART_D });
+    APART_SEL.clear();
+    touch();
+    // '멀리'는 사이에 두 자리를 요구해서, 인원이 조금만 많아도 자리가 안 나온다.
+    // 5분단 30자리 기준으로 이웃 금지는 8명까지 되지만 멀리는 4명이 한계다.
+    say(APART_D === 3 && n >= 5 ? 'warn' : 'ok',
+        APART_D === 3 && n >= 5
+          ? `${n}명을 '멀리'로 묶었습니다. 자리가 안 나오면 '이웃 금지'로 다시 묶어 보세요.`
+          : '묶었습니다. 랜덤을 돌리면 서로 떨어져 앉습니다.');
+  });
+  $('bFlip').addEventListener('click', () => { ST.flip = !ST.flip; touch(); });
+  $('bSave').addEventListener('click', save);
+  $('bCopy').addEventListener('click', copyTable);
+  $('bPrint').addEventListener('click', () => {
+    buildPrintExtras();
+    // 대화상자 설정은 우리가 못 건드린다 — 색이 안 나오는 이유를 알려만 준다.
+    say('ok', '인쇄 대화상자에서 색상을 «컬러»로 두세요. 날짜·주소가 같이 찍히면 «머리글 및 바닥글»을 꺼 주세요.');
+    // 인쇄에는 입력칸 대신 글로 낸다 — textarea 는 넘치는 부분이 잘린다.
+    // 화면 쪽 display 는 절대 건드리지 않는다. 예전에 여기서 memoCard 를 숨겼다가,
+    // 메모를 비운 채 인쇄하면 입력칸이 영영 사라져 다시 못 적는 일이 있었다.
+    const memo = $('memo').value;
+    $('memoPrint').textContent = memo;
+    $('memoCard').classList.toggle('memo-empty', !memo.trim());
+    window.print();
+  });
+  $('memo').addEventListener('input', () => { ST.memo = $('memo').value; DIRTY = true; });
+  $('bAdd').addEventListener('click', async () => {
+    const num  = parseInt($('addNum').value);
+    const name = $('addName').value.trim();
+    if (!num || !name) { say('warn', '번호와 이름을 모두 적어 주세요.'); return; }
+    const key = `${CLASSKEY}-${num}`;
+    if (ROSTER.some(s => s.key === key)) { say('warn', '그 번호는 이미 있습니다.'); return; }
+    ST.removed = (ST.removed || []).filter(k => k !== key);
+    ST.extra   = [...(ST.extra || []), { key, num, name }];
+    $('addNum').value = ''; $('addName').value = '';
+    await loadRoster(); touch();
+    say('ok', `${name} 학생을 넣었습니다. 저장해야 남습니다.`);
+  });
+  window.addEventListener('beforeunload', e => {
+    if (DIRTY && CANEDIT) { e.preventDefault(); e.returnValue = ''; }
+  });
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { say('err', '교사용 앱에서 로그인한 뒤 다시 열어 주세요.'); return; }
+  ME = (user.email || '').toLowerCase();
+  MYNAME = user.displayName || ME.split('@')[0];
+  if (!CLASSKEY) { say('err', '학급이 지정되지 않았습니다. 학생 종합검색에서 반을 고른 뒤 여세요.'); return; }
+  $('clsLabel').textContent = CLASSKEY.replace('-', '학년 ') + '반';
+  document.title = `${CLASSKEY} 자리 배치 — 영남고등학교`;
+
+  // 담임 판정은 앱이 넘겨준다(?hr=). 저장은 서버 규칙이 다시 막으므로 이건 화면 편의일 뿐이다.
+  CANEDIT = ME === ADMIN_EMAIL || sameClass(P.get('hr') || '', CLASSKEY);
+  $('who').textContent = CANEDIT ? '편집할 수 있습니다' : '보기만 됩니다 (담임만 저장)';
+  if (!CANEDIT) $('barMain').style.display = $('barGrid').style.display = 'none';
+
+  try {
+    await load();
+    await loadRoster();
+  } catch(e) {
+    say('err', e.code === 'permission-denied'
+      ? '열람 권한이 없습니다.' : '불러오지 못했습니다: ' + e.message);
+    return;
+  }
+  bindModes(); bindRest(); renderGrid(); renderSide();
+  if (!Object.keys(ST.seats).length && ROSTER.length && CANEDIT)
+    say('ok', '아직 배치가 없습니다. 번호순이나 랜덤을 눌러 시작하세요.');
+});
+</script>
+</body>
+</html>
