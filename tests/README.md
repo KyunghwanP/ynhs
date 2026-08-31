@@ -40,6 +40,7 @@ node tests/cal-consult.test.mjs                    # 업무 캘린더의 상담 
 node tests/consult-weekend.test.mjs                # 상담 주말 슬롯 + 7칸 폭 측정
 node tests/task-share.test.mjs                     # 공유받은 업무에 작성자·함께 받은 사람
 node tests/seat-inpage.test.mjs                    # 자리 배치 '크게 보기' → 앱 안 화면 + 돌아가기
+node tests/weekly-chips-live.test.mjs              # 주차 칩이 새로고침 없이 늘어나는지
 ```
 
 ### 교실 자리 배치 (seating.html)
