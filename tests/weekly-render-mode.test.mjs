@@ -421,6 +421,49 @@ console.log('\n■ 제목이 heading 으로 안 올 때');
   check('부서는 그대로 남는다', r.dept, r);
 }
 
+// ── 모바일 가로 스크롤 ────────────────────────────────────────────────────
+// 사이트 원본을 그대로 넣다 보니 안 끊기는 긴 글자(URL 등)나 폭을 못 박은
+// <table> 이 상자보다 넓어질 수 있다. .weekly-body 는 overflow-y:auto 라서,
+// overflow-x 를 안 정해 주면 그 계산값도 auto 로 끌려 올라가(CSS 규칙 —
+// 한쪽만 visible 이 아니면 다른 쪽도 visible 이 아니게 된다) 상자 자신이
+// 가로로도 스크롤되는 컨테이너가 된다. 그러면 넘친 내용이 안 보이는 채로
+// 오른쪽으로 끌리는 '빈 여백' 이 생긴다 — 실제로 이 증상이 보고됐다.
+console.log('\n■ 모바일 가로 스크롤');
+{
+  await pg.setViewportSize({ width: 390, height: 800 });
+  const OVERFLOW = `
+    <h1><span>주간 교육활동 및 업무 안내</span></h1>
+    <h2><span>교감 선생님</span></h2>
+    <p><span>· </span><span>참고: https://docs.google.com/spreadsheets/d/17DyD9aYX8RTdbdoQ3JTadD29C50dquygpcRjbuZEDw/edit?usp=sharing&aVeryLongParamThatShouldNotWrapXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</span></p>
+    <table style="width:900px"><tr><td>가</td><td>나</td><td>다</td><td>라</td><td>마</td><td>바</td><td>사</td><td>아</td><td>자</td><td>차</td></tr></table>
+  `;
+  await pg.evaluate(h => window.render(h), OVERFLOW);
+  const before = await pg.evaluate(() => ({
+    overflowX: getComputedStyle(document.querySelector('.weekly-body')).overflowX,
+    scrollLeft: document.querySelector('.weekly-body').scrollLeft,
+  }));
+  check('상자 자신에 overflow-x:hidden 이 있다', before.overflowX === 'hidden', before);
+  // 실제 휠 제스처로도 안 끌려야 한다 — computed 값만 보고 속으면 안 된다.
+  await pg.mouse.move(200, 400);
+  await pg.mouse.wheel(400, 0);
+  const scrollLeftAfter = await pg.evaluate(() => document.querySelector('.weekly-body').scrollLeft);
+  check('가로로 휠을 굴려도 끌려가지 않는다', scrollLeftAfter === 0, scrollLeftAfter);
+  // 긴 URL 은 클리핑이 아니라 줄바꿈으로 먼저 해결한다 — 그래야 내용이 안
+  // 사라진다. 잘려도 상관없는 표(폭을 못 박은 경우)만 overflow-x:hidden 이 받는다.
+  const wraps = await pg.evaluate(() => {
+    const r = document.querySelector('.wk-shadow-host').shadowRoot;
+    const p = [...r.querySelectorAll('p')].find(e => /docs\.google\.com/.test(e.textContent));
+    // 블록 요소 자체의 getClientRects() 는 줄마다가 아니라 상자 하나를 돌려준다.
+    // 실제 줄 수를 보려면 안의 글자에 Range 를 걸어야 한다.
+    const rg = document.createRange();
+    rg.selectNodeContents(p);
+    return new Set([...rg.getClientRects()].map(x => Math.round(x.top))).size > 1;
+  });
+  check('긴 URL 은 줄바꿈된다(잘려서 안 보이는 게 아니라)', wraps);
+  await pg.setViewportSize({ width: 1200, height: 800 });
+  await pg.evaluate(h => window.render(h), SITE);
+}
+
 console.log(errs.length ? '\n❌ 런타임 오류:\n' + errs.slice(0,4).join('\n') : '\n✅ 런타임 오류 없음');
 console.log(`\n${fail || errs.length ? '❌' : '✅'} 통과 ${pass} / 실패 ${fail}`);
 await b.close();
