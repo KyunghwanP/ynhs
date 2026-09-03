@@ -327,7 +327,7 @@
   try{ if(new URLSearchParams(location.search).get('glass')==='1') document.documentElement.classList.add('glass'); }catch(e){}
 </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
   @import url('https://cdn.jsdelivr.net/npm/pretendard@latest/dist/web/static/pretendard.css');
 
   :root{
@@ -1869,7 +1869,8 @@
     font-size:20px;line-height:2;color:var(--ink-soft);
     overflow:visible;
   }
-  .weekly-html-content *{
+  /* 받아온 HTML 의 글꼴을 통째로 갈아 끼운다. 원본 모양을 보려면 이걸 꺼야 한다. */
+  .weekly-html-content:not(.wk-plain):not(.wk-orig) *{
     font-family:'Noto Sans KR',sans-serif !important;
   }
   /* h1(페이지 제목): 카드 상단 어두운 타이틀바, flex로 제목+버튼 나란히 */
@@ -1914,11 +1915,60 @@
   .weekly-html-content h3{font-family:'Noto Sans KR';color:var(--ink);font-size:25px;font-weight:700;margin:18px 0 8px;}
   .weekly-html-content h4{font-family:'Noto Sans KR';color:var(--ink);font-size:24px;font-weight:700;margin:14px 0 6px;}
   .weekly-html-content p,.weekly-html-content div{margin:5px 0;}
-  .weekly-html-content a{color:var(--wed);}
+  .weekly-html-content:not(.wk-plain) a{color:var(--wed);}
   .weekly-html-content a:hover{text-decoration:underline;}
-  .weekly-html-content strong,.weekly-html-content b{color:var(--ink);font-weight:700;}
+  .weekly-html-content:not(.wk-plain) strong,
+  .weekly-html-content:not(.wk-plain) b{color:var(--ink);font-weight:700;}
   .weekly-html-content ul,.weekly-html-content ol{padding-left:20px;margin:6px 0;}
   .weekly-html-content li{margin:4px 0;}
+  /* 모드 '원본 그대로' — 받아온 HTML 을 Shadow DOM 에 넣어 앱 CSS 를 차단한다.
+     껍데기(제목 + 상자)만 앱 것이고 안쪽은 사이트 그대로다.
+     바깥 .wk-orig 는 폭만 잡고, 카드는 그림자 상자가 맡는다. */
+  .weekly-html-content.wk-orig{
+    background:transparent;box-shadow:none;border-radius:0;
+    color:var(--ink);font-size:initial;line-height:initial;
+    max-width:1200px;margin:6px auto 0;padding:0 12px;
+  }
+  /* 제목은 상자 위에 둔다. 사이트 제목을 그대로 상자 안에 두면 앱과 겉돌아서,
+     글만 가져와 앱의 다른 화면과 같은 글꼴·색으로 다시 쓴다. */
+  .wk-orig-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:10px 4px 14px;}
+  /* 글자색은 앱 본문색(--ink, 거의 검정)을 쓴다. 메인 파랑(--mon, #3B82F6)은
+     이 크기·이 배경에서 대비가 3.1:1 밖에 안 나와 읽기 기준(4.5:1)에 못 미친다.
+     파랑은 옆의 원본보기 단추가 이미 쥐고 있다. */
+  .wk-orig-title{font-family:'Pretendard','Noto Sans KR',sans-serif;
+    font-weight:800;font-size:18px;color:var(--ink);letter-spacing:-0.2px;}
+  .wk-orig-head .weekly-title-btn{margin-left:auto;
+    background:var(--mon);border-color:var(--mon);color:#fff !important;}
+
+  /* 상자 = 그림자 영역 자체. 안쪽 여백은 그림자 안(--wk-pad)이 정한다.
+     바깥에서 .wk-shadow-host 로 여백을 주면 클래스 선택자가 :host 를 이겨
+     안쪽 계산이 통째로 무시된다. */
+  .wk-shadow-host{display:block;background:var(--paper);border-radius:12px;
+    box-shadow:0 4px 12px -8px rgba(0,0,0,0.3);}
+  html.dark .wk-shadow-host{background:#fff;}
+
+  /* 휴대폰에서는 상자를 지우고 화면을 꽉 채운다. .weekly-body 의 좌우 4px 까지
+     되돌린다 — 이 화면에서만, 다른 모드 카드는 그대로 둔다. */
+  @media (max-width:560px){
+    .weekly-html-content.wk-orig{padding:0;margin-left:-4px;margin-right:-4px;}
+    /* 제목을 상자 안 글과 같은 선에 맞춘다(그림자 안 --wk-pad 와 같은 값). */
+    .wk-orig-head{padding-left:10px;padding-right:10px;}
+    .wk-shadow-host{border-radius:0;box-shadow:none;}
+  }
+  @media (max-width:420px){
+    .wk-orig-head{padding-left:6px;padding-right:6px;}
+  }
+
+  /* 보기 전환(관리자만). 상단 바가 세로 flex 라 align-self 로 오른쪽에 붙인다 —
+     margin-left:auto 만으로는 한 줄을 통째로 차지한다. */
+  .wk-modes{display:flex;gap:0;align-self:flex-end;margin:4px 0 6px;flex-shrink:0;
+    border:1px solid var(--rule);border-radius:8px;overflow:hidden;}
+  .wk-modes button{background:var(--paper);border:0;border-right:1px solid var(--rule);
+    padding:4px 9px;font-family:inherit;font-size:11.5px;color:var(--ink-soft);cursor:pointer;}
+  .wk-modes button:last-child{border-right:0;}
+  .wk-modes button.on{background:var(--mon);color:#fff;font-weight:700;}
+
   /* 별도 버튼 행 숨김 (제목 바에 통합) */
   .weekly-btn-row{display:none;}
   .weekly-dept{
@@ -1961,7 +2011,8 @@
   .weekly-html-content h3{font-size:16px;}
   .weekly-html-content h4{font-size:15px;border-bottom:none;}
   .weekly-html-content p{margin:6px 0;}
-  .weekly-html-content a{color:var(--wed);word-break:break-all;}
+  .weekly-html-content:not(.wk-plain) a{color:var(--wed);}
+  .weekly-html-content a{word-break:break-all;}
   .weekly-html-content a:hover{text-decoration:underline;}
   .weekly-html-content strong,.weekly-html-content b{color:var(--ink);font-weight:700;}
   .weekly-html-content ul,.weekly-html-content ol{padding-left:20px;margin:6px 0;}
@@ -8907,6 +8958,7 @@ async function initWeeklyPage(){
     // 주차 칩은 스냅샷으로 본다 — 스크래핑(GitHub Action)이 새 주차를 올리면
     // 새로고침 없이 칩이 늘어난다. 내용은 그대로 두고 칩만 갈아 끼운다.
     watchWeeklyIndex();
+    renderWeeklyModeBar();
     // 현재 주차: Firestore 캐시 확인
     const mainCacheSnap = await getDoc(doc(fbDb, 'weeklyData', 'cache-current'));
     const ONE_HOUR = 60 * 60 * 1000;
@@ -9062,6 +9114,249 @@ function applyWeeklyDarkColors(root){
   });
 }
 
+/* ══ 주간교육활동을 어떻게 그릴까 ═════════════════════════════════════════
+   받아온 HTML 은 구글 사이트의 마크업이다. 지금까지는 앱이 그걸 통째로 고쳐
+   그렸다 — 모든 글자의 글꼴을 !important 로 갈아 끼우고, 본문 20px·줄간격 2,
+   제목 크기·링크색·굵은글씨색까지 앱 색으로 덮었다. 읽기는 편한데 원본과
+   디테일이 달라진다.
+
+     app   지금까지의 방식
+     plain 글꼴·색만 원본 (크기는 앱 것 유지)
+     orig  원본 그대로 — Shadow DOM 에 넣어 앱 CSS 가 아예 못 닿게 하고,
+           그 안에 스티키 규칙 하나만 넣는다
+   ※ '사이트를 통째로 iframe 으로' 는 해 봤고 안 된다. 구글이 삽입을 막아 둬서
+     빈 화면이 뜬다(2026-09 확인). 픽셀까지 같아지는 대신 스티키를 못 쓰는
+     맞바꿈이었는데, 그 전에 애초에 뜨질 않는다. 다시 시도하지 말 것.
+
+   무엇이 나은지는 눈으로 봐야 안다. 전환은 관리자에게만 보인다.        */
+const WK_MODE_KEY = 'ynhsWeeklyMode';
+const WK_MODES = [['app','지금'], ['plain','글꼴·색'], ['orig','원본']];
+const wkIsOrig = () => weeklyMode === 'orig';
+// 기본은 '원본' 이다 — 사이트를 눈으로 보고 고른 결과다. 전환은 관리자에게만
+// 보이므로, 다른 선생님들은 이 화면 하나만 보게 된다.
+let weeklyMode = (() => { try { return localStorage.getItem(WK_MODE_KEY) || 'orig'; }
+                          catch(e){ return 'orig'; } })();
+let _wkLast = null;              // 마지막 본문 HTML — 전환할 때 다시 안 받아온다
+
+// 그림자 영역 안에 넣을 규칙. 원본을 건드리는 것은 스티키 하나뿐이다.
+const WK_SHADOW_CSS = `
+  /* ── 원본 모드의 글자 ──────────────────────────────────────────────
+     프록시(gas/Code.gs)가 사이트의 <style> 과 class 를 통째로 지워 보낸다.
+     그래서 여기 값은 전부 '사이트에서 재본 값을 태그별로 다시 적은 것'이다.
+     프록시는 role="heading" aria-level=N 을 h1..h4 로 바꿔 주므로 태그로 잡힌다.
+     글꼴 이름을 'Noto Sans' 로 두고 한글은 시스템 글꼴로 흘려보내는 것도 사이트와
+     같다. Noto Sans 는 라틴만 있고, 사이트도 한글은 브라우저 기본 산돌/맑은고딕
+     으로 떨어진다. 여기서 Noto Sans KR 을 쓰면 오히려 사이트와 달라진다. */
+  /* 좌우 여백은 '색 있는 상자'가 아니라 그 안의 글에 준다. 상자에 주면 색이
+     여백만큼 안쪽으로 물러나 상자 끝까지 안 닿는다. 그래서 :host 와 부서 상자는
+     좌우 여백 0 으로 두고, --wk-pad 를 글에만 물린다.
+     전체 폭은 바깥 상자(.wk-orig)가 잡는다. 여기서는 그 안쪽 여백만 정하고,
+     화면이 좁아질수록 줄여 휴대폰에서는 6px 까지 내려간다. 미디어 쿼리는 그림자
+     안에서도 화면 폭을 기준으로 판단한다 — 상자 폭이 아니다. */
+  :host{display:block;--wk-pad:36px;padding:0;
+        font-family:'Noto Sans',Arial,sans-serif;font-weight:500;
+        font-size:14pt;line-height:1.38;color:#1C1C1C;
+        -webkit-font-smoothing:antialiased;}
+  @media (max-width:1024px){ :host{--wk-pad:28px;} }
+  @media (max-width:768px){ :host{--wk-pad:20px;} }
+  @media (max-width:560px){ :host{--wk-pad:10px;} }
+  @media (max-width:420px){ :host{--wk-pad:6px;} }
+
+  .wk-doc > *:not(section),
+  section.wk-dept > *{padding-left:var(--wk-pad);padding-right:var(--wk-pad);}
+
+  /* 목록은 따로 봐야 한다. 사이트는 글머리 줄을 <ul><li><p> 로 보내고 글머리
+     모양(■)은 class 로 정하는데, 그 class 가 프록시를 못 넘어온다. 게다가 위
+     규칙이 ul 의 기본 안쪽 여백(40px)까지 덮어써서 글머리표가 상자 밖으로
+     밀려나 아예 안 보였다 — 화면에서 ■ 가 통째로 사라진 이유다.
+     ul 마다 붙는 기본 위아래 여백(18.7px)도 걷는다. 한 줄이 <ul> 하나씩으로
+     오기 때문에 그대로 두면 줄 사이가 유난히 벌어진다. */
+  .wk-doc ul, .wk-doc ol{margin:0;}
+  /* 글머리표가 들어설 자리를 준다. 목록 글머리표는 상자 밖(outside)에 그려져서,
+     안쪽 여백이 모자라면 그대로 상자 밖으로 밀려나 아예 안 보인다. */
+  section.wk-dept > ul, section.wk-dept > ol,
+  .wk-doc > ul, .wk-doc > ol{padding-left:calc(var(--wk-pad) + 2.15em);}
+  .wk-doc ul{list-style-type:square;}
+  .wk-doc ul ul{list-style-type:circle;}
+  .wk-doc li{margin:0;}
+
+  /* 상자의 둥근 모서리는 첫·마지막 띠가 만든다. 바깥에 overflow:hidden 을 걸어
+     자르면 그 상자가 스크롤 컨테이너가 되어 부서 이름 스티키가 죽는다. */
+  section.wk-dept:first-of-type{border-radius:12px 12px 0 0;}
+  section.wk-dept:last-of-type{border-radius:0 0 12px 12px;}
+  @media (max-width:560px){ section.wk-dept{border-radius:0 !important;} }
+
+  p{font-weight:500;font-size:14pt;line-height:1.38;margin:5pt 0 0;}
+  /* 페이지 제목은 상자 밖(.wk-orig-head)으로 꺼내 앱 제목으로 다시 쓴다.
+     사이트에서는 어두운 띠 위의 밝은 글자인데 그 띠는 class 라 안 넘어오고,
+     글자색(노랑)만 인라인으로 살아 넘어와 흰 바탕에 노란 글자가 됐었다.
+     여기 규칙은 h1 이 두 개 이상일 때(첫 개만 꺼낸다)를 위한 대비다.
+     글자색은 !important 로 덮는다 — 인라인으로 실려 온 색이 더 세다. */
+  h1{font-weight:700;font-size:36pt;line-height:1.2;margin:20pt 0;
+     color:#1C1C1C !important;}
+  h1 *{color:#1C1C1C !important;background:transparent !important;}
+  h2{font-weight:800;font-size:20pt;line-height:1.38;margin:10pt 0;}
+  h3{font-weight:600;font-size:16pt;line-height:1.38;margin:15pt 0 5pt;}
+  h4{font-weight:700;font-size:14pt;line-height:1.38;margin:15pt 0 5pt;}
+  /* 사이트 제목(h1)과 소제목(h2)은 화면 폭에 따라 줄어든다. */
+  @media (max-width:768px){ h1{font-size:32pt;} h2{font-size:19pt;} }
+  @media (max-width:480px){ h1{font-size:27pt;} h2{font-size:18pt;} }
+
+  /* 프록시가 사이트 CSS 를 지워 보내서, 원래 한 줄씩이던 항목이 옆으로
+     붙어 버린다. '지금' 방식은 <small> 뒤에 <br> 을 끼워 넣어 때웠는데,
+     그건 받아온 내용을 고치는 것이다. 여기서는 표시 방식만 바꾼다. */
+  small{display:block;font-weight:400;font-size:12.5pt;line-height:1.38;
+        margin:2.5pt 0 0;}
+  a{color:#0041A5;}
+
+  /* ── 부서 띠 ───────────────────────────────────────────────────────
+     프록시가 class 를 지워 버려서, 어디부터 어디까지가 한 부서인지 알려 주는
+     것은 h2(부서 이름)뿐이다. 그래서 h2 부터 다음 h2 직전까지를 section 으로
+     묶고(wkGroupDepts), 여기서 세 가지 띠 색을 돌려 가며 칠한다. 색은 사이트가
+     쓰는 것 그대로다 — 흰색 / 회색 / 옅은 파랑. */
+  /* 부서와 부서는 맞붙인다. 마진으로 띄우면 그 틈으로 카드의 흰 바탕이 비쳐
+     띠 사이에 흰 줄이 생긴다. 간격은 띠 **안쪽**(패딩)에서 만든다. */
+  section.wk-dept{margin:0;padding:0 0 24pt;background:#FFFFFF;}
+  section.wk-dept[data-band="gray"]{background:#F1F1F1;}
+  section.wk-dept[data-band="blue"]{background:#E0EEF5;}
+
+  /* CSS 변수는 그림자 경계를 넘어 상속된다 — 바깥 top-bar 높이를 그대로 쓴다.
+     top:0 으로 두면 제목이 상단 바 밑으로 파고든다.
+     배경은 inherit 이어야 한다. 흰색으로 박아 두면 회색·파랑 띠 위에서 부서
+     이름만 흰 판으로 떠 보인다. 부서 안에 갇힌 스티키라, 다음 부서가 올라오면
+     제목도 같이 밀려 나간다 — 지금 보고 있는 부서 이름만 붙어 있게 된다. */
+  h2{position:sticky;top:var(--weekly-top-offset, 44px);z-index:10;
+     background-color:inherit;
+     padding-top:14px;padding-bottom:8px;margin-top:0;margin-bottom:14pt;
+     border-bottom:1px solid rgba(0,0,0,0.16);
+     box-shadow:0 4px 8px -4px rgba(0,0,0,0.08);
+     scroll-margin-top:50px;}
+  img,table{max-width:100%;}
+  table{border-collapse:collapse;}
+`;
+
+// 사이트 제목을 찾는다. h1 으로 오면 좋은데, 이 사이트는 제목을 heading 으로
+// 안 보낸다 — 그냥 span 이다(앱에서 찍어 본 진단의 첫 줄이 'SPAN | 주간 교육
+// 활동 및 업무 안' 이었다). h1 만 찾다가 못 찾으니 제목 글자를 못 얻었고, 그래서
+// 중복 제거가 아예 시작도 못 했다. 흰 바탕의 노란 제목이 계속 남은 이유다.
+//
+// h1 이 없으면 '첫 부서 이름(h2)보다 앞에 있는 첫 글자 줄' 을 제목으로 본다.
+// 여기서는 계산된 display 로 상자를 고를 수 없다 — 아직 화면에 안 붙어 있어서
+// getComputedStyle 이 아무것도 못 준다. 그래서 '그 글자만 든 가장 바깥 상자'
+// 까지 글자 내용으로 거슬러 올라간다.
+function wkTitleEl(root){
+  const h1 = root.querySelector('h1');
+  if(h1) return h1;
+  const firstDept = root.querySelector('h2');
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let n;
+  while((n = walk.nextNode())){
+    if(!n.nodeValue || !n.nodeValue.trim()) continue;
+    // 부서 이름부터는 본문이다. 그 앞에 글자가 없으면 제목이 없는 것으로 본다.
+    if(firstDept && !(firstDept.compareDocumentPosition(n)
+                      & Node.DOCUMENT_POSITION_PRECEDING)) return null;
+    const t = n.nodeValue.trim();
+    if(t.length > 60) return null;             // 제목이라기엔 너무 길다
+    let el = n.parentElement;
+    while(el && el.parentElement && el.parentElement !== root
+          && el.parentElement.textContent.trim() === t) el = el.parentElement;
+    return el;
+  }
+  return null;
+}
+
+// 상자 위로 꺼낸 제목이 첫 부서 앞에 한 번 더 남아 있다. 사이트가 제목을 두 군데
+// (배너와 본문 머리)에 두는데, 앞엣것만 h1 로 넘어오고 뒤엣것은 색만 인라인으로
+// 실린 평범한 글이라 h1 규칙에도 안 걸린다 — 흰 바탕에 옅은 노랑으로 남는다.
+//
+// 글자를 그대로 맞대면 못 잡는다. 두 군데의 띄어쓰기가 다를 수 있고('업무 안내'
+// 와 '업무안내'), 줄바꿈·붙임표가 섞이기도 한다. 공백을 모두 걷어내고 비교하며,
+// 한쪽이 다른 쪽을 품고 있어도 같은 것으로 본다.
+const wkSquash = t => (t || '').replace(/[\s\u00A0]+/g, '');
+function wkSameTitle(a, b){
+  a = wkSquash(a); b = wkSquash(b);
+  if(!a || !b || a.length < 4) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+function wkStripDupTitle(root, text){
+  if(wkSquash(text).length < 4) return;
+  const firstDept = root.querySelector('h2');
+  for(const el of [...root.querySelectorAll('*')]){
+    // 앞서 지운 것의 자손일 수 있다. isConnected 로 보면 안 된다 — 이 시점의
+    // div 는 아직 화면에 안 붙어 있어서 전부 false 다.
+    if(!root.contains(el)) continue;
+    // 첫 부서보다 뒤에 있으면 본문 내용일 수 있다 — 건드리지 않는다.
+    if(firstDept && !(firstDept.compareDocumentPosition(el)
+                      & Node.DOCUMENT_POSITION_PRECEDING)) continue;
+    if(!wkSameTitle(el.textContent, text)) continue;
+    // 제목만 든 가장 안쪽 상자를 지운다. 바깥부터 지우면 형제 내용까지 날아간다.
+    if([...el.children].some(k => wkSameTitle(k.textContent, text))) continue;
+    let n = el;
+    while(n && n !== root){
+      const parent = n.parentNode;
+      n.remove();
+      if(!parent || parent === root) break;
+      if(parent.textContent.trim() || parent.querySelector('img')) break;
+      n = parent;
+    }
+  }
+}
+
+// 부서 단위로 묶는다 — h2(부서 이름)부터 다음 h2 직전까지가 한 부서다.
+// 형제 사이에서만 자르므로 h2 가 어느 깊이에 있든 그 자리에서 묶인다.
+//
+// 띠 색은 사이트를 그대로 따른다: 맨 위(교감선생님)와 맨 아래(행정실)가 파랑,
+// 그 사이는 회색·흰색이 번갈아 나온다. 자리로 정한다 — 부서 이름은 해마다
+// 바뀌지만 맨 위·맨 아래 자리는 그대로다.
+// 번호를 CSS 의 nth-of-type 으로 세면 안 된다. h2 가 서로 다른 부모 밑에
+// 흩어져 있을 때 번호가 부모별로 다시 1부터 돌아 색이 겹친다.
+function wkGroupDepts(root){
+  const heads = [...root.querySelectorAll('h2')];
+  const last = heads.length - 1;
+  heads.forEach((h, i) => {
+    const sec = document.createElement('section');
+    sec.className = 'wk-dept';
+    sec.dataset.band = (i === 0 || i === last) ? 'blue' : (i % 2 ? 'gray' : 'white');
+    h.parentNode.insertBefore(sec, h);
+    let n = h;
+    while(n){
+      const next = n.nextSibling;
+      sec.appendChild(n);
+      if(next && next.nodeType === 1 && next.tagName === 'H2') break;
+      n = next;
+    }
+  });
+}
+
+function renderWeeklyModeBar(){
+  const bar = document.getElementById('weeklyTopBar');
+  if(!bar) return;
+  let box = document.getElementById('wkModes');
+  const show = fbAuth.currentUser?.email === ADMIN_EMAIL && !isViewAs();
+  if(!show){ box?.remove(); return; }
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'wkModes'; box.className = 'wk-modes';
+    WK_MODES.forEach(([k, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.wkMode = k; b.textContent = label;
+      b.addEventListener('click', () => {
+        weeklyMode = k;
+        try { localStorage.setItem(WK_MODE_KEY, k); } catch(e){}
+        renderWeeklyModeBar();
+        if(_wkLast) renderContent(_wkLast);
+      });
+      box.appendChild(b);
+    });
+    bar.appendChild(box);
+  }
+  box.querySelectorAll('[data-wk-mode]').forEach(b =>
+    b.classList.toggle('on', b.dataset.wkMode === weeklyMode));
+}
+
+// ⚠ 아래 renderWeeklyHtml · renderSections 는 지금 어디서도 부르지 않는다.
+//   실제로 그리는 것은 renderContent 다. 여기에 손을 대고 화면이 안 바뀌어
+//   한참 헤맸다.
 function renderWeeklyHtml(title, html){
   const wrap = document.createElement('div');
   wrap.className = 'weekly-html-content';
@@ -9229,8 +9524,8 @@ function renderContent(html){
     .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi,'')
     .replace(/\son\w+="[^"]*"/g,'')
     .replace(/javascript:/gi,'#');
+  _wkLast = safe;
   const div = document.createElement('div');
-  div.className = 'weekly-html-content';
   div.innerHTML = safe;
 
   // 구글 사이트 앵커 링크 아이콘 제거
@@ -9243,8 +9538,8 @@ function renderContent(html){
     else svg.remove();
   });
 
-  // <small> 태그 줄바꿈 + 글자색 검정
-  div.querySelectorAll('small').forEach(small => {
+  // <small> 태그 줄바꿈 + 글자색 검정 — 앱이 손보는 부분이라 원본 모드에서는 안 한다
+  if(!wkIsOrig()) div.querySelectorAll('small').forEach(small => {
     small.style.color = '#000';
     small.insertAdjacentHTML('afterend', '<br>');
   });
@@ -9262,6 +9557,47 @@ function renderContent(html){
       (el.closest('div, p, li, span') || el).remove();
     }
   });
+
+  // ── 원본 그대로 ─────────────────────────────────────────────────────
+  // 여기까지의 손질은 '안전'과 '구글 사이트 껍데기 제거'다. 그건 원본 모드에서도
+  // 해야 한다. 아래부터가 앱이 모양을 바꾸는 부분이라, 원본 모드는 여기서 갈린다.
+  if(wkIsOrig()){
+    const wrap = document.createElement('div');
+    wrap.className = 'weekly-html-content wk-orig';
+    // 사이트 제목은 상자 밖으로 꺼내 앱 제목으로 다시 쓴다. 안에 두면 사이트가
+    // class 로만 칠한 어두운 띠를 흉내 내야 하고, 그게 앱과 겉돈다.
+    const head = document.createElement('div');
+    head.className = 'wk-orig-head';
+    const siteH1 = wkTitleEl(div);
+    const ttl = document.createElement('div');
+    ttl.className = 'wk-orig-title';
+    const ttlText = (siteH1?.textContent || '').trim();
+    ttl.textContent = ttlText || '주간 교육활동 및 업무 안내';
+    siteH1?.remove();
+    wkStripDupTitle(div, ttlText);
+    const ob = document.createElement('a');
+    ob.href = weeklyCurrentUrl; ob.target = '_blank';
+    ob.className = 'weekly-title-btn'; ob.textContent = '↗ 원본보기';
+    head.append(ttl, ob);
+    wrap.appendChild(head);
+    // 그림자 영역 — 앱 CSS 가 넘어가지 못한다.
+    const host = document.createElement('div');
+    host.className = 'wk-shadow-host';
+    const sh = host.attachShadow({ mode: 'open' });
+    const st = document.createElement('style');
+    st.textContent = WK_SHADOW_CSS;
+    div.className = 'wk-doc';
+    wkGroupDepts(div);
+    sh.append(st, div);
+    wrap.appendChild(host);
+    weeklyPageContent.innerHTML = '';
+    weeklyPageContent.appendChild(wrap);
+    renderWeeklyModeBar();
+    setTimeout(updateWeeklyTopOffset, 50);
+    return;
+  }
+
+  div.className = 'weekly-html-content' + (weeklyMode === 'plain' ? ' wk-plain' : '');
 
   // 제목 요소 찾기: h1 → role="heading" → 첫 번째 자식 순으로 시도
   const titleEl =
@@ -9295,6 +9631,8 @@ function renderContent(html){
   applyWeeklyDarkColors(div);
   weeklyPageContent.innerHTML = '';
   weeklyPageContent.appendChild(div);
+  renderWeeklyModeBar();
+  setTimeout(updateWeeklyTopOffset, 50);
 }
 
 
