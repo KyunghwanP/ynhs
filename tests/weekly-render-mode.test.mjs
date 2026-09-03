@@ -1,8 +1,9 @@
 // 주간교육활동을 어떻게 그리는가.
 //
-// 받아온 것은 구글 사이트의 마크업이다. 앱이 그걸 통째로 고쳐 그리면(글꼴 강제,
-// 크기·색 덮어쓰기) 읽기는 편한데 원본과 디테일이 달라진다. 세 가지 방식을
-// 놓고 고를 수 있게 해 뒀고, 여기서는 **각 방식이 실제로 무엇을 바꾸는지**를
+// 받아온 것은 구글 사이트의 마크업이다. test 레포에서 '지금 방식(앱이 통째로
+// 고쳐 그림) / 글꼴·색만 원본 / 원본 그대로' 세 가지를 놓고 눈으로 비교했고,
+// '원본 그대로' 만 남기기로 했다. 고를 것이 없으니 전환 버튼도 없앴다 — 모든
+// 선생님이 이 화면 하나만 본다. 여기서는 그 결과가 실제로 사이트와 같은지를
 // 실제 브라우저에서 계산된 스타일로 확인한다.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
@@ -49,19 +50,10 @@ const grabConst = name => {
 const STYLES = [...HTML.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n');
 
 console.log('\n■ 배선 (정적)');
-check('세 가지 방식이 있다',
-      /const WK_MODES = \[\['app','지금'\], \['plain','글꼴·색'\], \['orig','원본'\]\];/.test(HTML));
-// 전환은 관리자에게만 보인다. 그래서 기본값이 곧 전교 선생님이 보는 화면이다.
-check('기본이 원본이다', /localStorage\.getItem\(WK_MODE_KEY\) \|\| 'orig'/.test(HTML));
 // 사이트를 통째로 iframe 으로 띄우는 것은 해 봤고 안 된다(구글이 삽입 차단).
 // 지워 놓고 나중에 또 넣지 않도록 못 박는다.
 check('iframe 으로 띄우려 하지 않는다',
       !/wk-frame-el|renderWeeklyFrame/.test(HTML) && /다시 시도하지 말 것/.test(HTML));
-check('고른 것을 기억한다', /localStorage\.getItem\(WK_MODE_KEY\)/.test(HTML));
-check('전환은 관리자에게만 보인다',
-      /fbAuth\.currentUser\?\.email === ADMIN_EMAIL && !isViewAs\(\)/.test(grab('renderWeeklyModeBar')));
-check('전환할 때 다시 받아오지 않는다',
-      /_wkLast = safe;/.test(HTML) && /if\(_wkLast\) renderContent\(_wkLast\)/.test(HTML));
 check('원본 방식은 그림자 영역을 쓴다', /attachShadow\(\{ mode: 'open' \}\)/.test(HTML));
 check('그림자 안에 스티키가 있다', /position:sticky/.test(grabConst('WK_SHADOW_CSS')));
 // 한글은 사이트와 똑같이 시스템 글꼴로 흘려보내야 한다. 여기서 Noto Sans KR 을
@@ -79,10 +71,12 @@ check('사이트가 쓰는 굵기를 싣는다',
 // 안쪽이 계산한 좌우 여백이 통째로 무시되고 스티키 제목만 삐져나온다.
 check('바깥에서 그림자 상자에 여백을 주지 않는다',
       !/\.wk-shadow-host\{[^}]*padding/.test(STYLES));
-check('죽은 코드가 아니라 실제로 그리는 곳에 붙였다',
-      /if\(wkIsOrig\(\)\)\{/.test(grab('renderContent')));
 check('스티키가 상단 바 높이를 따른다',
       /top:var\(--weekly-top-offset, 44px\)/.test(grabConst('WK_SHADOW_CSS')));
+// 고를 것이 없으니 전환 버튼도, 그걸 그리던 코드도 없어야 한다.
+check('전환 버튼이 없다',
+      !/renderWeeklyModeBar|WK_MODES|id="?wkModes"?/.test(HTML));
+check('모드 갈래가 없다 — 원본 하나만 그린다', !/weeklyMode/.test(HTML));
 
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const pg = await b.newPage({ viewport: { width: 1200, height: 800 } });
@@ -103,7 +97,7 @@ const SITE = `
 await pg.setContent(`<!doctype html><meta charset="utf-8">
 <style>${STYLES}</style>
 <!-- 실제 앱 뼈대 그대로: .weekly-body 가 스크롤 상자이고 좌우 4px 여백을 준다.
-     원본 모드 카드는 휴대폰에서 그 4px 을 음수 마진으로 되돌려 화면을 꽉 채운다. -->
+     원본 카드는 휴대폰에서 그 4px 을 음수 마진으로 되돌려 화면을 꽉 채운다. -->
 <div class="weekly-body">
   <div id="weeklyTopBar" style="height:44px"></div>
   <div class="weekly-page-content" id="weeklyPageContent"></div>
@@ -120,65 +114,29 @@ await pg.setContent(`<!doctype html><meta charset="utf-8">
     const h = document.getElementById('weeklyTopBar').getBoundingClientRect().height;
     document.querySelector('.weekly-html-content')?.style.setProperty('--weekly-top-offset', h + 'px');
   }
-  ${grabConst('_wkColorCtx')}
-  ${grab('wkParseColor')}
-  ${grab('wkRgbToHsl')}
-  ${grab('applyWeeklyDarkColors')}
-  ${grabConst('WK_MODE_KEY')}
-  ${grabConst('WK_MODES')}
-  let weeklyMode = 'orig';
   let _wkLast = null;
-  ${grabConst('wkIsOrig')}
   ${grabConst('WK_SHADOW_CSS')}
   ${grabConst('wkSquash')}
   ${grab('wkSameTitle')}
   ${grab('wkTitleEl')}
   ${grab('wkStripDupTitle')}
   ${grab('wkGroupDepts')}
-  ${grab('renderWeeklyModeBar')}
   ${grab('renderContent')}
-  window.setMode = m => { weeklyMode = m; };
   window.render = h => renderContent(h);
 <\/script>`);
 
-// 제목바에도 a 가 있다(원본보기 버튼). 본문 안에서만 재야 실제 차이가 보인다.
-const styleOf = async (sel, inShadow) => pg.evaluate(([s, sh]) => {
-  const root = sh ? document.querySelector('.wk-shadow-host').shadowRoot
-                  : document.querySelector('.weekly-html-content');
-  // 제목바로 개조된 h1 안에도 a 가 있다(원본보기). 본문 것만 골라야 한다.
-  const el = [...root.querySelectorAll(s)].find(e => !e.closest('.weekly-forced-title')) || null;
-  if (!el) return null;
-  const c = getComputedStyle(el);
-  return { ff: c.fontFamily, fs: c.fontSize, color: c.color, pos: c.position, top: c.top };
-}, [sel, inShadow]);
-
-console.log('\n■ 지금 방식 — 앱이 통째로 고쳐 그린다');
-{
-  await pg.evaluate(h => { window.setMode('app'); window.render(h); }, SITE);
-  const p = await styleOf('p', false), a = await styleOf('a', false), h2 = await styleOf('h2', false);
-  check('사이트 글꼴을 앱 글꼴로 바꾼다', /Noto Sans KR/.test(p.ff), p.ff);
-  // 색 규칙에도 !important 가 없다. 사이트가 인라인으로 적어 준 색은 그대로 남는다.
-  // 실제로 앱이 힘으로 덮는 것은 '글꼴' 하나뿐이다.
-  check('인라인으로 적힌 색도 원본이 이긴다', a.color === 'rgb(11, 87, 208)', a.color);
-  // 크기 규칙에는 !important 가 없다 → 사이트가 인라인으로 적어 준 크기는 살아남는다.
-  // '앱이 크기까지 다 덮는다'는 것은 사실이 아니다.
-  check('인라인으로 적힌 크기는 원본이 이긴다', p.fs === '13px' && h2.fs === '22px', { p: p.fs, h2: h2.fs });
-}
-
-console.log('\n■ 글꼴·색만 원본 — 실제로는 글꼴만 달라진다');
-{
-  await pg.evaluate(h => { window.setMode('plain'); window.render(h); }, SITE);
-  const p = await styleOf('p', false), a = await styleOf('a', false), h2 = await styleOf('h2', false);
-  check('사이트 글꼴이 살아난다', /Courier/.test(p.ff), p.ff);
-  check('링크 색도 사이트 것', a.color === 'rgb(11, 87, 208)', a.color);
-  check('크기는 그대로(원래도 인라인이 이겼다)', h2.fs === '22px', h2.fs);
-}
-
 console.log('\n■ 원본 그대로 — 앱 CSS 가 아예 안 닿는다');
 {
-  await pg.evaluate(h => { window.setMode('orig'); window.render(h); }, SITE);
+  await pg.evaluate(h => window.render(h), SITE);
   check('그림자 영역에 들어간다', await pg.evaluate(() => !!document.querySelector('.wk-shadow-host')?.shadowRoot));
-  const p = await styleOf('p', true), a = await styleOf('a', true), h2 = await styleOf('h2', true);
+  const styleOf = sel => pg.evaluate(s => {
+    const r = document.querySelector('.wk-shadow-host').shadowRoot;
+    const el = r.querySelector(s);
+    if (!el) return null;
+    const c = getComputedStyle(el);
+    return { ff: c.fontFamily, fs: c.fontSize, color: c.color, pos: c.position, top: c.top };
+  }, sel);
+  const p = await styleOf('p'), a = await styleOf('a'), h2 = await styleOf('h2');
   check('사이트 글꼴 그대로', /Courier/.test(p.ff), p.ff);
   check('사이트 글자 크기 그대로', p.fs === '13px', p.fs);
   check('사이트 링크 색 그대로', a.color === 'rgb(11, 87, 208)', a.color);
@@ -217,7 +175,7 @@ console.log('\n■ 원본 그대로 — 앱 CSS 가 아예 안 닿는다');
 // 걸러 넘긴다. 그래서 구글 사이트가 class 로만 정해 둔 글꼴·크기·굵기·줄간격은
 // 아무것도 안 실려 온다. 아래 값은 실제 사이트에서 재 온 것이고, 그림자 안에서
 // 태그별로 다시 적어 준다. 여기 숫자가 곧 '사이트와 같은가'의 기준이다.
-console.log('\n■ 원본 그대로 — 사이트에서 잰 값과 같은가');
+console.log('\n■ 사이트에서 잰 값과 같은가');
 {
   // 프록시가 실제로 넘겨 주는 모습: class 도 style 도 없다.
   const BARE = `
@@ -228,7 +186,7 @@ console.log('\n■ 원본 그대로 — 사이트에서 잰 값과 같은가');
     <p><small>· 대상: 전교생</small></p>
     <p><a href="https://example.com">첨부 파일</a></p>
   `;
-  await pg.evaluate(h => { window.setMode('orig'); window.render(h); }, BARE);
+  await pg.evaluate(h => window.render(h), BARE);
   const measure = sel => pg.evaluate(s => {
     const el = document.querySelector('.wk-shadow-host').shadowRoot.querySelector(s);
     if (!el) return null;
@@ -271,7 +229,7 @@ console.log('\n■ 원본 그대로 — 사이트에서 잰 값과 같은가');
   });
   check('스티키 제목이 좌우를 꽉 덮는다', near(bleed.h2, bleed.host), bleed);
   await pg.setViewportSize({ width: 1200, height: 800 });
-  await pg.evaluate(h => { window.setMode('orig'); window.render(h); }, SITE);
+  await pg.evaluate(h => window.render(h), SITE);
 }
 
 // ── 부서 구분 ───────────────────────────────────────────────────────────
@@ -298,7 +256,7 @@ console.log('\n■ 부서 구분');
     <h2>교육연구부</h2>
     <p>9월 5일(토) 공개수업</p>
   `;
-  await pg.evaluate(h => { window.setMode('orig'); window.render(h); }, DEPT);
+  await pg.evaluate(h => window.render(h), DEPT);
   const d = await pg.evaluate(() => {
     const r = document.querySelector('.wk-shadow-host').shadowRoot;
     const secs = [...r.querySelectorAll('section.wk-dept')];
@@ -327,7 +285,7 @@ console.log('\n■ 부서 구분');
   });
   const dup = await pg.evaluate(() => {
     const r = document.querySelector('.wk-shadow-host').shadowRoot;
-    const sq = s => s.replace(/[\s\u00A0]+/g, '');
+    const sq = s => s.replace(/[\s ]+/g, '');
     const t = sq('주간 교육활동 및 업무 안내');
     return [...r.querySelectorAll('*')].filter(e => !e.children.length
              && sq(e.textContent) === t).length;
@@ -448,10 +406,10 @@ console.log('\n■ 제목이 heading 으로 안 올 때');
     <h2><span>교감 선생님</span></h2>
     <p><span>·</span><span> 안전에 유의해 주십시오</span></p>
   `;
-  await pg.evaluate(h => { window.setMode('orig'); window.render(h); }, NOH1);
+  await pg.evaluate(h => window.render(h), NOH1);
   const r = await pg.evaluate(() => {
     const sh = document.querySelector('.wk-shadow-host').shadowRoot;
-    const sq = s => s.replace(/[\s\u00A0]+/g, '');
+    const sq = s => s.replace(/[\s ]+/g, '');
     const t = sq('주간 교육활동 및 업무 안내');
     return { title: document.querySelector('.wk-orig-title').textContent.trim(),
              left: [...sh.querySelectorAll('*')]
@@ -461,17 +419,6 @@ console.log('\n■ 제목이 heading 으로 안 올 때');
   check('h1 이 없어도 제목을 찾아낸다', r.title === '주간 교육활동 및 업무 안내', r);
   check('노란 제목이 상자 안에 남지 않는다', r.left === 0, r);
   check('부서는 그대로 남는다', r.dept, r);
-  await pg.evaluate(h => { window.setMode('orig'); window.render(h); }, SITE);
-}
-
-console.log('\n■ 전환 막대');
-{
-  check('관리자에게는 보인다', await pg.evaluate(() => !!document.getElementById('wkModes')));
-  check('세 칸이다', (await pg.$$eval('#wkModes button', e => e.length)) === 3);
-  check('고른 것이 켜져 있다',
-        (await pg.$eval('#wkModes button.on', e => e.dataset.wkMode)) === 'orig');
-  await pg.evaluate(() => { window.__setWho('kim@yeungnam.hs.kr'); window.render('<p>x</p>'); });
-  check('다른 교사에게는 안 보인다', await pg.evaluate(() => !document.getElementById('wkModes')));
 }
 
 console.log(errs.length ? '\n❌ 런타임 오류:\n' + errs.slice(0,4).join('\n') : '\n✅ 런타임 오류 없음');
