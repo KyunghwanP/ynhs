@@ -31,17 +31,17 @@ check('배지 CSS가 있다', /\.home-pts-tag\{/.test(HTML));
 check('우리반 시간표를 그릴 때 배지 진단도 부른다',
       /window\._renderHomeClassTt\(\);\s*checkHomeroomNewPoints\(homeroomKey\);/.test(HTML));
 
-// 관리자는 담임반이 없다. 상담 화면은 이미 테스트용 1-1 로 폴백하는데 현황판만 안 해서
-// '우리반 오늘 시간표' 자체가 안 떴고, 그래서 배지도 볼 수가 없었다.
+// 담임 학급은 오직 명렬(myTeacher.homeroom)로만 정한다. test 저장소에는 담임반이 없는
+// 관리자가 확인할 수 있게 반 고르기 드롭다운을 두었지만, 여기로는 옮기지 않는다.
 {
   const blk = HTML.slice(HTML.indexOf('// ── 담임 학급 시간표 ──'),
                          HTML.indexOf('window._renderHomeClassTt();'));
-  check('현황판도 관리자면 1-1 로 폴백한다',
-        /isTestHomeroom = !myTeacher\.homeroom[\s\S]{0,160}ADMIN_EMAIL/.test(blk), blk.slice(0, 320));
-  check('보기 모드에서는 폴백하지 않는다(대상 교사 기준)', /!isViewAs\(\)/.test(blk));
-  check('폴백한 학급으로 시간표를 그린다', /classSchedule\[homeroomKey\]/.test(HTML));
-  check('폴백한 학급 이름을 헤더에 쓴다', /homeClassName'\)\.textContent = homeroomKey/.test(HTML));
-  check('폴백일 때만 반 고르기 드롭다운을 붙인다', /if\(isTestHomeroom\) renderTestHomeroomPicker\(homeroomKey\)/.test(blk));
+  check('담임반이 없으면 이 섹션도 배지도 없다', /const homeroomKey = myTeacher\.homeroom;/.test(blk), blk.slice(0, 200));
+  check('관리자 폴백을 들여오지 않았다', !/ADMIN_EMAIL/.test(blk), blk.slice(0, 300));
+  check('확인용 드롭다운도 없다',
+        !/renderTestHomeroomPicker|testHomeroomPick|home-test-hr/.test(HTML));
+  check('담임 학급으로 시간표를 그린다', /classSchedule\[homeroomKey\]/.test(HTML));
+  check('담임 학급 이름을 헤더에 쓴다', /homeClassName'\)\.textContent = homeroomKey/.test(HTML));
 }
 
 console.log('\n■ 모달 배선 (정적)');
@@ -77,7 +77,7 @@ check('최근 7일 모달에 누적 경고를 함께 넘긴다',
       && /renderPtsNewModal\(hr, within, title, [^,]+, warns\)/.test(HTML));
 check('그 주에 아무것도 없을 때만 이전 것으로 물러난다',
       /if \(within\.length\)[\s\S]{0,200}ptsRecentEntries\([\s\S]{0,80}PTS_FALLBACK_LIMIT\)/.test(HTML));
-check('담임(관리자는 고른 반)일 때만 보인다',
+check('담임일 때만 보인다',
       /recentBtn\.style\.display = hr \? '' : 'none'/.test(HTML));
 check('열기 함수가 window 에 있다', /window\.openPtsRecentModal\s*=/.test(HTML));
 
