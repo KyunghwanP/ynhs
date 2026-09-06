@@ -1757,6 +1757,12 @@
     text-align:center;font-size:12px;color:var(--ink-soft);
     font-family:'IBM Plex Mono';margin-bottom:12px;
   }
+  .pts-view-recent{
+    display:block;margin:0 auto 12px;padding:4px 10px;
+    border:1px solid var(--rule);border-radius:8px;background:var(--paper-soft);
+    color:var(--ink-soft);cursor:pointer;
+    font-family:'Pretendard','Noto Sans KR';font-size:12px;font-weight:700;
+  }
   .pts-list-header{
     display:grid;grid-template-columns:40px 1fr 56px 52px 52px 52px;
     gap:8px;padding:8px 16px;
@@ -1820,6 +1826,47 @@
   }
   .pts-detail-record-text{font-size:14px;color:var(--ink);line-height:1.5;}
   .pts-detail-empty{padding:24px;text-align:center;color:var(--ink-soft);font-size:14px;}
+  /* 새로 반영된 상벌점 모달 — 상세 팝업의 뼈대를 그대로 쓰고 아래 버튼 줄만 더한다 */
+  .pts-new-who{font-family:'Pretendard','Noto Sans KR';font-weight:700;font-size:14px;color:var(--ink);}
+  .pts-new-num{font-family:'IBM Plex Mono';font-size:12px;color:var(--ink-soft);font-weight:600;}
+  .pts-new-why{font-size:13px;color:var(--ink-soft);line-height:1.5;margin-top:2px;}
+  .pts-new-flag{
+    font-size:10px;font-weight:800;color:#fff;background:#7c3aed;
+    border-radius:5px;padding:0 5px;margin-left:5px;vertical-align:middle;
+  }
+  .pts-warn{
+    margin:12px 20px 0;padding:10px 12px;border-radius:10px;
+    background:#FEF2F2;border:1px solid #FECACA;
+  }
+  html.dark .pts-warn{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35);}
+  .pts-warn-title{
+    font-family:'Pretendard','Noto Sans KR';font-weight:800;font-size:12.5px;
+    color:#991B1B;margin-bottom:6px;
+  }
+  html.dark .pts-warn-title{color:#FCA5A5;}
+  .pts-warn-item{
+    display:flex;align-items:baseline;gap:8px;padding:3px 0;
+    font-size:13px;color:var(--ink);
+  }
+  .pts-warn-item .w-name{font-weight:700;}
+  .pts-warn-item .w-num{font-family:'IBM Plex Mono';font-size:11.5px;color:var(--ink-soft);}
+  .pts-warn-item .w-tot{
+    font-family:'IBM Plex Mono';font-weight:700;color:#EF4444;margin-left:auto;
+  }
+  .pts-warn-item .w-sub{font-family:'IBM Plex Mono';font-size:11px;color:var(--ink-soft);}
+  .pts-new-foot{padding:12px 20px;border-top:1px solid var(--rule);}
+  .pts-new-go{
+    width:100%;padding:11px;border-radius:10px;border:1px solid var(--rule);
+    background:var(--paper-soft);color:var(--ink);cursor:pointer;
+    font-family:'Pretendard','Noto Sans KR';font-weight:700;font-size:14px;
+  }
+  /* 관리자 확인용 담임 반 고르기 (담임반이 없을 때만) */
+  .home-test-hr{
+    font-family:'IBM Plex Mono';font-size:12px;font-weight:700;
+    color:var(--ink-soft);background:var(--paper-soft);
+    border:1px solid var(--rule);border-radius:8px;padding:3px 6px;
+    margin-left:auto;margin-right:8px;cursor:pointer;flex-shrink:0;
+  }
 
   /* 버전 표시 */
   .nav-version{
@@ -2204,6 +2251,12 @@
   .home-tt-cell.tt-sub{box-shadow:inset 3px 0 0 rgba(99,102,241,.6);}
   .home-op-tag{font-size:11px;font-weight:800;color:#4338ca;background:#e0e7ff;border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle;}
   html.dark .home-op-tag{color:#c7d2fe;background:#312e81;}
+  /* 안 본 것이 남아 있으면 진하게, 다 봤으면 옅게 — 배지 자체는 계속 떠 있는다 */
+  .home-pts-tag{font-size:11px;font-weight:800;color:var(--ink-soft);background:var(--paper-soft);
+    border:1px solid var(--rule);border-radius:6px;padding:1px 7px;margin-left:6px;
+    vertical-align:middle;cursor:pointer;}
+  .home-pts-tag.unseen{color:#fff;background:#7c3aed;border-color:#7c3aed;}
+  html.dark .home-pts-tag.unseen{background:#8b5cf6;border-color:#8b5cf6;}
   .tt-wk-btn{
     border:none;background:transparent;cursor:pointer;font-size:17px;line-height:1;
     color:var(--ink-soft);padding:1px 7px;border-radius:14px;font-family:inherit;
@@ -5111,6 +5164,8 @@
             <div class="pts-view-wrap">
               <!-- 업데이트 시각 -->
               <div class="pts-view-updated" id="ptsViewUpdated">불러오는 중...</div>
+              <button class="pts-view-recent" id="ptsViewRecentBtn" onclick="openPtsRecentModal()"
+                      style="display:none;">🗓 우리 반 최근 항목 보기</button>
 
               <!-- 검색 -->
               <div class="pts-view-search">
@@ -5781,6 +5836,24 @@
   </div>
 </div>
 
+<!-- 새로 반영된 상벌점 (현황판 '우리반 오늘 시간표' 배지에서 열림) -->
+<div class="pts-detail-modal" id="ptsNewModal" onclick="closePtsNewModal(event)">
+  <div class="pts-detail-box">
+    <div class="pts-detail-head">
+      <div>
+        <div class="pts-detail-head-name" id="ptsNewTitle">🆕 새로 반영된 상벌점</div>
+        <div class="pts-detail-head-info" id="ptsNewInfo"></div>
+      </div>
+      <button class="pts-detail-close" onclick="closePtsNewModalBtn()">×</button>
+    </div>
+    <div id="ptsNewWarn"></div>
+    <div class="pts-detail-records" id="ptsNewRecords"></div>
+    <div class="pts-new-foot">
+      <button class="pts-new-go" onclick="ptsNewGoToPoints()">상벌점 조회로 이동 ›</button>
+    </div>
+  </div>
+</div>
+
 <!-- 학급 편성 현황 모달 (현황판 위젯의 '자세히') -->
 <div class="co-overlay" id="classOrgModal">
   <div class="co-box">
@@ -5931,7 +6004,7 @@ const TEACHERS = [];
 const ADMIN_EMAIL = 'pkh910518@yeungnam.hs.kr';
 // 화면에 찍히는 버전. 사용 현황에 '이 사람이 지금 쓰는 버전'으로도 남는다 —
 // 누가 옛 화면을 계속 쓰는지 보려면 그게 있어야 한다.
-const APP_VER = 'ver6.98';
+const APP_VER = 'ver6.99';
 const VIEW_AS_EMAIL = new URLSearchParams(location.search).get('viewAs') || null;
 // 관리자 '실제 권한으로 보기' — admin.html이 워커에서 그 교사 명의의 커스텀 토큰을 받아
 // 이 페이지에 넘긴다. 실제로 그 계정으로 로그인되므로 Firestore 규칙도 그 사람 기준으로
@@ -7747,6 +7820,7 @@ window.addEventListener('popstate', (e)=>{
   if (document.getElementById('groupSettingsModal')?.style.display === 'flex') { closeGroupSettings(); armExitGuard(); return; }
   if (document.getElementById('mytaskModal')?.classList.contains('show')) { closeMytaskModal(); armExitGuard(); return; }
   if (document.getElementById('ptsDetailModal')?.classList.contains('show')) { closePtsDetailBtn(); armExitGuard(); return; }
+  if (document.getElementById('ptsNewModal')?.classList.contains('show')) { closePtsNewModalBtn(); armExitGuard(); return; }
   if (document.querySelector('.cd-overlay.open')) { document.querySelector('.cd-overlay.open').classList.remove('open'); armExitGuard(); return; }
   if (document.getElementById('jindanModal')?.classList.contains('open')) { closeJindanModal(); armExitGuard(); return; }
   if (document.getElementById('seatModal')?.classList.contains('open')) { closeSeatModal(); armExitGuard(); return; }
@@ -12528,10 +12602,17 @@ async function initHomePage() {
     } // hasAnyClass end
 
     // ── 담임 학급 시간표 ──
-    if(myTeacher.homeroom) {
+    // 담임 학급 (관리자는 담임반이 없어 이 섹션 자체가 안 떴다. 상담 화면이 이미 쓰던
+    // 테스트용 폴백과 같은 규칙 — 보기 모드는 대상 교사 기준이라 폴백하지 않는다.
+    // 관리자는 어느 반으로 볼지 헤더의 드롭다운으로 고를 수 있다)
+    const isTestHomeroom = !myTeacher.homeroom && !isViewAs()
+                           && fbAuth.currentUser?.email === ADMIN_EMAIL;
+    const homeroomKey = myTeacher.homeroom || (isTestHomeroom ? testHomeroomPick() : null);
+    if(homeroomKey) {
       const classSection = document.getElementById('homeClassTimetable');
       classSection.style.display = '';
-      document.getElementById('homeClassName').textContent = myTeacher.homeroom;
+      document.getElementById('homeClassName').textContent = homeroomKey;
+      if(isTestHomeroom) renderTestHomeroomPicker(homeroomKey);
       // 내 시간표와 같이 '다시 그릴 수 있는' 함수로 둔다. 전에는 여기서 한 번 그리고
       // 끝이라, 운영표(OPERATING)가 늦게 도착해도 반영되지 않았다 — 탭을 나갔다
       // 들어오기 전까지 계속 기초시간표였다. 요일·시각도 부를 때마다 새로 잡는다.
@@ -12539,8 +12620,8 @@ async function initHomePage() {
         const nowDate = new Date();
         const todayDayC = days[nowDate.getDay()];
         const nowMinC = nowDate.getHours()*60 + nowDate.getMinutes();
-        const classSched = classSchedule[myTeacher.homeroom] || {};
-        const _gradeH = ttGradeOf(myTeacher.homeroom);
+        const classSched = classSchedule[homeroomKey] || {};
+        const _gradeH = ttGradeOf(homeroomKey);
         const _opH = ttOpForDate(ttISO(nowDate));
         const _crossH = ttDayCross(_opH, todayDayC, _gradeH-1);
         const classHtml = periods.map(b => {
@@ -12564,6 +12645,7 @@ async function initHomePage() {
         }
       };
       window._renderHomeClassTt();
+      checkHomeroomNewPoints(homeroomKey);
 
       document.querySelector('[data-goto="timetable-class"]').addEventListener('click', () => {
         navigateTo('timetable');
@@ -12572,7 +12654,7 @@ async function initHomePage() {
           const classTabBtn = document.querySelector('.tab-btn[data-mode="class"]');
           if(classTabBtn) classTabBtn.click();
           setTimeout(() => {
-            const homeroom = myTeacher.homeroom;
+            const homeroom = homeroomKey;
             const [grade, room] = homeroom.split('-');
             const gradeEl = document.getElementById('gradeSelect');
             const roomEl  = document.getElementById('roomSelect');
@@ -15394,10 +15476,245 @@ async function loadPtsViewData() {
     }
     ptsViewLoaded = true;
     renderPtsGroups();
+    // 담임(관리자는 고른 반)이면 '우리 반 최근 항목'을 언제든 열 수 있게
+    const recentBtn = document.getElementById('ptsViewRecentBtn');
+    if (recentBtn) {
+      const hr = getMyHomeroom() || ((!isViewAs() && fbAuth.currentUser?.email === ADMIN_EMAIL)
+                                     ? testHomeroomPick() : null);
+      recentBtn.style.display = hr ? '' : 'none';
+      if (hr) recentBtn.textContent = `🗓 ${hr}반 최근 ${PTS_RECENT_DAYS}일 상벌점 보기`;
+    }
   } catch(e) {
     updatedEl.textContent = '데이터 로딩 실패';
     console.error(e);
   }
+}
+
+// ── 관리자 확인용: 어느 반 담임으로 볼지 (담임반이 없는 계정에서만) ──
+// 담임반이 없으면 '우리반 오늘 시간표'가 아예 안 떠서 거기 붙는 것들을 확인할 수 없다.
+const TEST_HR_KEY = 'ynhsTestHomeroom';
+function testHomeroomPick() {
+  try { return localStorage.getItem(TEST_HR_KEY) || '1-1'; } catch (e) { return '1-1'; }
+}
+function renderTestHomeroomPicker(current) {
+  const hdr = document.querySelector('#homeClassTimetable .home-section-header');
+  if (!hdr) return;
+  hdr.querySelector('#homeTestHrPick')?.remove();
+  const keys = Object.keys(classSchedule || {}).sort((a, b) => {
+    const [ag, ar] = a.split('-').map(Number), [bg, br] = b.split('-').map(Number);
+    return (ag - bg) || (ar - br);
+  });
+  if (!keys.length) keys.push(current);
+  const sel = document.createElement('select');
+  sel.id = 'homeTestHrPick';
+  sel.className = 'home-test-hr';
+  sel.title = '관리자 확인용 — 어느 반 담임으로 볼지';
+  sel.innerHTML = keys.map(k =>
+    `<option value="${escapeHtml(k)}"${k === current ? ' selected' : ''}>${escapeHtml(k)}반</option>`).join('');
+  // 헤더 전체가 시간표로 가는 버튼이라 드롭다운 조작이 새어 나가면 안 된다
+  sel.onclick = e => e.stopPropagation();
+  sel.onchange = e => {
+    e.stopPropagation();
+    try { localStorage.setItem(TEST_HR_KEY, sel.value); } catch (err) {}
+    initHomePage();   // 시간표·배지 전부 새 반 기준으로 다시
+  };
+  hdr.insertBefore(sel, hdr.querySelector('.home-section-arrow'));
+}
+
+// ── 담임 학급 새 상벌점 배지 (홈 현황판 '우리반 오늘 시간표' 헤더) ──
+// riro_points 는 밤마다 학년 전체가 통째로 덮어써지는 스냅샷이라 '새로 추가된 것'이라는
+// 개념이 원래 없다. 학생별 records(개별 항목) 를 서명으로 바꿔 직전에 확인한 서명 목록과
+// 비교하는 방식으로 흉내낸다 — 순수 함수라 riro_points 없이도 테스트할 수 있다.
+// 리로스쿨은 '[ 09.04 ]' 처럼 연도 없이 월·일만 보낸다. 형식을 못 맞추면 비교가
+// 조용히 전부 실패해서 '해당 항목 없음'만 뜬다(실제로 그랬다).
+//
+// 자료는 한 학년도치만 들어오고 학년도는 3월에 시작해 2월에 끝난다. 그래서 3~12월은
+// 학년도가 시작한 해, 1~2월은 그 다음 해로 붙이면 진짜 날짜가 되고, 그때부터는
+// 정렬도 '며칠 이내인가'도 보통 날짜처럼 다룰 수 있다.
+function ptsDateKey(v, today) {
+  const s = String(v == null ? '' : v);
+  const pad = n => String(n).padStart(2, '0');
+  const full = s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (full) return `${full[1]}-${pad(full[2])}-${pad(full[3])}`;
+  const md = s.match(/(\d{1,2})\D+(\d{1,2})/);
+  if (!md) return s;
+  const base = today ? new Date(today) : new Date();
+  const startYear = base.getMonth() + 1 >= 3 ? base.getFullYear() : base.getFullYear() - 1;
+  const m = Number(md[1]);
+  return `${m >= 3 ? startYear : startYear + 1}-${pad(md[1])}-${pad(md[2])}`;
+}
+// grade 를 주면 학년까지 본다. 조회 화면의 ptsViewData 는 세 학년이 한 배열에
+// 들어 있어서 반만 보면 1-1 을 보려다 2-1·3-1 까지 딸려 온다.
+function ptsEntriesFor(students, room, grade) {
+  const out = [];
+  (students || []).forEach(s => {
+    if (String(s.room) !== String(room)) return;
+    if (grade != null && String(s.grade) !== String(grade)) return;
+    (s.records || []).forEach(r => out.push({
+      sig: `${s.num}|${r.date}|${r.detail}`,
+      num: s.num, name: s.name || '', date: r.date, detail: r.detail
+    }));
+  });
+  return out;
+}
+function ptsSignaturesFor(students, room, grade) {
+  return ptsEntriesFor(students, room, grade).map(e => e.sig);
+}
+// 서명만 주고받으면 배지 숫자는 셀 수 있어도 '무엇이' 새로 생겼는지는 못 보여 준다.
+// 조회 페이지로 통째로 넘겨 버리면 새로 생긴 걸 다시 찾아야 하므로 항목 자체를 돌려준다.
+function ptsNewSince(students, room, ackedSigs, grade) {
+  const acked = new Set(ackedSigs || []);
+  return ptsEntriesFor(students, room, grade).filter(e => !acked.has(e.sig));
+}
+
+// 스냅샷에는 '언제 반영됐는지'가 없다. 그래서 기준선을 잡기 전에 이미 들어온 것은
+// 소급해서 새 것으로 잡을 수 없다 — 대신 항목에 적힌 날짜로 '최근 것'은 언제든 볼 수 있다.
+function ptsRecentEntries(students, room, grade, today) {
+  return ptsEntriesFor(students, room, grade)
+    .sort((a, b) => ptsDateKey(b.date, today).localeCompare(ptsDateKey(a.date, today)));
+}
+// 최근 N일. 건수로 자르면 한 반의 한 해 이력이 그보다 적어서 사실상 전부 나온다.
+function ptsEntriesWithin(students, room, grade, days, today) {
+  const base = today ? new Date(today) : new Date();
+  const from = new Date(base.getTime() - (days - 1) * 86400000);
+  const pad = n => String(n).padStart(2, '0');
+  const lo = `${from.getFullYear()}-${pad(from.getMonth() + 1)}-${pad(from.getDate())}`;
+  return ptsRecentEntries(students, room, grade, today)
+    .filter(e => ptsDateKey(e.date, today) >= lo);
+}
+
+// 누적 벌점 경고. 합계(상점 + 벌점 + 상계 감점)가 기준 이하인 학생 — 상계 봉사까지
+// 반영된 실질 점수라 선도 기준에 맞춰 보기 좋다. 기준값은 학교 규정에 맞춰 바꾼다.
+const PTS_WARN_TOTAL = -5;
+function ptsWarnStudents(students, room, grade, threshold) {
+  const limit = threshold == null ? PTS_WARN_TOTAL : threshold;
+  return (students || [])
+    .filter(s => String(s.room) === String(room))
+    .filter(s => grade == null || String(s.grade) === String(grade))
+    .filter(s => Number(s.total || 0) <= limit)
+    .sort((a, b) => Number(a.total || 0) - Number(b.total || 0));
+}
+
+// ── 새로 반영된 상벌점 모달 ──
+function renderPtsNewModal(homeroom, entries, title, info, warns, newSigs) {
+  const isNew = new Set(newSigs || []);
+  document.getElementById('ptsNewTitle').textContent = title || '🆕 새로 반영된 상벌점';
+  document.getElementById('ptsNewInfo').textContent = info || `${homeroom} · ${entries.length}건`;
+  const warnBox = document.getElementById('ptsNewWarn');
+  if (warnBox) {
+    warnBox.innerHTML = (warns && warns.length) ? `
+      <div class="pts-warn">
+        <div class="pts-warn-title">⚠️ 누적 벌점 주의 — 합계 ${PTS_WARN_TOTAL} 이하 ${warns.length}명</div>
+        ${warns.map(s => `
+          <div class="pts-warn-item">
+            <span class="w-name">${escapeHtml(String(s.name || ''))}</span>
+            <span class="w-num">${escapeHtml(String(s.num || ''))}번</span>
+            <span class="w-sub">벌점 ${Number(s.demerit || 0)}${s.deducted ? ` · 상계 +${Math.abs(Number(s.deducted))}` : ''}</span>
+            <span class="w-tot">합계 ${Number(s.total || 0)}</span>
+          </div>`).join('')}
+      </div>` : '';
+  }
+  const box = document.getElementById('ptsNewRecords');
+  box.innerHTML = entries.length ? entries.map(e => `
+    <div class="pts-detail-record-item">
+      <span class="pts-detail-record-date">${escapeHtml(String(e.date || ''))}</span>
+      <div>
+        <div class="pts-new-who">${escapeHtml(String(e.name || ''))}
+          <span class="pts-new-num">${escapeHtml(String(e.num || ''))}번</span>
+          ${isNew.has(e.sig) ? '<span class="pts-new-flag">NEW</span>' : ''}</div>
+        <div class="pts-new-why">${escapeHtml(String(e.detail || ''))}</div>
+      </div>
+    </div>`).join('') : '<div class="pts-detail-empty">해당하는 항목이 없습니다.</div>';
+  document.getElementById('ptsNewModal').classList.add('show');
+}
+
+// 조회 화면에서 아무 때나 — 기준선과 상관없이 '항목에 적힌 날짜' 기준 최근 것
+const PTS_RECENT_DAYS = 7;
+const PTS_FALLBACK_LIMIT = 10;
+function openPtsRecentModal() {
+  const hr = getMyHomeroom() || ((!isViewAs() && fbAuth.currentUser?.email === ADMIN_EMAIL)
+                                 ? testHomeroomPick() : null);
+  if (!hr) return;
+  const [grade, room] = hr.split('-');
+  const title = `🗓 최근 ${PTS_RECENT_DAYS}일 상벌점`;
+  const warns = ptsWarnStudents(ptsViewData, room, grade);
+  const within = ptsEntriesWithin(ptsViewData, room, grade, PTS_RECENT_DAYS);
+  if (within.length) {
+    renderPtsNewModal(hr, within, title, `${hr} · ${within.length}건`, warns);
+    return;
+  }
+  // 한 주 내내 아무 일도 없으면 빈 창만 뜬다 — 그때는 그 이전 것으로 물러난다
+  const older = ptsRecentEntries(ptsViewData, room, grade).slice(0, PTS_FALLBACK_LIMIT);
+  renderPtsNewModal(hr, older, title,
+    older.length ? `${hr} · 최근 ${PTS_RECENT_DAYS}일 없음 — 그 이전 ${older.length}건`
+                 : `${hr} · 기록 없음`, warns);
+}
+window.openPtsRecentModal = openPtsRecentModal;
+function closePtsNewModal(e) {
+  if (e.target === document.getElementById('ptsNewModal')) closePtsNewModalBtn();
+}
+function closePtsNewModalBtn() {
+  document.getElementById('ptsNewModal').classList.remove('show');
+}
+function ptsNewGoToPoints() {
+  closePtsNewModalBtn();
+  navigateTo('points');
+}
+window.closePtsNewModal = closePtsNewModal;
+window.closePtsNewModalBtn = closePtsNewModalBtn;
+window.ptsNewGoToPoints = ptsNewGoToPoints;
+
+async function checkHomeroomNewPoints(homeroom) {
+  try {
+    const hr = homeroom || (myTeacher && myTeacher.homeroom);
+    if (!hr) return;
+    const [grade, room] = hr.split('-');
+    if (!grade || !room) return;
+    const ackKey = 'ynhsPtsAck_' + hr;
+    const snap = await getDoc(doc(fbDb, 'riro_points', `grade${grade}`));
+    if (!snap.exists()) return;
+    const students = snap.data().students || [];
+    // 여기서는 grade{N} 문서 하나만 읽었으므로 학년은 이미 정해져 있다. 학년까지 걸면
+    // 레코드에 grade 가 빠진 경우 통째로 사라지기만 한다 — 반만 본다.
+    const allSigs = ptsSignaturesFor(students, room);
+
+    let acked;
+    try { acked = JSON.parse(localStorage.getItem(ackKey) || 'null'); } catch (e) { acked = null; }
+    // 처음 켠 기기 — 지금까지 쌓인 이력을 전부 '새 항목'으로 취급하지 않는다.
+    // 배지 자체는 '안 본 것'이 아니라 '최근 것'을 세므로 이때도 뜬다.
+    if (acked === null) {
+      localStorage.setItem(ackKey, JSON.stringify(allSigs));
+      acked = allSigs;
+    }
+
+    // 배지를 '안 본 것' 으로 세면 한 번 누르는 순간 사라져서, 그 뒤로는 최근에 무슨 일이
+    // 있었는지 현황판에서 알 길이 없다. 최근 7일에 항목이 있으면 계속 떠 있게 하고,
+    // 그중 아직 안 본 것은 모달에서 NEW 로 구분한다.
+    const recent = ptsEntriesWithin(students, room, null, PTS_RECENT_DAYS);
+    const newSigs = ptsNewSince(students, room, acked).map(e => e.sig);
+    const warns = ptsWarnStudents(students, room, null);
+
+    const classTitleEl = document.querySelector('#homeClassTimetable .home-section-title');
+    if (!classTitleEl) return;
+    classTitleEl.querySelector('.home-pts-tag')?.remove();
+    if (recent.length) {
+      const unseen = newSigs.filter(sig => recent.some(e => e.sig === sig)).length;
+      const tag = document.createElement('span');
+      tag.className = 'home-pts-tag' + (unseen ? ' unseen' : '');
+      tag.textContent = `🆕 ${recent.length}`;
+      tag.title = unseen ? `최근 ${PTS_RECENT_DAYS}일 ${recent.length}건 (안 본 것 ${unseen}건)`
+                         : `최근 ${PTS_RECENT_DAYS}일 ${recent.length}건`;
+      tag.onclick = (ev) => {
+        ev.stopPropagation();
+        // 열어 봤으니 확인 처리 — 배지는 그대로 두고 NEW 표시만 사라진다
+        localStorage.setItem(ackKey, JSON.stringify(allSigs));
+        tag.classList.remove('unseen');
+        renderPtsNewModal(hr, recent, `🗓 최근 ${PTS_RECENT_DAYS}일 상벌점`,
+                          `${hr} · ${recent.length}건`, warns, newSigs);
+      };
+      classTitleEl.appendChild(tag);
+    }
+  } catch (e) { console.error('상벌점 배지', e); }
 }
 
 function selectPtsGrade(grade) {
@@ -19275,6 +19592,10 @@ document.addEventListener('keydown', e => {
   // 상벌점 상세 팝업
   if (document.getElementById('ptsDetailModal')?.classList.contains('show')) {
     closePtsDetailBtn(); return;
+  }
+  // 새로 반영된 상벌점 / 최근 7일 팝업
+  if (document.getElementById('ptsNewModal')?.classList.contains('show')) {
+    closePtsNewModalBtn(); return;
   }
   // 교체/보강 모달
   if (document.getElementById('swapModal')?.classList.contains('open')) {
