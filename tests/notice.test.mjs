@@ -73,6 +73,13 @@ check('ESC 로도 닫힌다',
       /Escape[\s\S]{0,200}getElementById\('noticeModal'\)\?\.classList\.contains\('open'\)[\s\S]{0,80}closeNoticeModalBtn\(\)/.test(HTML));
 check('쓰기는 탭으로 나가 있다',
       /id="noticePage"/.test(HTML) && /function initNoticePage\(\)/.test(HTML));
+// 자주 쓰는 탭들을 앞에 두려고 맨 끝(식단표 아래)에 뒀다
+const navOrder = [...HTML.matchAll(/class="main-nav-item" data-page="([a-z]+)"/g)].map(m => m[1]);
+const tabOrder = [...HTML.matchAll(/class="tab-item" data-page="([a-z]+)"/g)].map(m => m[1]);
+check('쓰기 탭은 식단표 아래 맨 끝에 있다',
+      navOrder.at(-1) === 'notice' && navOrder.at(-2) === 'meal', navOrder.slice(-3));
+check('탭바에서도 맨 끝',
+      tabOrder.at(-1) === 'notice' && tabOrder.at(-2) === 'meal', tabOrder.slice(-3));
 check('쓰기 탭도 관리자에게만 뜬다',
       /navN\.style\.display = admin \? '' : 'none'/.test(HTML) && /id="navNotice"[^>]*style="display:none;"/.test(HTML));
 check('쓰기 탭이 navigateTo 목록에 있다', /'usage','notice'\]\.forEach/.test(HTML));
