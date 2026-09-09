@@ -12,10 +12,13 @@ import fs from 'node:fs';
 
 const HTML  = fs.readFileSync(import.meta.dirname + '/../index.html', 'utf8');
 const PAGE  = fs.readFileSync(import.meta.dirname + '/../usage.html', 'utf8');
-// '지금 버전' 을 여기 적어 두면 APP_VER 가 올라갈 때마다 이 검사가 죽는다.
-// usage.html 이 실제로 든 값을 그대로 읽는다.
-const CUR_VER = /const APP_VER = '([^']+)'/.exec(PAGE)[1];
 const RULES = fs.readFileSync(import.meta.dirname + '/../firestore.rules', 'utf8');
+// '지금 버전' 을 여기 적어 두면 APP_VER 가 올라갈 때마다 이 검사가 죽는다.
+const CUR_VER = /const APP_VER = '([^']+)'/.exec(PAGE)[1];
+// usage.html 은 자기 APP_VER 를 따로 들고 있다(이 화면은 index.html 안에 없다).
+// 이게 index.html 과 어긋나면 '옛 버전 쓰는 사람' 표가 거꾸로 나온다 —
+// 실제로 index 만 올렸다가 전원이 옛 버전으로 잡혔다.
+const IDX_VER = /const APP_VER = '([^']+)'/.exec(HTML)[1];
 
 let pass = 0, fail = 0;
 const check = (n, c, x) => c ? (pass++, console.log('  ✅', n))
@@ -57,7 +60,7 @@ check('전 교사에게 내려가는 파일에는 화면 코드가 없다',
 check('탭 버튼도 없다', !/data-page="usage"/.test(HTML));
 check('5연타는 앱 안 화면을 연다', /_ugClicks = 0; openUsagePage\(\);/.test(HTML));
 check('앱을 벗어나지 않고 iframe 으로 띄운다',
-      /id="usagePageFrame"/.test(HTML) && /usagePageFrame'\)\.src = 'usage\.html\?in=1'/.test(HTML));
+      /id="usagePageFrame"/.test(HTML) && /usagePageFrame'\)\.src = `usage\.html\?in=1&v=\$\{/.test(HTML));
 check('돌아가기 버튼이 있다', /id="usageBackBtn"/.test(HTML) && /function closeUsagePage/.test(HTML));
 check('다른 탭으로 나가면 프레임을 비운다',
       /page !== 'usage'\)\s*\{[\s\S]{0,180}usagePageFrame[\s\S]{0,120}about:blank/.test(HTML));
@@ -236,7 +239,11 @@ console.log('\n■ 관리자 말고는 못 들어간다');
   check('5번째에 앱 안에서 열린다', (await active()) === 'usagePage', await active());
   check('브라우저는 그대로 (앱을 안 벗어난다)',
         pg.url().endsWith('/h.html'), pg.url());
-  check('프레임이 usage.html 을 가리킨다', (await src()) === 'usage.html?in=1', await src());
+  check('프레임이 usage.html 을 가리킨다', (await src()).startsWith('usage.html?in=1'), await src());
+  // usage.html 은 PRECACHE 에 없어 강제로 다시 받아 오는 경로가 없다. 주소에 버전을
+  // 붙여 두지 않으면 브라우저 HTTP 캐시에 걸려 새로고침해도 옛 화면이 뜬다.
+  check(`usage.html 과 index.html 의 버전이 같다 (${IDX_VER})`, CUR_VER === IDX_VER, [CUR_VER, IDX_VER]);
+  check(`주소에 버전이 붙어 있다 (${CUR_VER})`, (await src()).includes(`&v=${CUR_VER}`), await src());
 
   await pg.evaluate(() => window.closeUsagePage());
   check('돌아가기로 원래 화면', (await active()) === 'homePage', await active());
@@ -605,10 +612,9 @@ console.log('\n■ usage.html 을 실제로 띄워 본다');
 
 console.log('\n■ 누가 옛 화면을 쓰는지 보인다');
 {
-  // '지금 버전' 을 여기 적어 두면 APP_VER 가 올라갈 때마다 이 검사가 죽는다.
-  // 페이지가 이미 읽어 둔 값(window.APP_VER)을 그대로 쓴다.
   const curVer = await pg.evaluate(() => window.APP_VER);
   const rows = [
+    // 페이지가 이미 읽어 둔 값(window.APP_VER)을 그대로 쓴다 — 버전이 올라가도 안 죽는다.
     { email:'a@x', name:'김하나', days:{ '2026-05-01':{opens:1, last:'10:00', ver:curVer, tabs:{home:1}} } },
     { email:'b@x', name:'이두리', days:{ '2026-05-01':{opens:1, last:'10:00', ver:'ver6.80', tabs:{home:1}} } },
   ];
