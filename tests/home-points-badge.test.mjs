@@ -83,14 +83,19 @@ check('최근 7일 모달에 누적 경고를 함께 넘긴다',
       /const warns = ptsWarnStudents\(ptsViewData, room, grade\)/.test(HTML)
       && /renderPtsNewModal\(hr, within, title, [^,]+, warns\)/.test(HTML));
 check('선도관심은 명렬에 있는 학생만 (전출·자퇴가 계속 뜨던 자리)',
-      /\.filter\(s => !roster \|\| roster\.has\(ptsRosterKey\(s\)\)\)/.test(HTML));
+      /if \(roster && !roster\.names\.has\(ptsRosterKey\(s\)\)\) continue;/.test(HTML));
+// 실제로 '김태형 3-10-04' 이 선도관심에 두 줄로 떴다. 원인은 자료를 두 번 담은 것.
+check('불러오기가 두 번 돌지 않는다 (같은 학생이 두 줄로 뜨던 원인)',
+      /if \(ptsViewLoading\) return ptsViewLoading;/.test(HTML) &&
+      /ptsViewLoading = _loadPtsViewData\(\)\.finally/.test(HTML));
+check('담는 동안 전역을 비워 두지 않는다',
+      !/ptsViewData = \[\];/.test(HTML) && /const rows = \[\];/.test(HTML));
 // 통계·반별 목록·검색이 모두 ptsViewData 를 쓴다. 한 군데씩 거르면 어디선가
 // 빠뜨리므로 불러올 때 한 번에 걸러 낸다.
 check('조회 자료 자체를 명렬로 거른다 (통계·목록·검색이 다 이걸 쓴다)',
-      /if \(_roster\) ptsViewData = ptsViewData\.filter\(s => _roster\.has\(ptsRosterKey\(s\)\)\);/.test(HTML));
+      /ptsViewData = ptsOnRoster\(rows, ptsRosterSet\(allStudents\)\);/.test(HTML));
 check('거르는 것이 통계를 그리기 전이다',
-      HTML.indexOf('ptsViewData = ptsViewData.filter(s => _roster.has') < HTML.indexOf('ptsViewLoaded = true;'));
-check('명렬을 못 읽었으면 안 거른다', /const _roster = ptsRosterSet\(allStudents\);/.test(HTML));
+      HTML.indexOf('ptsViewData = ptsOnRoster(rows,') < HTML.indexOf('ptsViewLoaded = true;'));
 check('배지 쪽도 명렬을 읽고 나서 그린다',
       /ensurePtsRoster\(\)\.then\(\(\) => renderHomeroomPtsBadge/.test(HTML));
 check('조회 화면도 명렬을 같이 읽는다', /await ensurePtsRoster\(\);/.test(HTML));
@@ -113,6 +118,9 @@ const closePtsNewModalBtnSrc = grab('closePtsNewModalBtn');
 const checkHomeroomNewPointsSrc = grab('checkHomeroomNewPoints');
 const ptsRosterSetSrc = grab('ptsRosterSet');
 const ptsRosterKeySrc = /^const ptsRosterKey = [\s\S]*?;$/m.exec(HTML)[0];
+const ptsSeatKeySrc = /^const ptsSeatKey = [\s\S]*?;$/m.exec(HTML)[0];
+const ptsOnRosterSrc = grab('ptsOnRoster');
+const ptsWatchListSrc = grab('ptsWatchList');
 const renderHomeroomPtsBadgeSrc = grab('renderHomeroomPtsBadge');
 
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
@@ -173,7 +181,13 @@ const HARNESS = `<!doctype html><meta charset="utf-8">
   const PTS_RECENT_DAYS = 7;
   ${ptsWarnStudentsSrc}
   ${ptsRosterKeySrc}
+  ${ptsSeatKeySrc}
   ${ptsRosterSetSrc}
+  ${ptsOnRosterSrc}
+  window.ptsOnRoster = ptsOnRoster;
+  const PTS_DEMERIT_WATCH = 10;
+  ${ptsWatchListSrc}
+  window.ptsWatchList = ptsWatchList;
   window.ptsRosterSet = ptsRosterSet;
   window.ptsWarnStudents = ptsWarnStudents;
   ${ptsRememberAckSrc}
@@ -493,6 +507,33 @@ console.log('\n■ 사유에 태그가 들어 있어도 실행되지 않는다')
   check('실행되지는 않았다', (await pg.evaluate(() => window.__pwned)) === undefined);
 }
 
+console.log('\n■ 선도 관심 학생 — 벌점 10점 이상은 다 보여준다');
+{
+  check('기준이 한 곳에 있다', /const PTS_DEMERIT_WATCH = 10;/.test(HTML));
+  check('열 명에서 자르지 않는다', !/\.sort\(\(a,b\) => a\.v - b\.v\)\s*\n?\s*\.slice\(0, 10\)/.test(HTML));
+  check('많으면 카드 안에서 스크롤한다', /\.pts-lead-list\{max-height:60vh;overflow-y:auto;\}/.test(HTML));
+
+  const pick = (list, min) => pg.evaluate(a =>
+    window.ptsWatchList(a[0], a[1]).map(x => x.s.name), [list, min]);
+  const S = (name, demerit, total) => ({ name, demerit, total, grade:3, room:1, num:1 });
+
+  check('벌점 10점이면 들어간다', (await pick([S('가', -10, -10)])).join() === '가');
+  check('9점이면 안 들어간다', (await pick([S('가', -9, -9)])).length === 0);
+  check('벌점이 양수로 와도 본다(부호가 섞여 온다)', (await pick([S('가', 12, -12)])).join() === '가');
+
+  // 상계 봉사로 합계가 올라가도 벌점을 받은 사실은 남는다
+  check('상계로 합계가 양수여도 벌점이 많으면 들어간다',
+        (await pick([S('가', -15, 3)])).join() === '가');
+  // 예전 기준(합계 음수)으로는 이 학생이 들어갔었다
+  check('벌점이 적으면 합계가 음수여도 안 들어간다',
+        (await pick([S('가', -2, -8)])).length === 0);
+
+  const many = Array.from({ length: 25 }, (_, i) => S('학생' + i, -(10 + i), -(10 + i)));
+  const got = await pick(many);
+  check('스물다섯 명이면 스물다섯 명 다 나온다', got.length === 25, got.length);
+  check('합계 낮은 순', got[0] === '학생24' && got.at(-1) === '학생0', [got[0], got.at(-1)]);
+}
+
 console.log('\n■ 컴퓨터를 안 꺼도 새로 들어온 것이 뜬다');
 {
   // 그리기가 명렬 읽기(promise) 뒤에 붙어 있다 — 밀어 넣고 한 박자 기다린다
@@ -557,6 +598,22 @@ console.log('\n■ 선도관심학생 — 전출·자퇴한 학생은 뺀다');
   // 이름에 공백이 섞여 들어와도 같은 사람으로 본다
   const spaced = await warn([{ grade:1, room:1, num:3, name:'김 하나', total:-7 }], ROSTER);
   check('이름의 공백은 무시한다', spaced.length === 1, spaced);
+
+  // 화면에서 실제로 본 것: '김태형 3-10-04 · 벌점22' 이 똑같이 두 줄.
+  // 자료를 두 번 담아 그렇다. 담는 쪽을 고쳤지만 여기서도 한 번 더 막는다.
+  const dup = (rows, roster) => pg.evaluate(a =>
+    window.ptsOnRoster(a[0], window.ptsRosterSet(a[1])).map(s => s.name + '/' + s.num), [rows, roster]);
+  const KT = { grade:3, room:10, num:4, name:'김태형', total:-12 };
+  const R3 = [{ grade:3, room:10, num:4, name:'김태형' },
+              { grade:3, room:10, num:5, name:'김태형' },   // 동명이인, 다른 자리
+              { grade:3, room:7,  num:23, name:'정찬영' }];
+  check('같은 학생이 두 번 들어오면 한 줄만',
+        (await dup([KT, { ...KT }], R3)).join() === '김태형/4', await dup([KT, { ...KT }], R3));
+  check('동명이인은 자리가 달라 둘 다 남는다',
+        (await dup([KT, { ...KT, num:5 }], R3)).join() === '김태형/4,김태형/5',
+        await dup([KT, { ...KT, num:5 }], R3));
+  check('명렬이 없어도 겹치는 것은 줄인다',
+        (await dup([KT, { ...KT }], [])).length === 1, await dup([KT, { ...KT }], []));
 
   // 여기가 위험한 쪽이다. 있는 학생을 지우면 선도관심에서 조용히 사라진다 —
   // 없는 학생이 하나 남는 것보다 나쁘다. 명렬에 이름만 있으면 살린다.
