@@ -2618,7 +2618,21 @@
     font-size:14px;line-height:1.65;outline:none;
   }
   .rt-editor:focus{border-color:var(--mon);}
-  .rt-editor img, .notice-view img{
+  /* 업무캘린더 메모용 — 공지 본문만큼 클 이유가 없다. 모달 안이라 더 그렇다. */
+  .rt-editor.compact{min-height:clamp(90px,14vh,170px);max-height:34vh;font-size:15px;}
+  .rt-editor:empty::before{content:attr(data-ph);color:var(--ink-soft);opacity:.7;}
+  .mytask-memo-hint{
+    display:flex;gap:8px;align-items:baseline;justify-content:space-between;
+    font-size:12px;color:var(--ink-soft);margin-top:5px;line-height:1.5;
+  }
+  .mytask-memo-msg{color:var(--mon);font-weight:700;flex-shrink:0;}
+  /* 읽기 쪽 상자. 저장된 서식을 그대로 보여 준다. */
+  .rt-view{font-size:14px;line-height:1.65;color:var(--ink);word-break:break-word;}
+  .rt-view p{margin:0 0 6px;}
+  .rt-view ul,.rt-view ol{margin:4px 0;padding-left:20px;}
+  .rt-view img{max-width:100%;height:auto;border-radius:8px;display:block;margin:8px 0;cursor:zoom-in;}
+  .rt-view img.pending{opacity:0.45;}
+  .rt-editor img, .notice-view img, .rt-view img{
     max-width:100%;height:auto;border-radius:8px;display:block;margin:8px 0;
   }
   /* 아직 안 올라간(또는 워커가 없어 못 받은) 그림 자리 */
@@ -5885,9 +5899,17 @@
             oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
             onkeydown="if(event.key==='Enter'){event.preventDefault();}"></textarea>
         </div>
-        <div class="mytask-modal-field">
+        <div class="mytask-modal-field" id="mytaskMemoField">
           <label>메모</label>
-          <textarea id="mytaskMemo" placeholder="상세 내용 (선택)" autocomplete="off" spellcheck="false"></textarea>
+          <!-- 도구 모음은 모달을 열 때 rtToolbarHtml() 로 채운다. 여기에 그대로
+               적어 두면 공지 쪽 도구가 바뀔 때 이쪽만 옛것으로 남는다. -->
+          <div id="mytaskMemoBar"></div>
+          <div class="rt-editor compact" id="mytaskMemoEd" contenteditable="true"
+               spellcheck="false" data-ph="상세 내용 (선택)"></div>
+          <div class="mytask-memo-hint">
+            <span>그림은 <b>Ctrl+V 로 붙여넣기</b>. 학생 신상이 담긴 자료는 넣지 마세요.</span>
+            <span class="mytask-memo-msg" id="mytaskMemoMsg"></span>
+          </div>
         </div>
         <div class="mytask-modal-dates">
           <div class="mytask-modal-field">
@@ -6297,7 +6319,7 @@ const TEACHERS = [];
 const ADMIN_EMAIL = 'pkh910518@yeungnam.hs.kr';
 // 화면에 찍히는 버전. 사용 현황에 '이 사람이 지금 쓰는 버전'으로도 남는다 —
 // 누가 옛 화면을 계속 쓰는지 보려면 그게 있어야 한다.
-const APP_VER = 'ver7.12';
+const APP_VER = 'ver7.13';
 const VIEW_AS_EMAIL = new URLSearchParams(location.search).get('viewAs') || null;
 // 관리자 '실제 권한으로 보기' — admin.html이 워커에서 그 교사 명의의 커스텀 토큰을 받아
 // 이 페이지에 넘긴다. 실제로 그 계정으로 로그인되므로 Firestore 규칙도 그 사람 기준으로
@@ -8604,7 +8626,9 @@ let _noticeList  = [];        // 이 배포의 공지들. 최근에 고친 것�
 let _noticeEditing = false;   // 공지 쓰기 화면(편집)에 있는가
 let _noticeDirty   = false;   // 그 안에서 실제로 고친 것이 있는가
 let _noticeDraft   = null;    // 지금 고치고 있는 공지 { id, title, html, keys, from, until, isNew }
-let _rtObjUrls = [];      // 화면에서 뗄 때 되돌려줄 blob 주소
+// 화면에서 뗄 때 되돌려줄 blob 주소. 어느 상자에 그린 것인지 같이 적어 둔다 —
+// 공지 모달과 캘린더 모달이 동시에 떠 있어도 서로의 그림을 끊지 않게.
+let _rtObjUrls = [];      // [{ url, root }]
 
 // ── 걸러내기 ────────────────────────────────────────────────────────────────
 // 글은 관리자만 쓰므로 남이 심을 일은 없지만, 붙여넣기로 바깥 HTML 이 통째로
@@ -8751,7 +8775,7 @@ async function rtLoadImages(root){
                               { headers: { Authorization: `Bearer ${idToken}` } });
       if (!res.ok || !(res.headers.get('Content-Type')||'').startsWith('image/')) throw 0;
       const url = URL.createObjectURL(await res.blob());
-      _rtObjUrls.push(url);
+      _rtObjUrls.push({ url, root });
       img.src = url;
       img.classList.remove('pending');
     } catch(e){
@@ -8761,9 +8785,13 @@ async function rtLoadImages(root){
   }));
 }
 
-function rtReleaseImages(){
-  for (const u of _rtObjUrls) { try { URL.revokeObjectURL(u); } catch(e){} }
-  _rtObjUrls = [];
+function rtReleaseImages(root){
+  const rest = [];
+  for (const it of _rtObjUrls) {
+    if (root && it.root !== root) { rest.push(it); continue; }   // 남의 것은 둔다
+    try { URL.revokeObjectURL(it.url); } catch(e){}
+  }
+  _rtObjUrls = rest;
 }
 
 // 이 배포의 모든 공지가 쓰는 그림 키. 청소는 반드시 이걸 기준으로 해야 한다 —
@@ -9212,6 +9240,12 @@ function bindNoticeZoom(){
     const img = e.target.closest('.notice-view img');
     if (img && img.src) openNoticeZoom(img.src);
   });
+  // 업무캘린더 메모의 그림도 같은 창으로 크게 본다. 크게 보기(z-index 9200)가
+  // 캘린더 모달(9100) 위에 뜨고, ESC·뒤로가기도 이미 이쪽을 먼저 닫는다.
+  document.getElementById('mytaskRecvInfo')?.addEventListener('click', e => {
+    const img = e.target.closest('.rt-view img');
+    if (img && img.src) openNoticeZoom(img.src);
+  });
   const ov = document.getElementById('noticeImgZoom');
   document.getElementById('noticeZoomImg')?.addEventListener('click', e => {
     e.stopPropagation(); toggleNoticeZoomActual();
@@ -9567,7 +9601,8 @@ async function rtOnPaste(e, ed){
     // 그림을 못 받는 편집기면 브라우저 기본 동작에 맡기지 않는다 — 기본 동작은
     // 그림을 data: 주소째로 본문에 박아 넣어, 문서 하나가 몇 MB 가 된다.
     e.preventDefault();
-    if (!o.put) { alert('여기에는 그림을 넣을 수 없습니다.'); return; }
+    // put() 이 null 을 돌려주는 때도 있다(보기 모드 등) — 그때도 못 받는 것으로 본다.
+    if (!o.put || !o.put()) { alert(o.noPutMsg || '여기에는 그림을 넣을 수 없습니다.'); return; }
     for (const it of files) { const f = it.getAsFile(); if (f) await rtInsertImage(ed, f); }
     return;
   }
@@ -9609,13 +9644,14 @@ const rtFileId = () => 'f' + Date.now().toString(36) + Math.random().toString(36
 // 저장할 때 걸러내기가 src 를 통째로 떼어 낸다.
 async function rtInsertImage(ed, file){
   const o = (ed && ed._rt) || {};
-  if (!o.put) return;
+  const where = o.put && o.put();
+  if (!where) return;
   const say = m => { try { o.status && o.status(m); } catch(e){} };
   say('그림 올리는 중...');
   try {
     const dataUrl = await rtShrink(file);
-    const r = await rtApi({ action: 'put', ...o.put(), fileId: rtFileId(), dataUrl });
-    if (!r || !r.success) throw new Error(rtErrText(r && r.error, o.put().kind));
+    const r = await rtApi({ action: 'put', ...where, fileId: rtFileId(), dataUrl });
+    if (!r || !r.success) throw new Error(rtErrText(r && r.error, where.kind));
     // 워커가 만든 키라도 그대로 태그에 박기 전에 한 번 더 본다.
     if (!RT_KEY_RE.test(r.key || '')) throw new Error('저장소가 이상한 답을 보냈습니다.');
     try { o.onKey && o.onKey(r.key); } catch(e){}
@@ -18918,6 +18954,9 @@ window.togglePanelConsult  = togglePanelConsult;
 let mytaskYear      = new Date().getFullYear();
 let mytaskMonth     = new Date().getMonth();
 let mytaskTasks     = [];
+// 내 일정 목록이 실제로 한 번이라도 도착했는가. 그림 청소가 이걸 본다 —
+// 안 왔는데 청소하면 '쓰는 그림이 하나도 없다'로 읽혀 전부 지워진다.
+let mytaskLoadedOnce = false;
 let mytaskShared    = [];
 let mytaskEditId    = null;
 let mytaskEditOwner = null;
@@ -19431,8 +19470,14 @@ async function ttMeetAddToCalendar(){
   try {
     const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
     set('mytaskTitle', '협의');
-    set('mytaskMemo', `대상: ${ttMeetPicked.join(', ')}`
-      + (sel.busy.length ? `\n※ ${sel.busy.join(', ')} 선생님은 이 시간 수업이 있습니다.` : ''));
+    // 메모는 이제 입력칸(value)이 아니라 편집기(innerHTML)다. 여기에 글자를 그대로
+    // 넣으면 이름 안의 <, & 가 태그로 읽히므로 escapeHtml 을 거친다.
+    const memoEd = document.getElementById('mytaskMemoEd');
+    if (memoEd) {
+      const lines = [`대상: ${ttMeetPicked.join(', ')}`];
+      if (sel.busy.length) lines.push(`※ ${sel.busy.join(', ')} 선생님은 이 시간 수업이 있습니다.`);
+      memoEd.innerHTML = lines.map(l => escapeHtml(l)).join('<br>');
+    }
     const b = BELL_SCHEDULE.find(x => String(x.period) === String(sel.key));
     if(b){ setMytaskTimeSelect('mytaskStartTime', b.start); setMytaskTimeSelect('mytaskEndTime', b.end); }
     renderMytaskSharedList();
@@ -19952,6 +19997,7 @@ async function loadMytasks() {
     collection(fbDb, 'tasks', myUid, 'items'),
     snap => {
       const myTasks = snap.docs.map(d => ({ id: d.id, ownerUid: myUid, ...d.data() }));
+      mytaskLoadedOnce = true;
       mytaskHealShareIds(myTasks, myUid);   // 이름으로 저장된 공유 대상을 이메일로 정정
       // 공유받은 일정(ownerUid !== myUid)은 유지, 내 일정만 교체
       mytaskTasks = [...myTasks, ...mytaskTasks.filter(t => t.ownerUid !== myUid)];
@@ -20881,9 +20927,17 @@ function renderMytaskRecvInfo(t, isOwner = false){
     const until = t.repeat.until ? ` (${escapeHtml(t.repeat.until)} 까지)` : '';
     html += row('반복', escapeHtml(MYTASK_REPEAT_LABEL[rep] || rep) + until);
   }
-  if (t.memo) html += row('메모', escapeHtml(t.memo), 'mrv-text');
+  // 메모는 두 모양으로 저장돼 있다.
+  //   memoHtml — 서식·그림이 있는 새 메모
+  //   memo     — 그 전에 쓴 순수 글자 (지금도 글자만 있는 메모는 이쪽으로도 남는다)
+  // 옛 메모를 HTML 로 넣으면 줄바꿈이 전부 사라지므로 길을 갈라 둔다.
+  if (t.memoHtml) html += row('메모', `<div class="rt-view">${rtSanitize(t.memoHtml)}</div>`);
+  else if (t.memo) html += row('메모', escapeHtml(t.memo), 'mrv-text');
   el.innerHTML = html;
   el.style.display = 'block';
+  // 그림은 <img src> 로 못 받는다(워커가 토큰을 요구한다). 받아서 끼운다.
+  const view = el.querySelector('.rt-view');
+  if (view) rtLoadImages(view);
 }
 
 // 요약 → 편집 폼. 작성자가 '수정'을 눌렀을 때만.
@@ -21062,6 +21116,86 @@ function getMytaskTimeValue(id) {
   return document.getElementById(id).value;
 }
 
+// ── 업무캘린더 메모 편집기 ──────────────────────────────────────────────────
+// 공지와 같은 편집기를 쓴다. 다른 것은 그림이 들어가는 자리뿐이다.
+//   공지     notices/<배포>/<공지id>/...        — 관리자만
+//   메모     tasks/<배포>/<내uid>/<일정id>/...  — 교사 누구나, 자기 칸에만
+let _mytaskMemoBound = false;   // 배선은 한 번만 (모달은 다시 안 만들어진다)
+let _mytaskDocId     = '';      // 지금 고치는 일정 id. 새 일정도 미리 정해 둔다.
+let _mytaskPutKeys   = [];      // 이번에 올린 그림 키 — 안 쓰고 나가면 지운다
+
+// 새 일정도 id 를 먼저 받아 둔다. 그림 경로에 일정 id 가 들어가는데, 저장할
+// 때까지 id 가 없으면 붙여넣은 그림을 어디에 둘지 정할 수 없다.
+function mytaskNewDocId(){
+  const u = fbAuth.currentUser;
+  try { return u ? doc(collection(fbDb, 'tasks', u.uid, 'items')).id : ''; }
+  catch(e){ return ''; }
+}
+
+// 저장된 메모를 편집기에 올릴 모양으로.
+// 옛 메모는 순수 글자다. 그대로 innerHTML 에 넣으면 줄바꿈이 전부 사라진다.
+function mytaskMemoHtml(t){
+  if (t && t.memoHtml) return rtSanitize(t.memoHtml);
+  const plain = String((t && t.memo) || '');
+  return plain ? escapeHtml(plain).split('\n').join('<br>') : '';
+}
+
+// 서식을 뺀 글자만. 두 곳에 쓴다 — '비었나' 보는 것과, 아직 새 앱을 못 받은
+// 화면(캐시된 옛 버전)이 읽을 memo 칸을 채우는 것.
+function rtPlainText(html){
+  const box = document.createElement('div');
+  box.innerHTML = String(html || '')
+    .replace(/<\/(p|div|h[1-4]|li|ul|ol)>|<br\s*\/?>/gi, '\n');
+  return (box.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function mytaskMemoLoad(t){
+  const ed  = document.getElementById('mytaskMemoEd');
+  const bar = document.getElementById('mytaskMemoBar');
+  if (!ed || !bar) return;
+  rtReleaseImages(ed);
+  _mytaskPutKeys = [];
+  if (!bar.firstElementChild) bar.innerHTML = rtToolbarHtml();
+  ed.innerHTML = mytaskMemoHtml(t);
+  rtLoadImages(ed);
+  if (_mytaskMemoBound) return;
+  _mytaskMemoBound = true;
+  rtBindEditor(ed, {
+    toolbar: bar.querySelector('.rt-toolbar'),
+    // '다른 선생님으로 보기' 중에는 그림을 안 받는다. 그림은 로그인한 계정의
+    // 칸에 들어가는데 일정은 보고 있는 선생님 것이라, 둘이 어긋난다.
+    put:      () => (isViewAs() ? null : { kind: 'task', taskId: _mytaskDocId }),
+    noPutMsg: '보기 모드에서는 그림을 넣을 수 없습니다.',
+    onKey:    k => _mytaskPutKeys.push(k),
+    status:   m => { const el = document.getElementById('mytaskMemoMsg'); if (el) el.textContent = m; }
+  });
+}
+
+// 내 일정 전부가 쓰는 그림 키. 청소(안 쓰는 그림 지우기)의 기준이다.
+// 기준이 틀리면 내 그림이 통째로 지워지므로, 못 믿을 때는 아예 안 한다는
+// 뜻으로 null 을 돌려준다.
+//   · 목록이 아직 한 번도 안 왔다     → 쓰는 그림을 하나도 모른다
+//   · 다른 선생님으로 보기 중이다     → 목록이 내 것이 아니다
+function mytaskAllKeys(extra){
+  const u = fbAuth.currentUser;
+  if (!u || isViewAs() || !mytaskLoadedOnce) return null;
+  const set = new Set();
+  for (const t of mytaskTasks) {
+    if (t.ownerUid !== u.uid) continue;
+    for (const k of (t.memoKeys || [])) if (RT_KEY_RE.test(k)) set.add(k);
+  }
+  for (const k of (extra || [])) if (RT_KEY_RE.test(k)) set.add(k);
+  return [...set];
+}
+
+// 올렸다가 안 쓴 그림을 지운다. 저장할 때와 그냥 닫을 때 모두 부른다.
+function mytaskDropUnused(usedKeys){
+  const used = new Set(usedKeys || []);
+  const gone = _mytaskPutKeys.filter(k => !used.has(k));
+  _mytaskPutKeys = [];
+  if (gone.length) rtApi({ action: 'del', keys: gone }).catch(() => {});
+}
+
 async function openMytaskModal(id=null, ownerUid=null, dateStr=null) {
   const user      = fbAuth.currentUser;
   mytaskEditId    = id;
@@ -21108,7 +21242,8 @@ async function openMytaskModal(id=null, ownerUid=null, dateStr=null) {
     const t = mytaskTasks.find(t => t.id === id) || mytaskShared.find(t => t.id === id);
     if (t) {
       document.getElementById('mytaskTitle').value     = t.title || '';
-      document.getElementById('mytaskMemo').value      = t.memo  || '';
+      _mytaskDocId = id;
+      mytaskMemoLoad(t);
       document.getElementById('mytaskStartDate').value = t.startDate || '';
       document.getElementById('mytaskEndDate').value   = t.endDate   || '';
       setMytaskTimeSelect('mytaskStartTime', t.startTime || '');
@@ -21126,7 +21261,9 @@ async function openMytaskModal(id=null, ownerUid=null, dateStr=null) {
   } else {
     const todayDefault = new Date().toISOString().slice(0,10);
     document.getElementById('mytaskTitle').value     = '';
-    document.getElementById('mytaskMemo').value      = '';
+    // 저장 전에도 그림을 받아야 하므로 id 를 먼저 받아 둔다
+    _mytaskDocId = mytaskNewDocId();
+    mytaskMemoLoad(null);
     document.getElementById('mytaskStartDate').value = dateStr || todayDefault;
     document.getElementById('mytaskEndDate').value   = dateStr || todayDefault;
     setMytaskTimeSelect('mytaskStartTime', '');
@@ -21212,7 +21349,13 @@ window.setMytaskRepeat = setMytaskRepeat;
 
 function closeMytaskModal() {
   document.getElementById('mytaskModal').classList.remove('show');
-  mytaskEditId = null; mytaskEditOwner = null;
+  // 붙여넣었다가 저장하지 않고 닫은 그림은 R2 에 그대로 남는다. 저장은
+  // 자기가 치우고 나가므로(_mytaskPutKeys 를 비운다), 여기까지 온 것은
+  // 안 쓰인 것이다.
+  mytaskDropUnused([]);
+  const ed = document.getElementById('mytaskMemoEd');
+  if (ed) { rtReleaseImages(ed); ed.innerHTML = ''; }
+  mytaskEditId = null; mytaskEditOwner = null; _mytaskDocId = '';
 }
 function closeMytaskModalOverlay(e) {
   if (e.target === document.getElementById('mytaskModal')) closeMytaskModal();
@@ -21234,7 +21377,14 @@ async function saveMytask() {
     return;
   }
   const title     = document.getElementById('mytaskTitle').value.trim();
-  const memo      = document.getElementById('mytaskMemo').value.trim();
+  const memoEd    = document.getElementById('mytaskMemoEd');
+  const memoHtml  = memoEd ? rtSanitize(memoEd.innerHTML) : '';
+  const memoKeys  = rtKeysIn(memoHtml);
+  const memoPlain = rtPlainText(memoHtml);
+  // memo(글자만)도 같이 남긴다. 아직 새 앱을 못 받은 화면 — 서비스 워커가
+  // 옛 index.html 을 물고 있는 컴퓨터·폰 — 은 memoHtml 을 모른다. 그 화면에서
+  // 메모가 통째로 빈칸으로 보이지 않게 하는 것이 이 칸의 몫이다.
+  const memo      = memoPlain || (memoKeys.length ? '(그림)' : '');
   const startDate = document.getElementById('mytaskStartDate').value;
   const endDate   = document.getElementById('mytaskEndDate').value;
   const startTime = getMytaskTimeValue('mytaskStartTime');
@@ -21251,7 +21401,7 @@ async function saveMytask() {
     : null;
   const existing = mytaskEditId ? (mytaskTasks.find(t => t.id === mytaskEditId) || {}) : {};
   const data = {
-    title, memo, startDate, endDate,
+    title, memo, memoHtml, memoKeys, startDate, endDate,
     startTime: startTime || null,
     endTime: endTime || null,
     status: mytaskCurrentStatus,
@@ -21264,11 +21414,21 @@ async function saveMytask() {
     updatedAt: new Date().toISOString()
   };
   try {
-    if (mytaskEditId) {
-      await setDoc(doc(fbDb, 'tasks', user.uid, 'items', mytaskEditId), data);
-    } else {
-      await addDoc(collection(fbDb, 'tasks', user.uid, 'items'), data);
-    }
+    // 새 일정도 id 를 미리 받아 뒀다(그림 경로에 들어간다). 그래서 addDoc 이
+    // 아니라 그 id 로 setDoc 한다 — addDoc 을 쓰면 id 가 하나 더 생겨,
+    // 붙여넣은 그림이 아무 일정에도 안 딸린 자리에 남는다.
+    const docId = mytaskEditId || _mytaskDocId || mytaskNewDocId();
+    await setDoc(doc(fbDb, 'tasks', user.uid, 'items', docId), data);
+
+    // 이제 무엇이 쓰이는지가 확정됐다. 넣었다 뺀 그림을 치운다.
+    mytaskDropUnused(memoKeys);
+    // 그리고 내 칸에 남아 있는 '아무 일정도 안 쓰는 그림'까지 훑어 치운다.
+    // 창이 갑자기 닫혀 위의 치우기를 못 부른 경우가 여기서 걸린다.
+    // 기준을 못 믿을 때(mytaskAllKeys 가 null)는 건너뛴다 — 잘못 훑으면
+    // 내 그림이 통째로 지워진다.
+    const keep = mytaskAllKeys(memoKeys);
+    if (keep) rtApi({ action: 'sweep', kind: 'task', keep }).catch(() => {});
+
     closeMytaskModal();
     // 렌더링은 onSnapshot이 자동으로 처리
   } catch(e) { alert('저장 실패: ' + e.message); }
@@ -21303,9 +21463,15 @@ async function deleteMytask() {
     return;
   }
 
-  if (!confirm('이 일정을 삭제할까요?')) return;
+  const gone = mytaskTasks.find(t => t.id === mytaskEditId && t.ownerUid === user.uid);
+  const goneKeys = (gone && gone.memoKeys || []).filter(k => RT_KEY_RE.test(k));
+  if (!confirm(goneKeys.length
+        ? '이 일정을 삭제할까요? 메모에 붙인 그림도 함께 지워집니다.'
+        : '이 일정을 삭제할까요?')) return;
   try {
     await deleteDoc(doc(fbDb, 'tasks', user.uid, 'items', mytaskEditId));
+    // 일정이 없어지면 그 그림을 아무도 안 쓴다. 문서만 지우면 R2 에 계속 남는다.
+    if (goneKeys.length) rtApi({ action: 'del', keys: goneKeys }).catch(() => {});
     mytaskTasks = mytaskTasks.filter(t => t.id !== mytaskEditId);
     closeMytaskModal();
     // 현황판 업데이트
