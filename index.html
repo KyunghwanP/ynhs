@@ -2652,6 +2652,13 @@
   }
   /* 아직 안 올라간(또는 워커가 없어 못 받은) 그림 자리 */
   .rt-editor img.pending{opacity:0.45;}
+  /* 영역째 복사해 붙였을 때, 아직 가져오는 중인 그림 자리.
+     빈 src 로 두면 깨진 그림 아이콘이 떠서 놀란다 — 상자만 그려 둔다. */
+  .rt-editor img.rt-hold{
+    width:140px;height:92px;object-fit:cover;
+    background:var(--chip,#eef1f5) center/18px no-repeat;
+    border:1px dashed var(--rule,#b9c2cf);opacity:0.7;
+  }
   .notice-view{font-size:14px;line-height:1.7;color:var(--ink);}
   .notice-view p{margin:0 0 8px;}
   .notice-hint{margin-top:8px;font-size:12px;font-weight:600;color:var(--ink-soft);}
@@ -4723,7 +4730,11 @@
       다른 계정으로 로그인
     </button>
     <div id="authStatus" style="margin-top:12px;"></div>
-    <div style="margin-top:16px;font-family:'IBM Plex Mono';font-size:10px;color:var(--ink-soft);opacity:0.4;">ver6.98</div>
+    <!-- 숫자를 여기 적지 않는다. 손으로 적어 두면 반드시 어긋난다 — 실제로
+         APP_VER 이 ver7.4x 까지 갔는데 이 자리는 ver6.98 에 멈춰 있었다.
+         로그인 화면의 이 숫자는 '이 폰이 새 앱을 받았나'를 보는 유일한 자리라,
+         틀린 숫자가 떠 있으면 없느니만 못하다. APP_VER 한 군데서만 채운다. -->
+    <div id="loginVer" style="margin-top:16px;font-family:'IBM Plex Mono';font-size:10px;color:var(--ink-soft);opacity:0.4;"></div>
   </div>
 </div>
 
@@ -4867,7 +4878,7 @@
       <div class="main-nav-item" data-page="notice" id="navNotice" style="display:none;">
         <span class="main-nav-icon">📢</span>전체 공지 쓰기
       </div>
-    <div class="nav-version" title="Made by 박경환">ver6.98</div>
+    <div class="nav-version" title="Made by 박경환"></div>
     </nav>
 
     <!-- 업무캘린더 FAB (우하단 고정) -->
@@ -6334,7 +6345,7 @@ const TEACHERS = [];
 const ADMIN_EMAIL = 'pkh910518@yeungnam.hs.kr';
 // 화면에 찍히는 버전. 사용 현황에 '이 사람이 지금 쓰는 버전'으로도 남는다 —
 // 누가 옛 화면을 계속 쓰는지 보려면 그게 있어야 한다.
-const APP_VER = 'ver7.27';
+const APP_VER = 'ver7.31';
 const VIEW_AS_EMAIL = new URLSearchParams(location.search).get('viewAs') || null;
 // 관리자 '실제 권한으로 보기' — admin.html이 워커에서 그 교사 명의의 커스텀 토큰을 받아
 // 이 페이지에 넘긴다. 실제로 그 계정으로 로그인되므로 Firestore 규칙도 그 사람 기준으로
@@ -6400,6 +6411,10 @@ try {
   document.querySelectorAll('.nav-version').forEach(el => {
     el.textContent = APP_VER + ' · ' + (location.hostname || '?') + ' NL:' + nlKeys.length + (IS_NEUTRALINO ? ' 앱✓' : '');
   });
+  // 로그인 화면은 진단 꼬리표 없이 숫자만. 선생님께 '버전 뭐라고 떠요?' 하고
+  // 물어볼 유일한 자리라, 읽어서 그대로 불러 줄 수 있어야 한다.
+  const loginVer = document.getElementById('loginVer');
+  if (loginVer) loginVer.textContent = APP_VER;
   console.log('[진단] host:', location.hostname, '| NL 전역:', nlKeys, '| Neutralino:', IS_NEUTRALINO, '| UA:', navigator.userAgent);
 } catch(e){}
 
@@ -8734,7 +8749,25 @@ function rtPreserveStyles(box){
   }
 }
 
-function rtSanitize(html){
+// 붙여넣기가 잡아 둘 수 있는 그림 주소인가.
+//   data:  — 그림이 주소 안에 통째로 실려 있다. 그 자리에서 풀면 된다.
+//   https: — 주소만 있다. 워커한테 받아 달라고 해야 한다.
+// 그 밖(file:///, blob:, cid:, http:)은 잡지 않는다. 한글·워드에서 온
+// file:/// 은 브라우저에 읽을 권한이 없고, 나머지는 붙여넣는 사람 브라우저
+// 안에서만 뜻이 있는 주소라 우리가 받아 봐야 나오는 것이 없다.
+function rtPasteSrc(src){
+  const s = String(src || '').trim();
+  if (/^data:image\/[a-z0-9.+-]+[,;]/i.test(s)) return s;
+  if (/^https:\/\/[^\s"'<>]+$/i.test(s)) return s;
+  return '';
+}
+
+// opts.keepPending 을 주면, 아직 우리 것이 아닌 <img> 를 지우는 대신
+// '빈 자리'로 남긴다(data-rt-src 에 원래 주소를 적어 둔다). 붙여넣기만 이
+// 모양을 쓴다 — 붙인 직후에 자리를 하나씩 채우고, 못 채운 자리는 그때 지운다.
+// 저장할 때는 옵션 없이 부르므로 남은 빈 자리가 전부 떨어져 나간다.
+function rtSanitize(html, opts){
+  const keepPending = !!(opts && opts.keepPending);
   const box = document.createElement('div');
   box.innerHTML = String(html || '');
   rtPreserveStyles(box);
@@ -8753,13 +8786,17 @@ function rtSanitize(html){
       const style = child.getAttribute('style');
       const dataK = child.getAttribute('data-k');
       const href  = child.getAttribute('href');
+      const src   = child.getAttribute('src');
       for (const a of [...child.attributes]) child.removeAttribute(a.name);
 
       if (child.tagName === 'IMG') {
         // 그림은 R2 키로만 남는다. src 는 그릴 때 붙인다 — 바깥 주소를 그대로
         // 두면 공지를 여는 사람 전원이 그 서버로 요청을 보내게 된다.
-        if (!RT_KEY_RE.test(dataK || '')) { child.remove(); continue; }
-        child.setAttribute('data-k', dataK);
+        if (RT_KEY_RE.test(dataK || '')) { child.setAttribute('data-k', dataK); continue; }
+        if (!keepPending) { child.remove(); continue; }
+        // 주소가 쓸 만하지 않아도 자리는 남긴다 — 클립보드에 그림 파일이 같이
+        // 실려 온 경우(워드에서 복사하면 그렇다) 그 파일로 채울 자리가 된다.
+        child.setAttribute('data-rt-src', rtPasteSrc(src));
         continue;                                   // 그림 안에는 아무것도 없다
       }
       if (style) { child.setAttribute('style', style); rtCleanStyle(child); }
@@ -9623,6 +9660,32 @@ function rtBindEditor(ed, opts){
     }
   }
 
+  // ── 클립보드에서 바로 받기 ──
+  // 폰에서 사진 붙여넣기가 안 되는 것은 '붙여넣기 몸짓'이 사진을 웹페이지까지
+  // 안 들고 오기 때문이다. 클립보드 자체에는 들어 있다. 그래서 몸짓을 거치지 않고
+  // navigator.clipboard.read() 로 직접 읽는다 — 브라우저가 한 번 물어보고 준다.
+  //
+  // 사진첩 단추(🖼)는 '저장된 파일'만 고를 수 있어서, 카톡이나 웹에서 이미지만
+  // 복사한 경우에는 고를 것이 없다. 그 구멍을 이 단추가 메운다.
+  const clipBtn = bar.querySelector('.rt-clip-btn');
+  if (clipBtn && o.put && navigator.clipboard && navigator.clipboard.read) {
+    clipBtn.hidden = false;
+    let savedClip = null;
+    clipBtn.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const sl = getSelection();
+      const r  = sl && sl.rangeCount ? sl.getRangeAt(0) : null;
+      savedClip = (r && ed.contains(r.commonAncestorContainer)) ? r.cloneRange() : null;
+    });
+    clipBtn.addEventListener('click', async () => {
+      if (!o.put()) { alert(o.noPutMsg || '여기에는 그림을 넣을 수 없습니다.'); return; }
+      ed.focus();
+      if (savedClip) { try { const sl = getSelection(); sl.removeAllRanges(); sl.addRange(savedClip); } catch(e){} }
+      savedClip = null;
+      await rtInsertFromClipboard(ed);
+    });
+  }
+
   const sel = bar.querySelector('.rt-size-sel');
   // focus() 를 여기서 먼저 부르면 안 된다. 커서 자리를 챙기는 것이 먼저다.
   sel?.addEventListener('change', () => { rtSetFontSize(ed, sel.value); dirty(); });
@@ -9663,6 +9726,11 @@ function rtToolbarHtml(selId){
            그림을 못 받는 편집기에서는 rtBindEditor 가 이 단추를 감춘다. -->
       <button type="button" class="rt-tool rt-img-btn" title="사진 넣기">🖼 사진</button>
       <input type="file" class="rt-img-in" accept="image/*" multiple hidden>
+      <!-- 사진첩에 저장된 것만 위 단추로 올라간다. 카톡이나 웹에서 '이미지 복사'
+           만 한 사진은 저장된 파일이 없어 고를 것이 없다. 그건 이 단추로 받는다 —
+           붙여넣기 몸짓에 기대지 않고 클립보드를 직접 읽는다.
+           읽는 길이 없는 브라우저에서는 rtBindEditor 가 감춘다. -->
+      <button type="button" class="rt-tool rt-clip-btn" title="클립보드의 사진 넣기" hidden>📋 클립보드</button>
     </div>`;
 }
 
@@ -9739,26 +9807,130 @@ function rtSyncSizeSel(ed){
 
 // ── 붙여넣기 ────────────────────────────────────────────────────────────────
 // 글은 걸러서 넣고, 그림은 R2 로 올린 뒤 자리에 끼운다.
+// 브라우저가 제 손으로 꽂아 넣은 data: 그림을 우리 것으로 만든다.
+//
+// 붙여넣기 이벤트에 아무것도 안 실려 왔을 때 부른다. 폰에서 실제로 겪는 길이다 —
+// 화면에는 그림이 떴는데 클립보드에서는 못 본 상태라, 그냥 두면 저장할 때
+// 걸러내기가 떼어 낸다.
+//
+// 자리를 data-rt-src 로 바꿔 두고 rtFillPending 에 넘긴다. 붙여넣기가 남긴
+// 빈 자리를 채우는 것과 똑같은 일이라, 채우는 코드를 또 만들지 않는다.
+async function rtSweepDataImages(ed){
+  if (!ed) return;
+  const o = ed._rt || {};
+  // 이미 우리 것(data-k)과 지금 채우는 중인 자리(rt-hold)는 건드리지 않는다.
+  // rt-hold 의 자리 표시 그림도 data: 라, 빼 두지 않으면 그것까지 다시 집는다.
+  const found = [...ed.querySelectorAll('img:not([data-k]):not(.rt-hold):not([data-rt-src])')]
+    .filter(i => /^data:image\//i.test(i.getAttribute('src') || ''));
+  if (!found.length) return;
+
+  const where = o.put && o.put();
+  if (!where) {
+    // 그림을 못 받는 자리다. 그냥 두면 저장할 때 조용히 사라지므로 지금 말한다.
+    for (const img of found) img.remove();
+    alert(o.noPutMsg || '여기에는 그림을 넣을 수 없습니다.');
+    return;
+  }
+  for (const img of found) img.setAttribute('data-rt-src', img.getAttribute('src'));
+  await rtFillPending(ed, [], where);
+}
+
+// 클립보드를 직접 읽어 사진을 넣는다. 📋 단추가 부른다.
+//
+// 브라우저가 물어보는 경우가 있다(사파리는 '붙여넣기' 확인 단추를 띄운다).
+// 선생님이 거절하거나, 애초에 읽을 권한이 없으면 예외가 난다 — 그때 왜 안 됐는지
+// 말해 주지 않으면 '단추가 고장났다'로 보인다.
+async function rtInsertFromClipboard(ed){
+  let items;
+  try {
+    items = await navigator.clipboard.read();
+  } catch(err){
+    alert('클립보드를 읽지 못했습니다.\n브라우저가 물어보면 "붙여넣기"를 눌러 주세요.');
+    return;
+  }
+  const blobs = [];
+  for (const it of items) {
+    // 여러 형식이 같이 들어 있을 수 있다(그림 + 글자). 그림 쪽만 꺼낸다.
+    const type = [...(it.types || [])].find(t => /^image\//.test(t));
+    if (!type) continue;
+    try { blobs.push(await it.getType(type)); } catch(e){}
+  }
+  if (!blobs.length) {
+    alert('클립보드에 사진이 없습니다.\n사진을 복사한 뒤 다시 눌러 주세요.');
+    return;
+  }
+  for (const b of blobs) await rtInsertImage(ed, b);
+}
+
+// 아직 채우는 중인 그림 자리가 남아 있나. 지금 저장하면 걸러내기가 그 자리를
+// 통째로 떼어 내 버린다 — 선생님 눈에는 붙여넣은 그림이 그냥 사라진 것이 된다.
+function rtStillFilling(ed){
+  if (!ed || !ed.querySelector('img[data-rt-src], img.rt-hold')) return false;
+  alert('그림을 아직 가져오는 중입니다. 잠시 뒤 저장해 주세요.');
+  return true;
+}
+
+// 붙여넣기.
+//
+// 클립보드에는 두 가지가 따로 실린다. 어느 쪽이 실리느냐는 '무엇을 복사했나'로
+// 갈린다 — 로컬이냐 바깥이냐가 아니다.
+//   · 그림 하나를 집어서 복사   → 파일(바이트)이 실린다. 바로 올리면 된다.
+//   · 영역을 드래그해서 복사    → HTML 만 실린다. 그림은 <img src="..."> 주소뿐이다.
+// 둘이 같이 실리는 경우도 흔하다(웹에서 그림 한 장 복사, 워드에서 그림 한 장
+// 복사). 예전에는 파일이 하나라도 있으면 HTML 을 통째로 버렸다 — 글 + 그림을
+// 같이 복사하면 그림만 들어가고 글자가 전부 사라졌다.
+//
+// 그래서 지금은 HTML 을 먼저 그대로 넣고(그림은 '빈 자리'로 둔다),
+// 그 자리를 rtFillPending 이 파일·data:·워커 순으로 채운다.
 async function rtOnPaste(e, ed){
   const dt = e.clipboardData;
   if (!dt) return;
   const o = (ed && ed._rt) || {};
-  const files = [...(dt.items || [])].filter(i => i.kind === 'file' && /^image\//.test(i.type));
-  if (files.length) {
-    // 그림을 못 받는 편집기면 브라우저 기본 동작에 맡기지 않는다 — 기본 동작은
-    // 그림을 data: 주소째로 본문에 박아 넣어, 문서 하나가 몇 MB 가 된다.
-    e.preventDefault();
-    // put() 이 null 을 돌려주는 때도 있다(보기 모드 등) — 그때도 못 받는 것으로 본다.
-    if (!o.put || !o.put()) { alert(o.noPutMsg || '여기에는 그림을 넣을 수 없습니다.'); return; }
-    for (const it of files) { const f = it.getAsFile(); if (f) await rtInsertImage(ed, f); }
+  const files = [...(dt.items || [])]
+    .filter(i => i.kind === 'file' && /^image\//.test(i.type))
+    .map(i => i.getAsFile()).filter(Boolean);
+  const html = dt.getData('text/html');
+  if (!files.length && !html) {
+    // 클립보드에서 우리가 알아볼 것이 없다. 브라우저 기본 동작에 맡긴다.
+    //
+    // 그런데 폰에서는 그 기본 동작이 그림을 data: 주소째로 편집기에 꽂아 넣는
+    // 일이 있다 — 붙여넣기 이벤트에는 아무것도 안 실려 오는데 화면에는 그림이
+    // 뜬다. 그 그림은 우리 것이 아니라 저장할 때 걸러내기가 떼어 낸다.
+    // 선생님 눈에는 '붙여넣기는 되는데 저장하면 사진이 사라진다'가 된다.
+    //
+    // 그래서 기본 동작이 끝난 뒤에 한 번 훑어서, 꽂힌 그림을 올려 둔다.
+    setTimeout(() => rtSweepDataImages(ed), 0);
     return;
   }
-  const html = dt.getData('text/html');
-  if (!html) return;                       // 그냥 글자면 브라우저에 맡긴다
+
+  // 그림을 못 받는 편집기면 브라우저 기본 동작에 맡기지 않는다 — 기본 동작은
+  // 그림을 data: 주소째로 본문에 박아 넣어, 문서 하나가 몇 MB 가 된다.
   e.preventDefault();
-  // 남의 문서에서 온 그림(<img src="http...">)은 걸러내기가 이미 지운다.
-  document.execCommand('insertHTML', false, rtSanitize(html));
+
+  const clean = html ? rtSanitize(html, { keepPending: true }) : '';
+  const box = document.createElement('div');
+  box.innerHTML = clean;
+  const nHold = box.querySelectorAll('img[data-rt-src]').length;
+
+  // put() 이 null 을 돌려주는 때도 있다(보기 모드 등) — 그때도 못 받는 것으로 본다.
+  const where = (files.length || nHold) && o.put ? o.put() : null;
+  if ((files.length || nHold) && !where) {
+    alert(o.noPutMsg || '여기에는 그림을 넣을 수 없습니다.');
+    // 글까지 버릴 이유는 없다. 그림만 빼고 넣는다.
+    if (html) {
+      document.execCommand('insertHTML', false, rtSanitize(html));
+      try { o.onDirty && o.onDirty(); } catch(err){}
+    }
+    return;
+  }
+
+  if (!html) {                              // 그림만 복사한 경우
+    for (const f of files) await rtInsertImage(ed, f);
+    return;
+  }
+  document.execCommand('insertHTML', false, clean);
   try { o.onDirty && o.onDirty(); } catch(err){}
+  if (files.length || nHold) await rtFillPending(ed, files, where);
 }
 
 // 붙여넣은 그림을 줄여서 dataURL 로. 원본 그대로 올리면 캡처 한 장이 몇 MB 다.
@@ -9830,6 +10002,20 @@ const rtFileId = () => 'f' + Date.now().toString(36) + Math.random().toString(36
 // 붙여넣은 그림 한 장을 R2 로 올리고 그 자리에 끼운다.
 // 본문에는 키만 남는다 — dataUrl 은 지금 화면에 보여 주려고 잠깐 쓸 뿐이고,
 // 저장할 때 걸러내기가 src 를 통째로 떼어 낸다.
+// 자리를 잡아 두는 동안 쓰는 투명한 1×1 그림. src 를 비워 두면 브라우저가
+// '깨진 그림' 아이콘을 그린다.
+const RT_HOLD_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+// 그림 한 장을 줄여서 R2 로 올린다. 어디에 끼울지는 부르는 쪽이 정한다.
+async function rtPutBlob(blob, where){
+  const dataUrl = await rtShrink(blob);
+  const r = await rtApi({ action: 'put', ...where, fileId: rtFileId(), dataUrl });
+  if (!r || !r.success) throw new Error(rtErrText(r && r.error, where.kind));
+  // 워커가 만든 키라도 그대로 태그에 박기 전에 한 번 더 본다.
+  if (!RT_KEY_RE.test(r.key || '')) throw new Error('저장소가 이상한 답을 보냈습니다.');
+  return { key: r.key, dataUrl };
+}
+
 async function rtInsertImage(ed, file){
   const o = (ed && ed._rt) || {};
   const where = o.put && o.put();
@@ -9837,21 +10023,95 @@ async function rtInsertImage(ed, file){
   const say = m => { try { o.status && o.status(m); } catch(e){} };
   say('그림 올리는 중...');
   try {
-    const dataUrl = await rtShrink(file);
-    const r = await rtApi({ action: 'put', ...where, fileId: rtFileId(), dataUrl });
-    if (!r || !r.success) throw new Error(rtErrText(r && r.error, where.kind));
-    // 워커가 만든 키라도 그대로 태그에 박기 전에 한 번 더 본다.
-    if (!RT_KEY_RE.test(r.key || '')) throw new Error('저장소가 이상한 답을 보냈습니다.');
-    try { o.onKey && o.onKey(r.key); } catch(e){}
+    const { key, dataUrl } = await rtPutBlob(file, where);
+    try { o.onKey && o.onKey(key); } catch(e){}
     ed.focus();
     document.execCommand('insertHTML', false,
-      `<img data-k="${r.key}" src="${dataUrl}"><br>`);
+      `<img data-k="${key}" src="${dataUrl}"><br>`);
     try { o.onDirty && o.onDirty(); } catch(e){}
     say('');
   } catch(err){
     say('');
     alert('그림을 올리지 못했습니다.\n' + (err.message || err));
   }
+}
+
+// 붙여넣기가 남긴 빈 자리(data-rt-src)의 그림을 실제로 구해 온다.
+async function rtPasteBlob(src){
+  // data: 는 그림이 주소 안에 다 들어 있다. fetch 가 그대로 풀어 준다(바깥으로 안 나간다).
+  if (/^data:/i.test(src)) return await (await fetch(src)).blob();
+  const r = await rtApi({ action: 'fetchImg', url: src });
+  if (!r || !r.success) throw new Error(rtFetchErrText(r && r.error));
+  return await (await fetch(r.dataUrl)).blob();
+}
+
+function rtFetchErrText(err){
+  if (err === 'BAD_URL')       return '가져올 수 없는 주소입니다.';
+  if (err === 'NOT_IMAGE')     return '그 주소에 있는 것이 그림이 아닙니다.';
+  if (err === 'TOO_BIG')       return '그림이 너무 큽니다.';
+  if (err === 'RATE')          return '한꺼번에 너무 많이 가져왔습니다. 잠시 뒤 다시 해 주세요.';
+  if (err === 'AUTH')          return '로그인이 만료되었습니다. 새로고침해 주세요.';
+  // 옛 워커는 이 동작을 모른다. 앱만 새로 올라가고 재배포가 빠졌을 때 나온다.
+  if (err === 'UNKNOWN_ACTION') return '그림 저장소가 아직 새 버전으로 바뀌지 않았습니다.';
+  return '그 그림을 가져오지 못했습니다.';
+}
+
+// 붙여넣은 뒤 빈 자리를 하나씩 채운다.
+//
+//   ① 자리 수와 클립보드 그림 파일 수가 같으면 → 순서대로 짝지어 그 파일을 쓴다.
+//      (웹에서 그림 한 장을 복사하면 'HTML 한 줄 + 파일 한 개' 가 같이 온다.
+//       그때 남의 서버로 다시 받으러 갈 이유가 없다 — 손에 이미 들려 있다.)
+//   ② 주소가 없는 자리도 파일 대기열에서 꺼내 쓴다(워드에서 온 file:/// 자리).
+//   ③ data: 면 그 자리에서 푼다.
+//   ④ https: 면 워커한테 받아 온다.
+//   ⑤ 아무것도 안 되면 자리를 지운다 — 예전과 같다.
+//
+// 못 가져온 장이 있어도 장마다 경고창을 띄우지 않는다. 다섯 장을 붙였다가
+// 창을 다섯 번 닫는 것보다, 끝나고 한 줄로 알려 주는 편이 낫다.
+async function rtFillPending(ed, files, where){
+  const o = (ed && ed._rt) || {};
+  const say = m => { try { o.status && o.status(m); } catch(e){} };
+  const pend = [...ed.querySelectorAll('img[data-rt-src]')];
+  const srcs = pend.map(img => img.getAttribute('data-rt-src') || '');
+  // 표시를 먼저 떼어 둔다. 채우는 동안 또 붙여넣어도 같은 자리를 두 번 잡지 않는다.
+  for (const img of pend) {
+    img.removeAttribute('data-rt-src');
+    img.classList.add('rt-hold');
+    img.src = RT_HOLD_SRC;
+  }
+  const queue = files.slice();
+  const paired = queue.length > 0 && queue.length === pend.length;
+  let done = 0, bad = 0;
+
+  for (let i = 0; i < pend.length; i++) {
+    const img = pend[i], src = srcs[i];
+    if (!img.isConnected) continue;          // 채우는 동안 선생님이 지웠다
+    say(`그림 가져오는 중... (${i + 1}/${pend.length})`);
+    let blob = null;
+    if (paired || !src) blob = queue.shift() || null;
+    try {
+      if (!blob) {
+        if (!src) throw new Error('주소가 없습니다.');
+        blob = await rtPasteBlob(src);
+      }
+      const r = await rtPutBlob(blob, where);
+      if (!img.isConnected) continue;
+      try { o.onKey && o.onKey(r.key); } catch(e){}
+      img.classList.remove('rt-hold');
+      img.setAttribute('data-k', r.key);
+      img.src = r.dataUrl;
+      done++;
+    } catch(err){
+      bad++;
+      img.remove();
+    }
+  }
+  // 자리보다 파일이 많으면 남은 것을 뒤에 붙인다 — 조용히 버리지 않는다.
+  for (const f of queue) await rtInsertImage(ed, f);
+
+  try { o.onDirty && o.onDirty(); } catch(e){}
+  if (bad) say(`그림 ${done + bad}장 중 ${bad}장을 가져오지 못했습니다.`);
+  else say('');
 }
 
 function rtErrText(err, kind){
@@ -9874,6 +10134,7 @@ async function saveNotice(){
   const btn = document.getElementById('noticeSaveBtn');
   const msg = document.getElementById('noticeSaveMsg');
   if (!ed || !_noticeDraft) return;
+  if (rtStillFilling(ed)) return;
   const html = rtSanitize(ed.innerHTML);
   // 글자도 그림도 없으면 빈 공지다 — 저장 대신 지우는 것으로 본다
   const bare = html.replace(/<[^>]*>/g, '').replace(/&nbsp;|\s/g, '');
@@ -21733,6 +21994,7 @@ async function saveMytask() {
   }
   const title     = document.getElementById('mytaskTitle').value.trim();
   const memoEd    = document.getElementById('mytaskMemoEd');
+  if (rtStillFilling(memoEd)) return;
   const memoHtml  = memoEd ? rtSanitize(memoEd.innerHTML) : '';
   const memoKeys  = rtKeysIn(memoHtml);
   const memoPlain = rtPlainText(memoHtml);
