@@ -6357,7 +6357,7 @@ const TEACHERS = [];
 const ADMIN_EMAIL = 'pkh910518@yeungnam.hs.kr';
 // 화면에 찍히는 버전. 사용 현황에 '이 사람이 지금 쓰는 버전'으로도 남는다 —
 // 누가 옛 화면을 계속 쓰는지 보려면 그게 있어야 한다.
-const APP_VER = 'ver7.34';
+const APP_VER = 'ver7.35';
 const VIEW_AS_EMAIL = new URLSearchParams(location.search).get('viewAs') || null;
 // 관리자 '실제 권한으로 보기' — admin.html이 워커에서 그 교사 명의의 커스텀 토큰을 받아
 // 이 페이지에 넘긴다. 실제로 그 계정으로 로그인되므로 Firestore 규칙도 그 사람 기준으로
@@ -9112,7 +9112,10 @@ function watchNotice(){
     _noticeLastSig = noticeStateSig();
     renderNoticeBtn();
     const modal = document.getElementById('noticeModal');
-    if (modal?.classList.contains('open')) renderNoticeModal();
+    if (modal?.classList.contains('open')) {
+      if (noticeKeepOpen()) renderNoticeModal();
+      else closeNoticeModal(null);
+    }
     // 쓰는 중이면 화면을 안 건드린다 — 쓰던 글이 남의 저장으로 날아가면 못 되돌린다.
     if (!_noticeEditing) renderNoticeAdminList();
     renderNoticeEditState();
@@ -9164,6 +9167,7 @@ let _noticeAuto = false;        // 지금 창이 '저절로 뜬' 것인가 (단�
 let _noticeAutoDone = false;    // 앱을 연 뒤 한 번만
 function noticeAutoOpen(){
   if (_noticeAutoDone) return;
+  if (IS_WIDGET_WV) return;                              // 위젯 칸을 덮지 않는다 (initNotice 참고)
   if (!noticeBtnVisible()) return;                       // 볼 수 없는 사람에게는 안 띄운다
   const live = noticeLiveList();
   if (!live.length) return;
@@ -9178,6 +9182,15 @@ function noticeAutoOpen(){
 }
 
 function initNotice(){
+  // 위젯 창에서는 공지를 아예 켜지 않는다.
+  //
+  // 위젯 한 칸은 패널 하나만 띄우는 작은 창인데, 거기에 전체 공지 창이 뜨면
+  // 패널을 통째로 덮는다. 위젯을 여섯 개 띄워 두면 여섯 개가 한꺼번에 덮인다
+  // (실제로 그랬다). 시간표 위젯을 보려고 띄웠는데 공지 창만 보이는 꼴이다.
+  //
+  // 듣는 것(watchNotice)도 안 건다. 위젯 창마다 Firestore 리스너가 하나씩
+  // 붙으면 읽기 한도를 창 수만큼 갉아먹는다 — 아무에게도 안 보여 줄 것을 위해서.
+  if (IS_WIDGET_WV) return;
   renderNoticeBtn();
   watchNotice();
   startNoticeClock();
@@ -9550,6 +9563,18 @@ function bindNoticeZoom(){
 }
 
 function noticeBackToList(){ _noticeOpenId = ''; renderNoticeModal(); }
+
+// 열려 있는 창을 계속 띄워 둘 것인가. 공지가 바뀔 때마다 묻는다.
+//
+// 저절로 뜬 창인데 보여 줄 것이 없어졌으면(공지를 내렸거나 게시 기간이 끝났다)
+// 닫는다. 그냥 다시 그리면 '올라온 공지가 없습니다' 만 띄운 빈 창이 화면 앞에
+// 남는다 — 선생님이 띄운 것도 아닌데 손으로 닫아야 한다.
+//
+// 손으로 연 창은 비어도 그대로 둔다. 관리자가 '＋ 공지 쓰기' 를 누르러 들어온
+// 자리라, 마지막 공지를 지웠다고 창까지 사라지면 쓰러 들어갈 길이 없어진다.
+function noticeKeepOpen(){
+  return !_noticeAuto || noticeVisibleList().length > 0;
+}
 
 function openNoticeModal(auto){
   const m = document.getElementById('noticeModal');
