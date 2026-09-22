@@ -47,6 +47,7 @@ await pg.setContent(`<!doctype html><meta charset="utf-8"><body><script>
   ${grab('mytaskResolveShareEmail')}
   ${grab('mytaskPerDoneState')}
   ${grab('mytaskDoneForMe')}
+  ${grab('mytaskInlineStatusHtml')}
 
   // 바깥 세계: 로그인한 사람과 명렬만 갈아 끼운다.
   let TEACHERS = [];
@@ -63,6 +64,12 @@ await pg.setContent(`<!doctype html><meta charset="utf-8"><body><script>
 
   // 이 사람 화면에서 이 일정이 완료로 보이나
   window.doneForMe_ = t => mytaskDoneForMe(t);
+  // 목록 칸이 '내 몫' 인가 '전체 상태' 인가. null 이면 전체 상태 select 로 떨어진다.
+  window.inline_ = (t, home) => {
+    const h = mytaskInlineStatusHtml(t, home);
+    return h === null ? null : (/updateMytaskMyDoneInline/.test(h) ? '내몫'
+                              : /updateMytaskStatus/.test(h) ? '전체' : '?');
+  };
   window.state_ = t => {
     const s = mytaskPerDoneState(t);
     return { total: s.total, done: s.done, meDone: s.meDone,
@@ -177,6 +184,30 @@ console.log('\n■ 전원이 끝나기 전에는 누구도 자동 완료되지 �
         (await allDone(t, [doneEntry(OWNER), doneEntry(A), doneEntry(B)], B)) === true);
 }
 
+console.log('\n■ 목록 칸은 누구에게나 "내 몫" 이다 (실제로 났던 일)');
+{
+  // 작성자가 목록에서 🟢완료를 골랐더니 받은 선생님들 목록에서 통째로 사라졌다.
+  // 목록 칸이 작성자에게만 '전체 상태' 였기 때문이다. 목록에서는 아무도 전체를
+  // 끝낼 수 없어야 한다 — 직권 완료는 창을 열어 상태 단추로 하는 일로 남긴다.
+  await roster(FULL_ROSTER);
+  const t = task();
+  const inline = (p, home) => pg.evaluate(([p, t, home]) => {
+    window.asMe_(p.email, p.uid, p.name); return window.inline_(t, home);
+  }, [p, t, home]);
+
+  check('작성자 — 목록에서 내 몫만 (전체 아님)', (await inline(OWNER, false)) === '내몫',
+        await inline(OWNER, false));
+  check('받은 사람 — 내 몫만', (await inline(A, false)) === '내몫');
+  check('현황판에서도 작성자는 내 몫만', (await inline(OWNER, true)) === '내몫');
+
+  // 각자 완료가 아닌 일정은 예전처럼 전체 상태 select 를 쓴다(그게 맞다).
+  const plain = task({ perDone: false });
+  const plainInline = await pg.evaluate(([p, t]) => {
+    window.asMe_(p.email, p.uid, p.name); return window.inline_(t, false);
+  }, [OWNER, plain]);
+  check('각자 완료가 아니면 전체 상태 칸 그대로', plainInline === null, plainInline);
+}
+
 console.log('\n■ 전체 상태가 done 이면 (작성자가 직권 완료) 모두에게 완료');
 {
   // 이건 의도된 동작이다. 작성자는 언제든 직권으로 끝낼 수 있다.
@@ -207,6 +238,12 @@ console.log('\n■ 배선 — 받은 사람이 전체 상태를 쓰는 길을 �
         /statusFld\.style\.display = isOwner \? 'block' : 'none';/.test(HTML));
 
   check('새 일정에 작성자 이메일을 적어 둔다', /ownerEmail: user\.email,/.test(HTML));
+  // 작성자가 정말로 전체를 끝낼 때는 한 번 묻는다 — 남은 분들 목록에서 사라지므로.
+  check('직권 완료 전에 남은 사람 수를 알리고 묻는다',
+        /existing\.perDone && mytaskCurrentStatus === 'done'[\s\S]{0,400}confirm\(/.test(HTML) &&
+        /자기 몫을 완료하지 않았습니다/.test(HTML));
+  check('그때 내 몫만 끝내는 길도 알려 준다', /내 업무 완료 처리' 를 누르세요/.test(HTML));
+  check('상태 행이 전체라는 것을 적어 둔다', /전체 상태 \(공유받은 분들께도 그대로 적용됩니다\)/.test(HTML));
   check('못 찾으면 자동 완료하지 않는다',
         /const ownerDone = !!ownerEmail && doneBy\.some\(d => d\.id === ownerEmail\);/.test(HTML));
 }
