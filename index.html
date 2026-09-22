@@ -6357,7 +6357,7 @@ const TEACHERS = [];
 const ADMIN_EMAIL = 'pkh910518@yeungnam.hs.kr';
 // 화면에 찍히는 버전. 사용 현황에 '이 사람이 지금 쓰는 버전'으로도 남는다 —
 // 누가 옛 화면을 계속 쓰는지 보려면 그게 있어야 한다.
-const APP_VER = 'ver7.37';
+const APP_VER = 'ver7.38';
 const VIEW_AS_EMAIL = new URLSearchParams(location.search).get('viewAs') || null;
 // 관리자 '실제 권한으로 보기' — admin.html이 워커에서 그 교사 명의의 커스텀 토큰을 받아
 // 이 페이지에 넘긴다. 실제로 그 계정으로 로그인되므로 Firestore 규칙도 그 사람 기준으로
@@ -21391,6 +21391,13 @@ function renderMytaskList() {
 async function updateMytaskStatus(id, ownerUid, status) {
   const user = fbAuth.currentUser;
   const uid  = ownerUid || user.uid;
+  // 각자 완료 일정에서 받은 사람이 부르면 전체 상태가 바뀐다(위 saveMytask 참고).
+  // 목록에서는 mytaskInlineStatusHtml 이 이 select 대신 '내 몫' select 를 그리지만,
+  // 이 함수는 window 에 노출되어 있어 다른 길로도 닿는다.
+  const cur = mytaskTasks.find(x => x.id === id) || mytaskShared.find(x => x.id === id);
+  if (cur && cur.perDone && cur.ownerUid && cur.ownerUid !== (window._myUid || user.uid)) {
+    return updateMytaskMyDoneInline(id, cur.ownerUid, status);
+  }
   try {
     await setDoc(doc(fbDb, 'tasks', uid, 'items', id), { status }, { merge: true });
     const t = mytaskTasks.find(t => t.id === id);
@@ -21466,6 +21473,20 @@ function mytaskHealShareIds(tasks, myUid){
   });
 }
 
+// 이 일정 작성자의 이메일. 문서에 적힌 것이 1순위다.
+//
+// 명렬(TEACHERS)의 이메일·uid 는 시간표를 새로 올릴 때마다 사라졌다가 선생님들이
+// 로그인하는 대로 다시 채워진다. 그 사이에는 작성자를 못 찾는다. 예전 문서에는
+// ownerEmail 이 없어 그 길밖에 없으므로, 못 찾으면 **못 찾았다고 답한다** —
+// 부르는 쪽이 '이미 완료' 로 치지 않게.
+function mytaskOwnerEmail(t){
+  if (!t) return null;
+  if (t.ownerEmail) return t.ownerEmail;
+  const myUid = window._myUid || fbAuth.currentUser?.uid || '';
+  if (t.ownerUid && t.ownerUid === myUid) return fbAuth.currentUser?.email || null;
+  return TEACHERS.find(x => x.uid && x.uid === t.ownerUid)?.email || null;
+}
+
 function mytaskResolveShareEmail(entry){   // sharedWith 항목(이름 또는 이메일) → 이메일
   if (!entry) return null;
   if (entry.includes('@')) return entry;
@@ -21484,13 +21505,15 @@ function mytaskPerDoneState(t){
     return { label: nm, email: em, done };
   });
   // 작성자도 개인 완료 대상에 포함 — 전체(직권) 완료는 상태 버튼으로 따로 분리
-  const isMine = t.ownerUid === (window._myUid || user?.uid || '');
   const ownerTeacher = TEACHERS.find(x => x.uid && x.uid === t.ownerUid);
-  const ownerEmail = isMine ? myEmail : (ownerTeacher?.email || null);
-  if (ownerEmail) {
+  const ownerEmail = mytaskOwnerEmail(t);
+  // 작성자를 못 찾아도 칸은 세운다. 빼 버리면 '1/1 완료' 처럼 보이는데 자동 완료는
+  // 안 돼서(위 판정) 화면과 동작이 어긋난다. 못 찾았으면 '아직' 으로 둔다.
+  {
     const ownerName = t.ownerName || ownerTeacher?.name
-      || TEACHERS.find(x => x.email === ownerEmail)?.name || user?.displayName || '작성자';
-    entries.unshift({ label: `${ownerName} (작성자)`, email: ownerEmail, done: doneBy.some(d => d.id === ownerEmail) });
+      || (ownerEmail && TEACHERS.find(x => x.email === ownerEmail)?.name) || '작성자';
+    entries.unshift({ label: `${ownerName} (작성자)`, email: ownerEmail,
+                      done: !!ownerEmail && doneBy.some(d => d.id === ownerEmail) });
   }
   return {
     total: entries.length,
@@ -21545,11 +21568,17 @@ async function mytaskSetMyDone(ownerUid, id, wantDone){
         const em = mytaskResolveShareEmail(s);
         return em ? doneBy.some(d => d.id === em) : doneBy.some(d => d.name === s);
       });
-      // 작성자 몫의 완료까지 포함해야 전원 완료 (작성자 이메일을 못 찾으면 공유자 기준)
+      // 작성자 몫까지 끝나야 전원 완료다.
+      //
+      // 예전에는 작성자 이메일을 못 찾으면 '이미 끝낸 것' 으로 쳤다(= true). 그래서
+      // 명렬에서 작성자가 잠깐 안 보이는 동안, 받은 사람 하나가 자기 몫을 완료하면
+      // 그것만으로 전원 완료가 되어 **모두에게 완료로 떴다.**
+      // 못 찾으면 자동 완료를 하지 않는다 — 덜 끝난 것으로 두는 쪽이 안전하다.
+      // (작성자는 언제든 상태 단추로 직권 완료할 수 있다.)
       const ownerEmail = (ownerUid === user.uid)
         ? user.email
-        : (TEACHERS.find(x => x.uid && x.uid === ownerUid)?.email || null);
-      const ownerDone = ownerEmail ? doneBy.some(d => d.id === ownerEmail) : true;
+        : (data.ownerEmail || TEACHERS.find(x => x.uid && x.uid === ownerUid)?.email || null);
+      const ownerDone = !!ownerEmail && doneBy.some(d => d.id === ownerEmail);
       const allDone = shareAllDone && ownerDone;
       if (allDone && data.status !== 'done') {
         u.status = 'done';
@@ -22262,6 +22291,14 @@ async function saveMytask() {
   const user    = fbAuth.currentUser;
   const isOwner = !mytaskEditOwner || mytaskEditOwner === user.uid;
   if (!isOwner) {
+    // 각자 완료 일정에서는 받은 사람이 '전체 상태' 를 건드리면 안 된다.
+    // status 는 모두가 같이 보는 값이고, mytaskDoneForMe 가 그 값이 done 이면
+    // 누구에게나 완료로 답한다 — 한 사람이 눌러 전원이 완료로 바뀐다.
+    // 화면에서는 이미 상태 단추를 감추지만(openMytaskModal), 쓰는 길에도 문을 둔다.
+    // 감추는 것은 실수를 줄일 뿐 막지는 못한다.
+    const cur = mytaskTasks.find(x => x.id === mytaskEditId)
+             || mytaskShared.find(x => x.id === mytaskEditId);
+    if (cur && cur.perDone) { closeMytaskModal(); return; }
     try {
       await setDoc(doc(fbDb, 'tasks', mytaskEditOwner, 'items', mytaskEditId),
         { status: mytaskCurrentStatus }, { merge: true });
@@ -22304,6 +22341,13 @@ async function saveMytask() {
     endTime: endTime || null,
     status: mytaskCurrentStatus,
     sharedWith: mytaskCurrentShared,
+    // 작성자 이메일을 문서에 적어 둔다.
+    //
+    // 예전에는 안 적고 uid 로 명렬(TEACHERS)에서 찾았다. 그런데 명렬의 이메일·uid 는
+    // 시간표를 새로 올릴 때마다 사라지고 선생님들이 로그인하는 대로 다시 채워진다
+    // (README 2장). 그 사이에는 작성자를 못 찾는데, 그때 '각자 완료' 판정이
+    // 작성자를 이미 끝낸 사람으로 쳐서 남들 몫만으로 전체가 완료돼 버렸다.
+    ownerEmail: user.email,
     // 각자 완료 방식: 공유 대상이 있을 때만 유효, 완료 기록(doneBy)은 보존
     perDone: !!(document.getElementById('mytaskPerDoneChk')?.checked && mytaskCurrentShared.length),
     doneBy: existing.doneBy || [],
