@@ -173,6 +173,14 @@ AHK 쪽은 **런처로 실행해야** 자동 갱신된다. `ynhs-widget.exe`를 
 스크립트는 **전부 Firestore에만 쓰고 저장소에 파일을 남기지 않으므로**, test에서 돌아도
 ynhs 배포가 그대로 받는다. 양쪽에 두면 중복 실행이 된다.
 
+같은 이유로 아래도 test 에만 둔다.
+
+- `riro/` — 학교 PC 가 `kyunghwanp.github.io/test/riro/` 에서 내려받는다
+- 워커 원본 `workers/riro-ingest.js` · `overtime-api*.js` · `build-overtime.mjs` —
+  배포는 Cloudflare 대시보드라 저장소 위치와 상관없다. 그 검사들도 test 에 있다
+- 초과근무·감독표 `overtime.html` · `gas/overtime/` · `docs/duty-template.xlsx` —
+  아직 시험 중(관리자 탭). 운영으로 옮길 때 이 줄을 지운다
+
 **③ 그대로 두는 것**
 
 - `sw.js` — 경로를 파일에 박지 않고 `self.location.pathname`에서 알아내므로 **양쪽이 같은 파일**
