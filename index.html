@@ -1581,6 +1581,39 @@
     font-family:'Pretendard','Noto Sans KR';outline:none;}
   .s360-susi-q:focus{border-color:var(--mon);}
   .s360-susi-q::placeholder{color:var(--ink-soft);font-weight:600;font-size:13px;}
+  /* 밑줄 탭 — 회색 상자 대신 고른 탭 아래 파란 줄(.s360-ink)이 미끄러져 옮겨 간다.
+     .students-tab-row(학생 비상연락망의 회색 상자 탭)가 뒤에서 같은 무게로 덮어 회색 상자가 남았었다 → 두 클래스로 무게를 올린다(2026-10-28) */
+  .students-tab-row.s360-tabs{position:relative;margin:4px 0 14px;width:auto;background:transparent;padding:0;border-radius:0;gap:2px;border-bottom:1px solid var(--rule);}
+  /* 그 반 담임·관리자 — 탭 줄 오른쪽 끝에 「✏️ 작성하러 가기」(생기부 보조자료 탭의 그 학생 작성 칸으로) */
+  .s360-write{margin-left:auto;align-self:center;border:none;background:none;padding:6px 4px;font:inherit;font-size:14px;font-weight:800;color:var(--mon);cursor:pointer;
+    text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px;transition:text-decoration-color .15s;white-space:nowrap;}
+  .s360-write:hover{text-decoration-color:var(--mon);}
+  /* 보조자료 탭을 보며 내리면 — 탭 줄이 지나간 뒤 위쪽에 이름·학년 반 번호·참여한 활동(잘리지 않게, 많으면 줄바꿈). 칩을 누르면 그 카드로.
+     활동은 안쪽 보조자료 창이 알려 준다(sgb-acts). 높이 0 의 틀에 얹어 글이 밀리지 않게. 폰은 없음(생기부 탭과 같게) */
+  .s360-mini{display:none;}
+  .s360-mini-in{position:absolute;left:-28px;right:-28px;top:0;display:flex;align-items:baseline;gap:12px;padding:8px 28px;
+    background:var(--paper);border-bottom:1px solid var(--rule);box-shadow:0 6px 12px -10px rgba(15,23,42,.35);
+    opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .15s,transform .15s;}
+  .s360-mini.on .s360-mini-in{opacity:1;transform:none;pointer-events:auto;}
+  .s360-mini-who{display:flex;align-items:baseline;gap:6px;flex-shrink:0;white-space:nowrap;}
+  .s360-mini-who b{font-size:16px;font-weight:900;color:var(--ink);}
+  .s360-mini-who span{font-family:'IBM Plex Mono';font-size:13px;font-weight:700;color:var(--ink-soft);}
+  .s360-mini-acts{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0;}
+  .s360-mini-acts button{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:4px 10px;border:1px solid var(--rule);border-radius:14px;
+    background:var(--paper);color:var(--ink);font:inherit;font-size:13px;font-weight:700;line-height:1.4;cursor:pointer;text-align:left;}
+  .s360-mini-acts button:hover{border-color:var(--mon);color:var(--mon);}
+  .s360-mini-acts .d{font-weight:600;color:var(--ink-soft);}
+  .s360-mini-acts .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--ink-soft);}
+  .s360-mini-acts .dot.ja{background:#2563EB;} .s360-mini-acts .dot.jin{background:#059669;} .s360-mini-acts .dot.gae{background:#9333EA;}
+  .s360-mini-acts .dot.nu{background:#D97706;} .s360-mini-acts .dot.haeng{background:#0E7490;} .s360-mini-acts .dot.dong{background:#BE185D;}
+  @media (min-width:901px){ .s360-mini{display:block;position:sticky;top:-16px;z-index:5;height:0;} }   /* 스크롤 칸의 안쪽 여백(16px)만큼 올려 맨 위에 붙인다 */
+  .s360-tabs .students-tab{font-size:15px;padding:10px 16px 11px;border-radius:6px 6px 0 0;}
+  .s360-tabs .students-tab:hover{color:var(--ink);}   /* 회색 음영 없이 글자색만 */
+  .s360-tabs .students-tab.active{background:transparent;box-shadow:none;color:var(--mon);}
+  .s360-tabs .students-tab:disabled{opacity:.4;cursor:not-allowed;background:transparent;}
+  .s360-ink{position:absolute;bottom:-1px;left:0;width:0;height:3px;border-radius:3px 3px 0 0;background:var(--mon);
+    transition:left .25s ease,width .25s ease;pointer-events:none;}
+  @media (prefers-reduced-motion:reduce){ .s360-ink{transition:none;} }
   .s360-back{display:inline-block;background:none;border:0;color:var(--ink-soft);font-weight:700;cursor:pointer;padding:0 0 10px;font-size:14px;font-family:inherit;}
   .s360-back:hover{color:var(--ink);}
   /* 차트 3개: 넓으면 3열, 좁으면 바로 1열 (2열 중간 단계 없음)
@@ -2829,6 +2862,16 @@
   }
   .jd-open:hover{ background:#eef2ff; }
   @media (max-width:640px){ .jd-overlay{padding:0;} .jd-box{border-radius:0;height:100%;} }
+  /* 생기부 보조자료 전체화면 — 생기부 화면 위쪽 「⛶ 전체화면」. 앱 머리·메뉴를 덮고 창을 꽉 채운다(모달·알림은 그 위) */
+  #saenggibuPage.sgb-full.active{position:fixed;inset:0;z-index:8900;background:var(--bg-base);
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  /* 생기부 사용설명서 모달 — 진단 모달 껍데기 + 제목 줄(닫기 단추가 설명서 글을 가리지 않게) */
+  #sgbManualModal .jd-box{display:flex;flex-direction:column;width:min(1240px,100%);}
+  #sgbManualModal iframe{flex:1;height:auto;min-height:0;}
+  .sgbm-head{display:flex;align-items:center;gap:8px;padding:9px 12px 9px 18px;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0;}
+  .sgbm-head b{margin-right:auto;font-size:15px;font-weight:800;color:#0f172a;}
+  .sgbm-head .jd-close,.sgbm-head .jd-open{position:static;text-decoration:none;}
+  html.dark .sgbm-head{background:#111A2B;border-color:#243149;} html.dark .sgbm-head b{color:#E8EEF7;}
   .swap-list{display:flex;flex-direction:column;gap:8px;}
   .swap-cand{
     background:var(--paper-soft);border-radius:8px;padding:10px 12px;
@@ -4828,6 +4871,9 @@
     <div class="tab-item" data-page="room" id="tabRoom" style="display:none;">
       <span class="tab-item-icon">🚪</span>특별실 예약
     </div>
+    <div class="tab-item" data-page="saenggibu" id="tabSaenggibu" style="display:none;">
+      <span class="tab-item-icon">📑</span>생기부 보조자료
+    </div>
     <div class="tab-item" data-page="docs">
       <span class="tab-item-icon">📋</span>업무자료
     </div>
@@ -4886,6 +4932,9 @@
       </div>
       <div class="main-nav-item" data-page="room" id="navRoom" style="display:none;">
         <span class="main-nav-icon">🚪</span>특별실 예약
+      </div>
+      <div class="main-nav-item" data-page="saenggibu" id="navSaenggibu" style="display:none;">
+        <span class="main-nav-icon">📑</span>생기부 보조자료
       </div>
       <div class="main-nav-item" data-page="docs">
         <span class="main-nav-icon">📋</span>업무자료
@@ -5808,6 +5857,10 @@
         <div class="notice-foot" id="noticeEditFoot"></div>
       </div>
 
+      <!-- 생기부 보조자료 — 부서·교과가 모은 기재 문안 통합 엑셀. 내용은 saenggibu.html 이 갖는다. -->
+      <div class="page-view" id="saenggibuPage">
+        <iframe id="saenggibuPageFrame" title="생기부 보조자료" style="flex:1;width:100%;border:0;background:var(--bg-base);"></iframe>
+      </div>
       <div class="page-view" id="seatPage">
         <div id="seatPageHead" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--rule);flex-shrink:0;">
           <button class="sg-back-btn" id="seatBackBtn">← 돌아가기</button>
@@ -6235,6 +6288,18 @@
   </div>
 </div>
 
+<!-- 생기부 보조자료 사용설명서(saenggibu-manual.html) — 생기부 화면 위쪽 「📖 사용설명서」 가 연다. 담임이면 담임 탭, 아니면 부서·교과 탭 -->
+<div class="jd-overlay" id="sgbManualModal">
+  <div class="jd-box">
+    <div class="sgbm-head">
+      <b>📖 생기부 보조자료 사용설명서</b>
+      <a class="jd-open" id="sgbManualNewTab" href="saenggibu-manual.html" target="_blank" rel="noopener" title="새 탭에서 크게 봅니다">↗ 새 탭</a>
+      <button class="jd-close" id="sgbManualClose" title="닫기">✕</button>
+    </div>
+    <iframe id="sgbManualFrame" title="생기부 보조자료 사용설명서"></iframe>
+  </div>
+</div>
+
 <!-- 협의 시간 찾기 — #timetablePage 바깥에 둔다(위젯이 시간표 페이지를 늘려도 영향 없게) -->
 <!-- 공지 안 그림 크게 보기. 공지 창보다 위에 뜬다(z-index). -->
 <div class="notice-zoom" id="noticeImgZoom">
@@ -6375,7 +6440,7 @@ const TEACHERS = [];
 const ADMIN_EMAIL = 'pkh910518@yeungnam.hs.kr';
 // 화면에 찍히는 버전. 사용 현황에 '이 사람이 지금 쓰는 버전'으로도 남는다 —
 // 누가 옛 화면을 계속 쓰는지 보려면 그게 있어야 한다.
-const APP_VER = 'ver7.47';
+const APP_VER = 'ver7.48';
 const VIEW_AS_EMAIL = new URLSearchParams(location.search).get('viewAs') || null;
 // 관리자 '실제 권한으로 보기' — admin.html이 워커에서 그 교사 명의의 커스텀 토큰을 받아
 // 이 페이지에 넘긴다. 실제로 그 계정으로 로그인되므로 Firestore 규칙도 그 사람 기준으로
@@ -8310,10 +8375,13 @@ window.addEventListener('popstate', (e)=>{
   if (document.querySelector('.cd-overlay.open')) { document.querySelector('.cd-overlay.open').classList.remove('open'); armExitGuard(); return; }
   if (document.getElementById('jindanModal')?.classList.contains('open')) { closeJindanModal(); armExitGuard(); return; }
   if (document.getElementById('seatModal')?.classList.contains('open')) { closeSeatModal(); armExitGuard(); return; }
+  if (document.getElementById('sgbManualModal')?.classList.contains('open')) { closeSgbManual(); armExitGuard(); return; }
   if (document.getElementById('classOrgModal')?.classList.contains('open')) { closeClassOrgModal(); armExitGuard(); return; }
   // 외출증 — 상세를 먼저 본다(상세 위에 발급이 겹칠 일은 없지만, 수정 중이면 상세가 위다)
   if (document.getElementById('passDetailOverlay')?.classList.contains('open')) { passCloseDetail(); armExitGuard(); return; }
   if (document.getElementById('passModalOverlay')?.classList.contains('open'))  { passCloseForm();   armExitGuard(); return; }
+  // 생기부 전체화면 — 뒤로가기 한 번이면 원래 크기로(폰에서 앱 메뉴가 가려져 있다)
+  if (_sgbFull) { setSgbFull(false); armExitGuard(); return; }
 
   // 2. 교체/보강 모달 뎁스
   const newDepth = st.modalDepth || 0;
@@ -10646,6 +10714,55 @@ function closeUsagePage(){
   navigateTo(_usageBackTo === 'usage' ? 'home' : _usageBackTo);
 }
 
+// ── 생기부 보조자료 (saenggibu.html) ── 처음에만 띄우고, 다시 들어오면
+// 새로 올라온 게 있는지만 보라고 알린다(보던 학생·활동이 그대로 남게).
+// 교사 전체에 열었는가 — 탭(navSaenggibu·tabSaenggibu)과 종합검색의 「생기부 보조자료」 탭이 같이 따른다.
+// false 면 관리자만(운영 ynhs 는 선생님이 먼저 써 본다, 2026-10-29). 열 때는 true 로 바꾸고
+// manual.html 에 14번 절(생기부 보조자료)을 넣는다 — 검사(s360-tabs · saenggibu)가 둘이 맞는지 본다.
+const SGB_OPEN_ALL = false;   // 운영: 지금은 관리자만(2026-10-29)
+function openSaenggibuFrame(){
+  const f = document.getElementById('saenggibuPageFrame');
+  if (!f) return;
+  if (!f.src || f.src === 'about:blank') { f.dataset.ready = ''; f.src = `saenggibu.html?in=1&v=${encodeURIComponent(APP_VER)}`; return; }
+  try { f.contentWindow.postMessage({ type: 'sgb-refresh' }, location.origin); } catch (e) {}
+}
+// ── 생기부 보조자료 — 전체화면 · 사용설명서 ── 단추는 생기부 화면(saenggibu.html) 위쪽 줄에 있고, 누르면 여기로 알린다.
+// 전체화면: 생기부 화면이 앱 머리·메뉴 자리까지 덮어 창을 꽉 채운다(브라우저 F11 전체화면은 아니다 — 선생님 뜻 2026-10-29).
+// 다시 누르기 · Esc · 뒤로가기 · 다른 탭으로 옮기면 원래대로.
+let _sgbFull = false;
+function setSgbFull(on){
+  on = !!on;
+  const pg = document.getElementById('saenggibuPage'), f = document.getElementById('saenggibuPageFrame');
+  if (!pg) return;
+  _sgbFull = on;
+  pg.classList.toggle('sgb-full', on);
+  try { f?.contentWindow?.postMessage({ type: 'sgb-full-state', on }, location.origin); } catch (e) {}
+}
+function openSgbManual(tab){
+  clearTimeout(exitArmTimer);
+  const url = `saenggibu-manual.html?v=${encodeURIComponent(APP_VER)}#${tab === 'upload' ? 'upload' : 'write'}`;
+  document.getElementById('sgbManualFrame').src = url;
+  document.getElementById('sgbManualNewTab').href = url;
+  document.getElementById('sgbManualModal').classList.add('open');
+}
+function closeSgbManual(){
+  document.getElementById('sgbManualModal').classList.remove('open');
+  document.getElementById('sgbManualFrame').src = 'about:blank';
+}
+function onSgbFrameMsg(e){
+  const f = document.getElementById('saenggibuPageFrame');
+  if (e.origin !== location.origin || !f || e.source !== f.contentWindow) return;
+  if (e.data?.type === 'sgb-full') setSgbFull(e.data.on);
+  else if (e.data?.type === 'sgb-manual') openSgbManual(e.data.tab);
+}
+window.addEventListener('message', onSgbFrameMsg);
+document.getElementById('sgbManualClose').addEventListener('click', closeSgbManual);
+document.getElementById('sgbManualModal').addEventListener('click', e => { if (isOutsideClick(e)) closeSgbManual(); });
+// 설명서 안을 누른 뒤에는 키가 그 안으로 간다 — 같은 출처라 Esc 를 거기서도 듣는다(설명서는 스크립트가 없다)
+document.getElementById('sgbManualFrame').addEventListener('load', e => {
+  try { e.target.contentDocument?.addEventListener('keydown', k => { if (k.key === 'Escape') closeSgbManual(); }); } catch (err) {}
+});
+
 // 🥚 학기 라벨을 빠르게 5번 클릭하면 1학기 아카이브 ↔ 2학기 토글 (숨겨진 기능)
 let _semClicks = 0, _semTimer = null;
 function initSemEasterEgg(){
@@ -11193,6 +11310,14 @@ onAuthStateChanged(fbAuth, async (user) => {
       if (adminBtn)  adminBtn.style.display  = 'block';
       if (adminBtnD) adminBtnD.style.display = 'block';
       // 관리자 페이지(admin.html)는 사이드바에 노출하지 않음 — 주소 직접 입력으로만 접근
+    }
+    // 생기부 보조자료 탭: SGB_OPEN_ALL 이면 모든 교사(부서·교과가 기재 문안 시트를 바로 올린다 — 규칙도 교사 전체 읽기·쓰기),
+    // 아니면 관리자만(보기 모드에서는 숨김). 관리(지우기·고치기)와 엑셀로 받기는 saenggibu.html 안에서 관리자에게만 보인다.
+    if (SGB_OPEN_ALL || _IS_ADMIN()) {
+      ['navSaenggibu', 'tabSaenggibu'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = '';
+      });
     }
     // 특별실 예약 탭: 전체 교사에게 공개(시범 운영 종료)
     {
@@ -14552,10 +14677,24 @@ async function s360ShowDetail(s, targetEl){
       <div class="spot-sec"><div class="spot-sec-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">선택과목<span id="s360SimSlot"></span></div>
         <div id="s360Electives" style="font-size:15px;color:var(--ink-soft);">불러오는 중...</div>
       </div>
-      <div class="spot-sec" style="margin-bottom:0;"><div class="spot-sec-title">성적 (내신 · 모의고사 전체 회차)</div>
+      ${s360SgbOn() ? `<div class="students-tab-row s360-tabs" id="s360Tabs2" role="tablist">
+          <button type="button" class="students-tab" data-tab="grade" role="tab">📈 성적</button>
+          <button type="button" class="students-tab" data-tab="sgb" role="tab">📑 생기부 보조자료</button>
+          ${s360CanWrite(s) ? '<button type="button" class="s360-write" id="s360WriteBtn" title="생기부 보조자료 탭으로 옮겨 이 학생의 작성 칸을 엽니다">✏️ 작성하러 가기</button>' : ''}
+          <span class="s360-ink"></span>
+        </div>
+        <div class="s360-mini" id="s360Mini" aria-hidden="true"><div class="s360-mini-in">
+          <span class="s360-mini-who"><b>${escapeHtml(s.name||'')}</b> <span>${s.grade}학년 ${s.room}반 ${s.num}번</span></span>
+          <div class="s360-mini-acts" id="s360MiniActs"></div></div></div>` : ''}
+      <div class="spot-sec s360-pane-grade" style="margin-bottom:0;"><div class="spot-sec-title">성적 (내신 · 모의고사 전체 회차)</div>
         <div id="s360Grades" style="font-size:15px;color:var(--ink-soft);">불러오는 중...</div>
       </div>
+      ${s360SgbOn() ? `<div class="s360-pane-sgb" style="display:none;">
+          <iframe id="s360SgbFrame" title="생기부 보조자료" style="width:100%;height:240px;border:0;display:block;"></iframe>
+        </div>` : ''}
     </div>`;
+  s360BindTabs(s);
+  s360MiniBind(main);
   if (!paneMode) document.getElementById('s360BackBtn').addEventListener('click', () => s360Back());
   document.getElementById('s360ContactBtn').addEventListener('click', () => showStudentDetail(s));
   s360LoadPhoto(s);      // 사진명렬(studentPhotos) — 있으면 헤더에 표시
@@ -14618,14 +14757,129 @@ async function s360ShowDetail(s, targetEl){
     }
   } catch(e) {
     if (e.code === 'permission-denied') {
-      // 열람 권한 없는 반 → 성적 섹션을 통째로 숨김 (안내 문구 없이)
+      // 열람 권한 없는 반 → 성적 섹션을 통째로 숨김 (안내 문구 없이).
+      // 보조자료 탭이 있으면 성적 탭을 흐리게 하고 보조자료를 연다.
       const sec = gEl.closest('.spot-sec');
       if (sec) sec.style.display = 'none'; else gEl.innerHTML = '';
+      const gt = document.querySelector('#s360Tabs2 [data-tab="grade"]');
+      if (gt){ gt.disabled = true; gt.title = '이 반 성적을 볼 권한이 없습니다'; s360ShowTab('sgb', s, true); }
     } else {
       gEl.textContent = '성적 로드 실패: ' + e.message;
     }
   }
 }
+
+// ── 종합검색 「성적 / 생기부 보조자료」 탭 ──
+// 보조자료는 saenggibu.html 을 '한 학생만 보기'(?embed=1&k=…)로 띄운다 — 봉사 표·복사·유의 사항이
+// 생기부 탭과 같은 코드로 나온다. 높이는 안쪽이 postMessage('sgb-height')로 알려 준다.
+// 생기부 보조자료 탭과 같은 조건(SGB_OPEN_ALL — 아니면 관리자만).
+const s360SgbOn = () => SGB_OPEN_ALL || _IS_ADMIN();
+const S360_TAB_LS = 'ynhs-s360-tab';
+function s360ShowTab(tab, s, auto){
+  const tabs = document.getElementById('s360Tabs2');
+  if (!tabs) return;
+  tabs.querySelectorAll('.students-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  s360MoveInk();
+  const g = document.querySelector('.s360-pane-grade'), v = document.querySelector('.s360-pane-sgb');
+  // 성적 탭이 흐리면(권한 없는 반) 성적 칸은 늘 숨긴다
+  if (g) g.style.display = tab === 'grade' && !tabs.querySelector('[data-tab="grade"]').disabled ? '' : 'none';
+  if (v) v.style.display = tab === 'sgb' ? '' : 'none';
+  if (tab === 'sgb'){
+    const f = document.getElementById('s360SgbFrame');
+    const k = `${parseInt(s.grade)}-${parseInt(s.room)}-${parseInt(s.num)}`;
+    if (f && f.dataset.k !== k){ f.dataset.k = k; f.src = `saenggibu.html?in=1&embed=1&k=${k}&v=${encodeURIComponent(APP_VER)}`; }
+  }
+  if (!auto) { try { localStorage.setItem(S360_TAB_LS, tab); } catch(e){} }
+  s360MiniSync();
+}
+// ── 보조자료 탭 위쪽 줄 ── 탭 줄이 스크롤 칸 위로 지나가면 나타난다(보조자료 탭일 때만)
+let _s360Main = null;
+function s360MiniBind(main){
+  _s360Main = main;
+  if (!main._s360Mini){ main.addEventListener('scroll', s360MiniSync, { passive: true }); main._s360Mini = true; }   // 같은 칸에 학생마다 또 걸지 않게
+  s360MiniSync();
+}
+function s360MiniSync(){
+  const mini = document.getElementById('s360Mini'), tabs = document.getElementById('s360Tabs2'), main = _s360Main;
+  if (!mini || !tabs || !main) return;
+  const sgb = !!tabs.querySelector('[data-tab="sgb"].active') && !!document.getElementById('s360MiniActs')?.children.length;
+  mini.classList.toggle('on', sgb && getComputedStyle(mini).display !== 'none' && tabs.getBoundingClientRect().bottom < main.getBoundingClientRect().top + 4);
+}
+function s360MiniRender(acts){
+  const box = document.getElementById('s360MiniActs');
+  if (!box) return;
+  box.innerHTML = acts.map(a => `<button type="button" tabindex="-1" data-go="${escapeHtml(a.id)}" title="${escapeHtml(a.title)}"><i class="dot ${escapeHtml(a.tag || '')}"></i><span class="an">${escapeHtml(a.title)}</span>${a.n > 1 ? `<span class="d">${a.n}</span>` : ''}</button>`).join('');
+  box.onclick = e => {
+    const b = e.target.closest('[data-go]'), f = document.getElementById('s360SgbFrame');
+    if (b && f) try { f.contentWindow.postMessage({ type: 'sgb-go', id: b.dataset.go }, location.origin); } catch (err) {}
+  };
+  s360MiniSync();
+}
+window.addEventListener('message', e => {
+  const f = document.getElementById('s360SgbFrame');
+  if (e.origin !== location.origin || !f || e.source !== f.contentWindow) return;
+  if (e.data?.type === 'sgb-acts' && e.data.k === f.dataset.k) s360MiniRender(Array.isArray(e.data.acts) ? e.data.acts : []);
+  if (e.data?.type === 'sgb-go-at' && _s360Main){
+    // 그 카드가 위쪽 줄 바로 아래에 오게 — 안쪽 창의 위치 + 카드의 창 안 위치 - 위쪽 줄 높이
+    const main = _s360Main, bar = document.querySelector('#s360Mini .s360-mini-in');
+    const top = main.scrollTop + f.getBoundingClientRect().top - main.getBoundingClientRect().top + (+e.data.y || 0) - (bar ? bar.offsetHeight : 0) - 10;
+    main.scrollTo({ top: Math.max(0, top), behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth' });
+  }
+});
+// 파란 줄을 고른 탭 아래로. 처음 그릴 때는 미끄러지지 않고 바로(학생을 바꿀 때마다 왼쪽에서 날아오지 않게)
+function s360MoveInk(first){
+  const tabs = document.getElementById('s360Tabs2');
+  const ink = tabs && tabs.querySelector('.s360-ink'), on = tabs && tabs.querySelector('.students-tab.active');
+  if (!ink || !on || !on.offsetWidth) return;
+  if (first) ink.style.transition = 'none';
+  ink.style.left = on.offsetLeft + 'px'; ink.style.width = on.offsetWidth + 'px';
+  if (first) { void ink.offsetWidth; ink.style.transition = ''; }
+}
+window.addEventListener('resize', () => s360MoveInk(true));
+// 종합검색 「✏️ 작성하러 가기」 — 그 반 담임과 관리자만(가장 모드는 아님). 화면 편의일 뿐이고, 저장은 firestore.rules 가 다시 막는다
+function s360CanWrite(s){
+  if (isViewAs()) return false;
+  if (fbAuth.currentUser?.email === ADMIN_EMAIL) return true;
+  const hr = getMyHomeroom();
+  return !!hr && sameClassKey(hr, `${s.grade}-${s.room}`);
+}
+// 생기부 보조자료 탭으로 옮겨 그 학생의 작성 칸을 연다. 탭이 처음이면 다 뜬 뒤(sgb-ready)에, 떠 있으면 바로 알린다
+let _sgbGo = null;
+function openSaenggibuWrite(k){
+  _sgbGo = { type: 'sgb-open', k, dr: 1 };
+  navigateTo('saenggibu');
+  sgbFlushGo();
+}
+function sgbFlushGo(){
+  const f = document.getElementById('saenggibuPageFrame');
+  if (!_sgbGo || !f || f.dataset.ready !== '1') return;
+  try { f.contentWindow.postMessage(_sgbGo, location.origin); _sgbGo = null; } catch (e) {}
+}
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || e.data?.type !== 'sgb-ready') return;
+  const f = document.getElementById('saenggibuPageFrame');
+  if (f && e.source === f.contentWindow){ f.dataset.ready = '1'; sgbFlushGo();
+    try { f.contentWindow.postMessage({ type: 'sgb-full-state', on: _sgbFull }, location.origin); } catch (err) {} }
+});
+function s360BindTabs(s){
+  const tabs = document.getElementById('s360Tabs2');
+  if (!tabs) return;
+  const wb = document.getElementById('s360WriteBtn');
+  if (wb) wb.addEventListener('click', () => openSaenggibuWrite(`${parseInt(s.grade)}-${parseInt(s.room)}-${parseInt(s.num)}`));
+  tabs.addEventListener('click', e => {
+    const b = e.target.closest('.students-tab');
+    if (b && !b.disabled) s360ShowTab(b.dataset.tab, s);
+  });
+  let last = 'grade';
+  try { last = localStorage.getItem(S360_TAB_LS) || 'grade'; } catch(e){}
+  s360ShowTab(last === 'sgb' ? 'sgb' : 'grade', s, true);
+  s360MoveInk(true);
+}
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || e.data?.type !== 'sgb-height') return;
+  const f = document.getElementById('s360SgbFrame');
+  if (f && e.source === f.contentWindow) f.style.height = Math.max(120, +e.data.h || 0) + 'px';
+});
 
 // ---- 학사일정 ----
 let scheduleInitialized = false;
@@ -17330,7 +17584,7 @@ function navigateTo(page) {
   document.querySelectorAll('.mobile-tab-bar .tab-item').forEach(t => t.classList.toggle('active', t.dataset.page === page));
   // 'seat' 은 탭 버튼이 없는 화면이다 — 자리 배치 모달의 「페이지로」로만 들어온다.
   // 여기 목록에 없으면 다른 탭으로 옮겨도 안 닫힌다.
-  ['home','timetable','weekly','meal','contacts','students','schedule','points','mytask','consult','docs','grades','search','room','pass','seat','usage','notice'].forEach(p => {
+  ['home','timetable','weekly','meal','contacts','students','schedule','points','mytask','consult','docs','grades','search','room','pass','seat','saenggibu','usage','notice'].forEach(p => {
     const el = document.getElementById(p + 'Page');
     if(el) el.classList.toggle('active', p === page);
   });
@@ -17343,6 +17597,8 @@ function navigateTo(page) {
     const uf = document.getElementById('usagePageFrame');
     if (uf && uf.src && uf.src !== 'about:blank') uf.src = 'about:blank';
   }
+  if(page === 'saenggibu') openSaenggibuFrame();
+  else if(_sgbFull) setSgbFull(false);  // 생기부 전체화면은 다른 탭으로 옮기면 푼다
   if(page === 'notice') initNoticePage();
   else if(currentPage === 'notice') { _noticeEditing = false; _noticeDirty = false; rtReleaseImages(); }
   if(page !== 'consult') stopConsultWatch();
@@ -22630,6 +22886,9 @@ document.addEventListener('keydown', e => {
   }
   if (document.getElementById('seatModal')?.classList.contains('open')) {
     closeSeatModal(); return;
+  }
+  if (document.getElementById('sgbManualModal')?.classList.contains('open')) {
+    closeSgbManual(); return;
   }
   if (document.getElementById('classOrgModal')?.classList.contains('open')) {
     closeClassOrgModal(); return;

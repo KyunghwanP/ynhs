@@ -39,12 +39,15 @@
 | `appdata/operating` | 수업시수 운영표(요일 대체·창체·시험) | `upload.html` |
 | `contacts/main` | 교원 연락망 | `upload.html` |
 | `students/main` | 학생 명렬 | `upload.html` |
+| `students/changed` | 편성표에서 반·번호가 빈 학생(전출·자퇴 등) — 학년·이름·구분·날짜만 | `upload.html`(편성표) |
 | `electives/{학년-반}` | 학생 선택과목 | `upload.html` |
 | `gradesMock` `gradesSusi` `gradesIpgyeol` | 성적·입결 | Actions(서비스계정) |
 | `acl/*` | 권한 관련 (아래 참조) | Actions + 관리자 |
 | `consultations/{반}` | 학부모 상담 예약(개인정보 포함) | 교사 앱 · Worker |
 | `consultationsPublic/{반}` | 위 문서의 **공개 미러** | 교사 앱 · Worker |
 | `memos2/{uid}` `tasks/{uid}` | 개인 메모·업무 일정 | 본인만 |
+| `saenggibu/meta`·`manifest`·`lock`·`log`·`fmt-*` · `saenggibuStu/{학년-반-번호}` · `saenggibuAct/{활동-학년-조각}` | 생기부 보조자료(부서별 기재 문안 시트) — 목록 · 올리는 동안 잠금 · 올린 기록 · 원본 양식 · 학생별 · 활동별 | `saenggibu.html`(교사 전체가 올림, 관리는 관리자) |
+| `saenggibuDraft/{학년-반-번호}` · `saenggibuDraftHist/{학년-반-번호}` | 생기부 담임 작성 — 자율·진로·개세특·행특 최종안·빼 둔 내용·메모 · 되돌리기 기록. **그 반 담임과 앱 관리자만**(다른 반은 조회도 안 됨) | `saenggibu.html` 학생별의 「✏️ 작성」 |
 
 ### 교사 이메일이 다루기 까다로운 이유
 
@@ -180,6 +183,9 @@ ynhs 배포가 그대로 받는다. 양쪽에 두면 중복 실행이 된다.
   배포는 Cloudflare 대시보드라 저장소 위치와 상관없다. 그 검사들도 test 에 있다
 - 초과근무·감독표 `overtime.html` · `gas/overtime/` · `docs/duty-template.xlsx` —
   아직 시험 중(관리자 탭). 운영으로 옮길 때 이 줄을 지운다
+- 생기부 보조자료는 운영에도 옮겼지만(2026-10-29) **탭은 관리자만**이다 — `index.html` 의 `SGB_OPEN_ALL` 이 test 는 `true`,
+  ynhs 는 `false`(메뉴 탭과 종합검색의 생기부 탭이 같이 따른다). `manual.html` 의 14번 절(생기부 보조자료)은 test 에만 둔다.
+  교사 전체에 열 때 ynhs 의 `SGB_OPEN_ALL` 을 `true` 로 바꾸고 14번 절을 함께 옮긴 뒤 이 줄을 고친다(검사가 둘이 맞는지 본다)
 
 **③ 그대로 두는 것**
 
