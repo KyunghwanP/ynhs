@@ -837,8 +837,8 @@ const STUB = {
 };
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 let STORE = {};   // 문맥이 바뀌어도(다른 사람으로 열어도) 같은 Firestore 를 보게
-async function openAs(email, { width = 1100, blockExcel = false, share = false, framed = false } = {}) {
-  const ctx = await b.newContext({ viewport: { width, height: 900 } });
+async function openAs(email, { width = 1100, blockExcel = false, share = false, framed = false, mobile = false } = {}) {
+  const ctx = await b.newContext({ viewport: { width, height: 900 }, ...(mobile ? { isMobile: true, hasTouch: true } : {}) });
   await ctx.route(ORIGIN + '/test/saenggibu.html*', r => r.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: HTML }));
   await ctx.route(ORIGIN + '/test/favicon-32.png', r => r.fulfill({ status: 404, body: '' }));
   await ctx.route('https://www.gstatic.com/firebasejs/**', r =>
@@ -868,10 +868,15 @@ async function openAs(email, { width = 1100, blockExcel = false, share = false, 
     const click = HTMLAnchorElement.prototype.click;
     HTMLAnchorElement.prototype.click = function () { if (this.download) window.__dlName = this.download; return click.call(this); };
   }, [email, STORE, share]);
-  // framed — 앱처럼 바깥 창(index.html 흉내) 안의 iframe 으로 띄운다. 바깥 창은 받은 알림을 window.__got 에 모은다
+  // framed — 앱처럼 바깥 창(index.html 흉내) 안의 iframe 으로 띄운다. 바깥 창은 받은 알림을 window.__got 에 모은다.
+  // framed: 'app' 이면 지금 앱처럼 대답도 한다(다 뜨면·전체화면을 바꾸면 상태, 설명서는 「열었다」). true 는 대답 없는 예전 앱
+  const ANSWER = 'var on=false,f=document.getElementById("f"),tell=d=>f.contentWindow.postMessage(d,location.origin);'
+    + 'addEventListener("message",e=>{if(e.origin!==location.origin||e.source!==f.contentWindow)return;var t=e.data&&e.data.type;'
+    + 'if(t==="sgb-ready")tell({type:"sgb-full-state",on:on});else if(t==="sgb-full"){on=!!e.data.on;tell({type:"sgb-full-state",on:on});}'
+    + 'else if(t==="sgb-manual")tell({type:"sgb-manual-open"});});';
   if (framed) await ctx.route(ORIGIN + '/test/sgb-parent.html', r => r.fulfill({ status: 200, contentType: 'text/html; charset=utf-8',
     body: '<!doctype html><meta charset="utf-8"><body style="margin:0"><iframe id="f" src="saenggibu.html?in=1" style="width:100%;height:880px;border:0"></iframe>'
-      + '<script>window.__got=[];addEventListener("message",e=>{if(e.origin===location.origin)window.__got.push(e.data)});</' + 'script>' }));
+      + '<script>window.__got=[];addEventListener("message",e=>{if(e.origin===location.origin)window.__got.push(e.data)});' + (framed === 'app' ? ANSWER : '') + '</' + 'script>' }));
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -2265,7 +2270,7 @@ STORE = STORE_B;
   check('오류 없음(목록 숨기기·넓이)', p.errors.length === 0, p.errors);
   await p.context().close();
 }
-// 좁은 칸 위쪽 줄 — 사진·이름·활동 목록이 위로 지나가면 이름·반 번호·참여한 활동을 한 줄로(선생님 요청 2026-10-28). 폰·넓은 화면(오른쪽 목차)은 없음
+// 좁은 칸 위쪽 줄 — 사진·이름·활동 목록이 위로 지나가면 이름·반 번호·참여한 활동을 한 줄로(선생님 요청 2026-10-28). 넓은 화면(오른쪽 목차)은 없음 · 폰은 아래 따로
 {
   const q = await openAs(KIM, { width: 1100 });
   await q.waitForSelector('#stus .stu');
@@ -2304,15 +2309,54 @@ STORE = STORE_B;
   await scrollTo(0);
   await q.waitForFunction(() => !document.getElementById('sMini').classList.contains('on'));
   check('— 맨 위로 올리면 다시 숨는다', true);
-  // 넓은 화면(작성 칸을 닫은 FHD — 오른쪽 목차)·폰에는 없다
+  // 넓은 화면(작성 칸을 닫은 FHD — 오른쪽 목차)에는 없다
   await q.click('#drClose');
   await q.setViewportSize({ width: 1900, height: 900 });
   await q.waitForFunction(() => getComputedStyle(document.getElementById('sMini')).display === 'none');
   check('넓은 화면(오른쪽 목차)에는 위쪽 줄이 없다', true);
-  await q.setViewportSize({ width: 390, height: 800 });
-  await q.waitForTimeout(150);
-  check('폰에도 없다', await q.$eval('#sMini', el => getComputedStyle(el).display === 'none'));
   check('오류 없음(위쪽 줄)', q.errors.length === 0, q.errors);
+  await q.context().close();
+}
+// 폰도 위쪽 줄(선생님 「스티키는 없네… 모바일에선」 2026-10-29) — 폰은 칸이 아니라 화면(#body)이 스크롤된다.
+// 이동 줄(← 반 · 다음 ▶)은 화면 맨 위에 잘리지 않게 붙고(전에는 위 12px 가 잘렸다), 그 바로 아래 이름 · 참여한 활동.
+// 폭이 좁아 활동은 한 줄로 두고 옆으로 밀어 본다(줄을 바꾸면 활동이 많을 때 화면을 반쯤 덮는다)
+{
+  const q = await openAs(KIM, { width: 390, mobile: true });
+  await q.waitForSelector('#stus .stu');
+  await q.click('#stus .stu[data-n="1"]');
+  await q.waitForSelector('#stuOut .s-name');
+  await q.waitForTimeout(200);
+  check('폰 — 처음(머리가 보일 때)은 위쪽 줄이 숨어 있다', !(await q.$eval('#sMini', el => el.classList.contains('on'))));
+  const scroll = y => q.evaluate(y => { const b = document.getElementById('body'); b.scrollTop = y; b.dispatchEvent(new Event('scroll')); }, y);
+  await scroll(await q.evaluate(() => { const b = document.getElementById('body'); return b.scrollTop + document.querySelector('#stuOut .s-head').getBoundingClientRect().bottom - b.getBoundingClientRect().top + 60; }));
+  await q.waitForFunction(() => document.getElementById('sMini').classList.contains('on'), null, { timeout: 3000 }).catch(() => {});
+  await q.waitForTimeout(250);   // 나타나는 움직임(0.15초)이 끝난 뒤에 잰다
+  const pm = await q.evaluate(() => { const r = s => document.querySelector(s).getBoundingClientRect(), body = r('#body'), nav = r('#mNav'), bar = r('#sMini .s-mini-in');
+    const acts = document.querySelector('#sMini .s-mini-acts'), bs = [...acts.querySelectorAll('button')].map(b => b.getBoundingClientRect());
+    return { on: document.getElementById('sMini').classList.contains('on'), op: getComputedStyle(document.querySelector('#sMini .s-mini-in')).opacity,
+      bodyTop: Math.round(body.top), navTop: Math.round(nav.top), navBottom: Math.round(nav.bottom), barTop: Math.round(bar.top), barH: Math.round(bar.height),
+      left: Math.round(bar.left), right: Math.round(bar.right), vw: innerWidth, rows: new Set(bs.map(x => Math.round(x.top))).size, n: bs.length,
+      who: document.querySelector('#sMini .s-mini-who').innerText.replace(/\s+/g, ' ').trim(), pageX: document.documentElement.scrollWidth <= innerWidth + 1 }; });
+  check('폰 — 내려도 이동 줄(← 1학년 1반 · 다음 ▶)이 잘리지 않고 화면 맨 위에 붙는다', pm.navTop === pm.bodyTop, pm);
+  check('— 머리가 지나가면 그 바로 아래 위쪽 줄(또렷하게): 이름 · 참여한 활동 3, 화면 너비 가득', pm.on && pm.op === '1' && Math.abs(pm.barTop - pm.navBottom) <= 1
+    && pm.left <= 0 && pm.right >= pm.vw && pm.who === '김가람' && pm.n === 3, pm);
+  check('— 활동은 한 줄(옆으로 밀어 봄)이라 화면을 덮지 않는다 · 페이지는 가로로 넘치지 않는다', pm.on && pm.barH > 0 && pm.rows === 1 && pm.barH <= 52 && pm.pageX, pm);
+  // 활동을 누르면 그 카드로 — 이동 줄 · 위쪽 줄에 가리지 않게. 맨 끝 칩(옆으로 밀어야 보이는 것)을 누른다
+  const vcard = id => [...document.querySelectorAll(`#stuOut .card[data-a="${id}"]`)].find(c => c.getClientRects().length && !c.closest('.vol-split'));   // 봉사는 접힌 카드 말고 누가기록 표로 간다 — 보이는 카드만
+  const goId = await q.evaluate(src => { const vc = (0, eval)('(' + src + ')'); return [...document.querySelectorAll('#sMini .s-mini-acts button')].reverse().find(b => vc(b.dataset.go))?.dataset.go; }, vcard.toString());
+  await q.click(`#sMini .s-mini-acts button[data-go="${goId}"]`, { timeout: 3000 }).catch(() => {});   // 안 보이면 아래 검사가 실패로 알린다
+  // 맨 끝 카드는 더 내려갈 곳이 없으면 위쪽 줄 바로 밑까지 못 올라온다 — 그때는 맨 아래까지 내려가 위쪽 줄 아래에 보이면 된다
+  const under = id => { const b = document.getElementById('body'), c = [...document.querySelectorAll(`#stuOut .card[data-a="${id}"]`)].find(x => x.getClientRects().length && !x.closest('.vol-split'))?.getBoundingClientRect(),
+    m = document.querySelector('#sMini .s-mini-in').getBoundingClientRect(), end = b.scrollTop + b.clientHeight >= b.scrollHeight - 2;
+    return { cardTop: Math.round(c?.top ?? -999), barBottom: Math.round(m.bottom), end, ok: !!c && c.top >= m.bottom - 1 && (c.top <= m.bottom + 40 || end) }; };
+  await q.waitForFunction(([src, id]) => (0, eval)('(' + src + ')')(id).ok, [under.toString(), goId], { timeout: 4000 }).catch(() => {});   // 부드럽게 굴러가는 동안 기다린다
+  const pc = { id: goId, ...(await q.evaluate(under, goId)) };
+  check('— 활동을 누르면 그 카드로(두 줄에 가리지 않게)', pc.ok, pc);
+  await scroll(0);
+  await q.waitForFunction(() => !document.getElementById('sMini').classList.contains('on'), null, { timeout: 3000 }).catch(() => {});
+  check('— 맨 위로 올리면 다시 숨는다', !(await q.$eval('#sMini', el => el.classList.contains('on'))));
+  if (process.env.SGB_SHOTS) await q.screenshot({ path: path.join(process.env.SGB_SHOTS, '15-mini-phone.png') });
+  check('오류 없음(폰 위쪽 줄)', q.errors.length === 0, q.errors);
   await q.context().close();
 }
 {
@@ -2560,30 +2604,65 @@ STORE = STORE_B;
 // ── 사용설명서 · 전체화면 단추(선생님 요청 2026-10-29) ── 앱 안에서는 앱에 알리고(모달 · 앱 머리를 덮는 전체화면), 단독 창은 새 탭 · 브라우저 전체화면
 console.log('\n[사용설명서 · 전체화면 단추]');
 {
-  const p = await openAs(KIM, { framed: true });
+  // 지금 앱(대답하는 바깥 창) — 설명서는 앱 모달, 전체화면은 앱이 알려 주는 상태대로 단추가 바뀐다
+  const p = await openAs(KIM, { framed: 'app' });
   const fr = await (await p.waitForSelector('#f')).contentFrame();
   await fr.waitForSelector('#stus .stu', { timeout: 8000 }).catch(() => {});
   const vis = sel => fr.evaluate(s => { const e = document.querySelector(s); return !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0; }, sel);
-  check('위쪽 줄 오른쪽에 「📖 사용설명서」 · 「⛶ 전체화면」', await vis('.top .top-tools #manBtn') && await vis('.top .top-tools #fullBtn')
+  check('「📖 사용설명서」 는 검색창 바로 왼쪽, 「⛶ 전체화면」 은 위쪽 줄 오른쪽 끝', await vis('#manBtn') && await vis('.top .top-tools #fullBtn')
+    && await fr.evaluate(() => document.getElementById('hakbun').previousElementSibling?.id === 'manBtn')
     && (await fr.textContent('#manBtn')).includes('사용설명서') && (await fr.textContent('#fullBtn')).includes('전체화면'));
+  const spy = f => f.evaluate(() => { window.__opened = []; window.open = (u, t) => { window.__opened.push([u, t]); return null; }; });
+  await p.waitForFunction(() => window.__got.some(m => m?.type === 'sgb-ready'), null, { timeout: 8000 }).catch(() => {});
+  await p.waitForTimeout(100);
+  const toastOf = f => f.evaluate(() => document.getElementById('toast').classList.contains('on') ? document.getElementById('toast').textContent : '');
+  const fullOf = () => fr.evaluate(() => { const b = document.getElementById('fullBtn'); return { pressed: b.getAttribute('aria-pressed'), t: b.textContent, bg: getComputedStyle(b).backgroundColor }; });
+  await spy(fr);
   await fr.click('#manBtn');
   await fr.click('#fullBtn');
   await p.waitForTimeout(150);
   const got = await p.evaluate(() => window.__got.filter(m => /^sgb-(manual|full)$/.test(m?.type)));
   check('— 앱 안: 담임은 사용설명서를 담임 탭으로 열어 달라고, 전체화면은 켜 달라고 앱에 알린다', JSON.stringify(got) === JSON.stringify([{ type: 'sgb-manual', tab: 'write' }, { type: 'sgb-full', on: true }]), got);
-  await p.evaluate(() => document.getElementById('f').contentWindow.postMessage({ type: 'sgb-full-state', on: true }, location.origin));
-  await p.waitForTimeout(100);
-  const on = await fr.evaluate(() => ({ pressed: document.getElementById('fullBtn').getAttribute('aria-pressed'), t: document.getElementById('fullBtn').textContent, bg: getComputedStyle(document.getElementById('fullBtn')).backgroundColor }));
+  const on = await fullOf();
   check('— 앱이 전체화면이라고 알려 주면 단추가 「원래 크기」(파랗게)', on.pressed === 'true' && on.t.includes('원래 크기') && on.bg !== 'rgba(0, 0, 0, 0)' && on.bg !== 'rgb(255, 255, 255)', on);
-  await fr.click('#fullBtn');
   await fr.press('body', 'Escape');
   await p.waitForTimeout(150);
-  const off = await p.evaluate(() => window.__got.filter(m => m?.type === 'sgb-full').slice(1));
-  check('— 다시 누르거나 Esc 를 누르면 끄라고 알린다', off.length === 2 && off.every(m => m.on === false), off);
+  await fr.click('#fullBtn');
+  await p.waitForTimeout(100);
+  await fr.click('#fullBtn');
+  await p.waitForTimeout(700);
+  const seq = await p.evaluate(() => window.__got.filter(m => m?.type === 'sgb-full').map(m => m.on).join());
+  check('— Esc 나 다시 누르면 끄라고 알리고, 단추도 「전체화면」 으로 돌아온다', seq === 'true,false,true,false' && (await fullOf()).pressed === 'false', seq);
+  const quiet = await fr.evaluate(() => window.__opened);
+  check('— 앱이 알아들으면 새 탭도 「새로고침」 안내도 없다(설명서는 앱 모달 하나만)', quiet.length === 0 && !(await toastOf(fr)).includes('새로고침'), [quiet, await toastOf(fr)]);
   check('— 오류 없음', !p.errors.length, p.errors);
   await p.context().close();
+  // 예전 앱(대답 없는 바깥 창) — 배포 뒤에도 앱을 켜 둔 채 쓰면 앱만 예전 판이고 이 화면은 새로 뜬다(선생님 「전체화면 안되네」 2026-10-29)
+  const o = await openAs(KIM, { framed: true });
+  const fo = await (await o.waitForSelector('#f')).contentFrame();
+  await fo.waitForSelector('#stus .stu', { timeout: 8000 }).catch(() => {});
+  await spy(fo);
+  await fo.click('#fullBtn');
+  await o.waitForTimeout(700);
+  const old = await toastOf(fo);
+  check('예전 앱이면 ⛶ 를 눌렀을 때 「앱을 새로고침해 주세요」 — 조용히 안 되는 일이 없게', old.includes('새로고침'), old);
+  await fo.click('#manBtn');
+  await o.waitForTimeout(700);
+  const oo = await fo.evaluate(() => window.__opened);
+  check('— 📖 사용설명서는 새 탭으로 연다(담임 탭)', oo.length === 1 && oo[0][0] === 'saenggibu-manual.html#write' && oo[0][1] === '_blank', oo);
+  check('— 오류 없음', !o.errors.length, o.errors);
+  await o.context().close();
+  // 폰(손가락 화면)은 보기만 — 올리기·양식 받기·엑셀로 받기·관리 단추를 감춘다(선생님 2026-10-29). 좁은 PC 창은 그대로
+  for (const [mobile, width, want] of [[true, 390, 'none'], [false, 860, 'flex']]) {
+    const m = await openAs(ADMIN, { width, mobile });
+    await m.waitForSelector('#upBtn', { state: 'attached' });
+    await m.waitForTimeout(500);
+    const d = await m.evaluate(() => getComputedStyle(document.querySelector('.top .admin')).display);
+    check(mobile ? '폰(390, 손가락) — 📤 엑셀 올리기 · 📄 양식 받기 · 📥 엑셀로 받기 · ⚙ 관리 단추가 안 보인다' : '— 좁은 PC 창(860, 마우스)에서는 그대로 보인다', d === want, d);
+    await m.context().close();
+  }
   // 담임이 아닌 선생님(부서·교과 — 지어낸 계정)은 부서·교과 탭으로
-  const q = await openAs('dept@yeungnam.hs.kr', { framed: true });
+  const q = await openAs('dept@yeungnam.hs.kr', { framed: 'app' });
   const fq = await (await q.waitForSelector('#f')).contentFrame();
   await fq.waitForSelector('#manBtn');
   await fq.waitForTimeout(600);
